@@ -1,0 +1,31 @@
+services:
+  synetra_bkend:
+    build:
+      context: ./synetra_bkend
+    container_name: synetra_bkend
+    env_file:
+      - ./synetra_bkend/.env
+    ports:
+      - "8083:5000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./synetra_bkend:/app
+      - /app/node_modules
+    command: sh -c "npx prisma generate && npm run dev"
+
+  synetra_web:
+    build:
+      context: ./synetra_web
+    container_name: synetra_web
+    env_file:
+      - ./synetra_web/.env.local
+    ports:
+      - "5001:3000"
+    depends_on:
+      - synetra_bkend
+    volumes:
+      - ./synetra_web:/app
+      - /app/node_modules
+      - /app/.next
+    command: npm run dev

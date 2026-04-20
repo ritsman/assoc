@@ -1,0 +1,51 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Association {
+  id            String   @id @default(cuid())
+  name          String
+  slug          String   @unique
+  sector        String?
+  description   String?
+  logoUrl       String?
+  primaryColor  String?
+  appName       String?
+  domain        String?  @unique
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  members       Member[]
+}
+
+model Member {
+  id               String      @id @default(cuid())
+  associationId    String
+  firstName        String
+  lastName         String
+  email            String
+  phone            String?
+  companyName      String?
+  roleTitle        String?
+  specialization   String?
+  membershipStatus MemberStatus @default(ACTIVE)
+  joinedAt         DateTime    @default(now())
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  association      Association @relation(fields: [associationId], references: [id], onDelete: Cascade)
+
+  @@unique([associationId, email])
+  @@index([associationId])
+}
+
+enum MemberStatus {
+  ACTIVE
+  INACTIVE
+  PENDING
+}
