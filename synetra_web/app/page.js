@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const navSections = [
   {
@@ -2616,6 +2616,7 @@ function AdminVendorAccessPanel({
 
 export default function HomePage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [activeSection, setActiveSection] = useState("Association arena");
   const [activeAssociationTab, setActiveAssociationTab] = useState("Profile");
   const [activeFinanceTab, setActiveFinanceTab] = useState("Income");
@@ -2625,7 +2626,7 @@ export default function HomePage() {
   const [financeStatementDateTo, setFinanceStatementDateTo] = useState("");
   const [activeMemberTab, setActiveMemberTab] = useState("All Members");
   const [activeVendorTab, setActiveVendorTab] = useState("Registration");
-  const [isAdminAccessOpen, setIsAdminAccessOpen] = useState(true);
+  const [isAdminAccessOpen, setIsAdminAccessOpen] = useState(false);
   const [activeAdminAccessSection, setActiveAdminAccessSection] = useState("App Access");
   const [appPermissions, setAppPermissions] = useState({
     approveMembersLogin: true,
@@ -2719,6 +2720,21 @@ export default function HomePage() {
   });
   const isAssociationAdmin = true;
   const isMemberAdmin = true;
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 900px)");
+
+    const syncSidebarViewportState = (event) => {
+      const isMobile = event.matches;
+      setIsMobileViewport(isMobile);
+      setIsSidebarOpen(!isMobile);
+    };
+
+    syncSidebarViewportState(mediaQuery);
+    mediaQuery.addEventListener("change", syncSidebarViewportState);
+
+    return () => mediaQuery.removeEventListener("change", syncSidebarViewportState);
+  }, []);
 
   const filteredFinanceStatementEntries = financeStatementEntries.filter((entry) => {
     const matchesType = !financeStatementFilterType || entry.entryType === financeStatementFilterType || entry.direction === financeStatementFilterType;
@@ -3164,7 +3180,28 @@ export default function HomePage() {
           <span className="mini-label">Current Scope</span>
           <p>One logged-in admin inside one association only.</p>
         </div>
+
+        <div className={`sidebar-mobile-account ${isSidebarOpen ? "" : "is-hidden"}`}>
+          <Link className="sidebar-profile-link" href="/profile" aria-label="Open profile settings">
+            <span className="avatar-circle">AU</span>
+            <span className="sidebar-profile-copy">
+              <strong>My Profile</strong>
+              <span>Edit personal details</span>
+            </span>
+          </Link>
+
+          <Link className="sidebar-logout-link" href="#">
+            Logout
+          </Link>
+        </div>
       </aside>
+
+      <button
+        type="button"
+        className={`sidebar-backdrop ${isSidebarOpen && isMobileViewport ? "is-visible" : ""}`}
+        aria-label="Close sidebar"
+        onClick={() => setIsSidebarOpen(false)}
+      />
 
       <section className="content-area">
         <header className="topbar">
@@ -3190,7 +3227,12 @@ export default function HomePage() {
 
           <div className="topbar-actions">
             <button className="icon-chip" type="button" aria-label="Unread notifications">
-              <span className="icon-chip-symbol">!</span>
+              <span className="icon-chip-symbol" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M7 10a5 5 0 1 1 10 0v4.2l1.4 2.3H5.6L7 14.2V10Z" />
+                  <path d="M10 18.5a2.2 2.2 0 0 0 4 0" />
+                </svg>
+              </span>
               <span className="icon-chip-count">3</span>
             </button>
 
