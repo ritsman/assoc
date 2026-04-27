@@ -6,4 +6,16 @@ coverage
 .env.local
 .env.*.local
 *.log
-
+.env.compose
+synetra_bkend/.env
+synetra_bkend/.env.local
+synetra_bkend/.env.vps
+synetra_web/.env.local
+synetra_web/.env.vps
+!synetra_bkend/.env.example
+!synetra_bkend/.env.local.example
+!synetra_bkend/.env.vps.example
+!synetra_web/.env.example
+!synetra_web/.env.local.example
+!synetra_web/.env.vps.example
+!.env.compose.example

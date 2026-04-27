@@ -1,0 +1,12 @@
+services:
+  synetra_bkend:
+    networks:
+      - shared_backend
+
+  synetra_web:
+    networks:
+      - shared_backend
+
+networks:
+  shared_backend:
+    external: true

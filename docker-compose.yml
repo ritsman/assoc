@@ -4,7 +4,7 @@ services:
       context: ./synetra_bkend
     container_name: synetra_bkend
     env_file:
-      - ./synetra_bkend/.env
+      - ${SYNETRA_BKEND_ENV_FILE:-./synetra_bkend/.env}
     ports:
       - "8083:5000"
     extra_hosts:
@@ -19,7 +19,7 @@ services:
       context: ./synetra_web
     container_name: synetra_web
     env_file:
-      - ./synetra_web/.env.local
+      - ${SYNETRA_WEB_ENV_FILE:-./synetra_web/.env.local}
     ports:
       - "5001:3000"
     depends_on:
