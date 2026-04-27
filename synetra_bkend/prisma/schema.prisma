@@ -9,43 +9,93 @@ datasource db {
 }
 
 model Association {
-  id            String   @id @default(cuid())
-  name          String
-  slug          String   @unique
-  sector        String?
-  description   String?
-  logoUrl       String?
-  primaryColor  String?
-  appName       String?
-  domain        String?  @unique
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  members       Member[]
+  id           String   @id @default(cuid())
+  name         String
+  slug         String   @unique
+  sector       String?
+  description  String?
+  logoUrl      String?
+  primaryColor String?
+  appName      String?
+  domain       String?  @unique
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  members      Member[]
+  users        User[]
 }
 
 model Member {
-  id               String      @id @default(cuid())
-  associationId    String
-  firstName        String
-  lastName         String
-  email            String
-  phone            String?
-  companyName      String?
-  roleTitle        String?
-  specialization   String?
-  membershipStatus MemberStatus @default(ACTIVE)
-  joinedAt         DateTime    @default(now())
-  createdAt        DateTime    @default(now())
-  updatedAt        DateTime    @updatedAt
-  association      Association @relation(fields: [associationId], references: [id], onDelete: Cascade)
+  id                  String        @id @default(cuid())
+  associationId       String
+  firstName           String
+  lastName            String
+  email               String
+  phone               String?
+  address             String?
+  gst                 String?
+  companyName         String?
+  roleTitle           String?
+  specialization      String?
+  membershipDetails   String?
+  membershipStartDate DateTime?
+  membershipEndDate   DateTime?
+  paymentAmount       String?
+  paymentStatus       PaymentStatus @default(PENDING)
+  customFieldValues   Json?
+  membershipStatus    MemberStatus  @default(ACTIVE)
+  joinedAt            DateTime      @default(now())
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  association         Association   @relation(fields: [associationId], references: [id], onDelete: Cascade)
 
   @@unique([associationId, email])
   @@index([associationId])
+}
+
+model User {
+  id             String         @id @default(cuid())
+  associationId  String?
+  firstName      String
+  lastName       String
+  email          String         @unique
+  phone          String?
+  passwordHash   String
+  isAdmin        Boolean        @default(false)
+  isMember       Boolean        @default(false)
+  isVendor       Boolean        @default(false)
+  approvalStatus ApprovalStatus @default(PENDING)
+  isActive       Boolean        @default(true)
+  approvedAt     DateTime?
+  rejectedAt     DateTime?
+  approvalNotes  String?
+  approvedById   String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  association    Association?   @relation(fields: [associationId], references: [id], onDelete: SetNull)
+  approvedBy     User?          @relation("UserApprovals", fields: [approvedById], references: [id], onDelete: SetNull)
+  approvedUsers  User[]         @relation("UserApprovals")
+
+  @@index([associationId])
+  @@index([approvalStatus])
+  @@index([isAdmin, isMember, isVendor])
 }
 
 enum MemberStatus {
   ACTIVE
   INACTIVE
   PENDING
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  OVERDUE
+  WAIVED
 }

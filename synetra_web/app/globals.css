@@ -1,3 +1,6 @@
+@import "tailwindcss/theme" layer(theme);
+@import "tailwindcss/utilities" layer(utilities);
+
 :root {
   color-scheme: light;
   --bg: #f6f3ff;
@@ -1313,6 +1316,73 @@ body {
   margin-top: 18px;
 }
 
+.member-master-layout {
+  display: grid;
+  gap: 24px;
+}
+
+.member-master-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.member-master-field-list {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.member-master-field-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.member-master-field-card strong {
+  display: block;
+}
+
+.member-master-field-card p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.member-master-field-edit-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(180px, 0.8fr) auto auto;
+  gap: 14px;
+  width: 100%;
+  align-items: end;
+}
+
+.member-master-preview-topline {
+  margin-top: 28px;
+}
+
+.member-form-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 40px 20px;
+  background: rgba(17, 18, 34, 0.45);
+  backdrop-filter: blur(10px);
+  overflow-y: auto;
+}
+
+.member-form-dialog {
+  width: min(980px, 100%);
+}
+
 .content-control-field {
   display: grid;
   gap: 8px;
@@ -2092,6 +2162,15 @@ body {
   }
 
   .member-content-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .member-master-field-card {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .member-master-field-edit-grid {
     grid-template-columns: 1fr;
   }
 

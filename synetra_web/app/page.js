@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8083/api";
+
 const navSections = [
   {
     label: "Dashboard",
@@ -493,6 +495,7 @@ const memberArenaTabs = [
   "Associate Members",
   "Temporary Visitors",
   "Committee Members",
+  "Master",
 ];
 const vendorArenaTabs = ["Registration", "Membership & Payment", "Master"];
 const eventsArenaTabs = ["Master", "Create New Event", "Type of Event", "Event"];
@@ -541,11 +544,17 @@ const memberRecords = [
     name: "Aarav Mehta",
     company: "Mehta Industrial Systems",
     address: "14 Ashram Road, Ahmedabad",
+    gst: "24AABCM1201A1Z3",
+    membershipDetails: "Chairman account with full committee access.",
     phone: "+91 98765 10001",
     whatsapp: "919876510001",
     email: "aarav@mehtaindustrial.com",
     membershipType: "Committee",
     membershipPeriod: "Apr 2023 - Mar 2027",
+    membershipStartDate: "2023-04-01",
+    membershipEndDate: "2027-03-31",
+    paymentAmount: "Rs. 0",
+    paymentStatus: "Paid",
     badge: "Chairman",
     initials: "AM",
     group: "Committee Members",
@@ -557,11 +566,17 @@ const memberRecords = [
     name: "Nisha Rao",
     company: "Rao Process Engineers",
     address: "22 C G Road, Ahmedabad",
+    gst: "24AADCR3321J1ZU",
+    membershipDetails: "Secretary account managing member circular coordination.",
     phone: "+91 98765 10002",
     whatsapp: "919876510002",
     email: "nisha@raoengineers.com",
     membershipType: "Committee",
     membershipPeriod: "Apr 2024 - Mar 2027",
+    membershipStartDate: "2024-04-01",
+    membershipEndDate: "2027-03-31",
+    paymentAmount: "Rs. 0",
+    paymentStatus: "Paid",
     badge: "Secretary",
     initials: "NR",
     group: "Committee Members",
@@ -573,11 +588,17 @@ const memberRecords = [
     name: "Kunal Sethi",
     company: "Sethi Fabrication Works",
     address: "7 Industrial Layout, Delhi",
+    gst: "07ABGCS4510M1ZX",
+    membershipDetails: "Primary member record for fabrication services.",
     phone: "+91 98765 10003",
     whatsapp: "919876510003",
     email: "kunal@sethifab.com",
     membershipType: "Primary",
     membershipPeriod: "Jan 2022 - Dec 2026",
+    membershipStartDate: "2022-01-01",
+    membershipEndDate: "2026-12-31",
+    paymentAmount: "Rs. 48,000",
+    paymentStatus: "Paid",
     badge: "Primary",
     initials: "KS",
     group: "Primary Members",
@@ -589,11 +610,17 @@ const memberRecords = [
     name: "Rhea Patel",
     company: "Patel Precision Cast",
     address: "85 Ring Road, Surat",
+    gst: "24AAICP6722K1ZT",
+    membershipDetails: "Primary member with casting and traceability specialization.",
     phone: "+91 98765 10004",
     whatsapp: "919876510004",
     email: "rhea@patelprecision.com",
     membershipType: "Primary",
     membershipPeriod: "Jul 2021 - Jun 2026",
+    membershipStartDate: "2021-07-01",
+    membershipEndDate: "2026-06-30",
+    paymentAmount: "Rs. 48,000",
+    paymentStatus: "Pending",
     badge: "Primary",
     initials: "RP",
     group: "Primary Members",
@@ -605,11 +632,17 @@ const memberRecords = [
     name: "Dev Khanna",
     company: "Khanna Automation",
     address: "31 MIDC Estate, Pune",
+    gst: "27AAECK9043E1ZF",
+    membershipDetails: "Associate member for automation and controls.",
     phone: "+91 98765 10005",
     whatsapp: "919876510005",
     email: "dev@khannaauto.in",
     membershipType: "Associate",
     membershipPeriod: "Apr 2025 - Mar 2026",
+    membershipStartDate: "2025-04-01",
+    membershipEndDate: "2026-03-31",
+    paymentAmount: "Rs. 24,000",
+    paymentStatus: "Paid",
     badge: "Associate",
     initials: "DK",
     group: "Associate Members",
@@ -621,11 +654,17 @@ const memberRecords = [
     name: "Ira Joshi",
     company: "Joshi Toolcraft",
     address: "11 Sector 18, Mumbai",
+    gst: "27AAFCJ2019R1ZC",
+    membershipDetails: "Associate member for toolcraft and machining.",
     phone: "+91 98765 10006",
     whatsapp: "919876510006",
     email: "ira@joshitoolcraft.com",
     membershipType: "Associate",
     membershipPeriod: "Apr 2024 - Mar 2026",
+    membershipStartDate: "2024-04-01",
+    membershipEndDate: "2026-03-31",
+    paymentAmount: "Rs. 24,000",
+    paymentStatus: "Overdue",
     badge: "Associate",
     initials: "IJ",
     group: "Associate Members",
@@ -637,11 +676,17 @@ const memberRecords = [
     name: "Vikram Shah",
     company: "Visitor - Expo Delegate",
     address: "Temporary desk, Association Office",
+    gst: "",
+    membershipDetails: "Temporary visitor pass for expo access.",
     phone: "+91 98765 10007",
     whatsapp: "919876510007",
     email: "vikram.visitor@example.com",
     membershipType: "Temporary Visit",
     membershipPeriod: "Valid until 30 Apr 2026",
+    membershipStartDate: "2026-04-01",
+    membershipEndDate: "2026-04-30",
+    paymentAmount: "Rs. 5,000",
+    paymentStatus: "Pending",
     badge: "Visitor",
     initials: "VS",
     group: "Temporary Visitors",
@@ -653,11 +698,17 @@ const memberRecords = [
     name: "Maya Fernandes",
     company: "Visitor - Training Cohort",
     address: "Guest desk, Training Center",
+    gst: "",
+    membershipDetails: "Temporary visitor for the training cohort.",
     phone: "+91 98765 10008",
     whatsapp: "919876510008",
     email: "maya.visitor@example.com",
     membershipType: "Temporary Visit",
     membershipPeriod: "Valid until 12 May 2026",
+    membershipStartDate: "2026-04-12",
+    membershipEndDate: "2026-05-12",
+    paymentAmount: "Rs. 5,000",
+    paymentStatus: "Paid",
     badge: "Visitor",
     initials: "MF",
     group: "Temporary Visitors",
@@ -672,6 +723,104 @@ const memberSummaryStats = [
   { value: "312", label: "Associate" },
   { value: "108", label: "Visitors" },
 ];
+const initialMembershipFormFields = [
+  { id: "field-name", key: "name", label: "Name", type: "text", required: true, isDefault: true },
+  {
+    id: "field-company-address",
+    key: "companyAddress",
+    label: "Company Address",
+    type: "textarea",
+    required: true,
+    isDefault: true,
+  },
+  { id: "field-gst", key: "gst", label: "GST", type: "text", required: true, isDefault: true },
+  {
+    id: "field-membership-details",
+    key: "membershipDetails",
+    label: "Membership Details",
+    type: "textarea",
+    required: true,
+    isDefault: true,
+  },
+];
+const defaultMemberAdminForm = {
+  name: "",
+  company: "",
+  companyAddress: "",
+  gst: "",
+  membershipDetails: "",
+  email: "",
+  phone: "",
+  membershipType: "Primary",
+  membershipStartDate: "",
+  membershipEndDate: "",
+  paymentAmount: "",
+  paymentStatus: "Pending",
+  badge: "Draft",
+  appAccessStatus: "Pending Approval",
+  customFieldValues: {},
+};
+
+function formatMembershipPeriod(startDate, endDate) {
+  if (!startDate || !endDate) {
+    return "Membership period pending";
+  }
+
+  return `${startDate} to ${endDate}`;
+}
+
+function mapApiMemberToUi(member) {
+  const firstName = member.firstName ?? "";
+  const lastName = member.lastName ?? "";
+  const name = `${firstName} ${lastName}`.trim();
+  const membershipType = member.roleTitle || "Primary";
+
+  return {
+    id: member.id,
+    name,
+    company: member.companyName || "",
+    address: member.address || "",
+    gst: member.gst || "",
+    membershipDetails: member.membershipDetails || "",
+    phone: member.phone || "",
+    whatsapp: (member.phone || "").replace(/\D/g, ""),
+    email: member.email,
+    membershipType,
+    membershipPeriod: formatMembershipPeriod(
+      member.membershipStartDate?.slice?.(0, 10) || "",
+      member.membershipEndDate?.slice?.(0, 10) || "",
+    ),
+    membershipStartDate: member.membershipStartDate?.slice?.(0, 10) || "",
+    membershipEndDate: member.membershipEndDate?.slice?.(0, 10) || "",
+    paymentAmount: member.paymentAmount || "",
+    paymentStatus:
+      member.paymentStatus === "PAID"
+        ? "Paid"
+        : member.paymentStatus === "OVERDUE"
+          ? "Overdue"
+          : member.paymentStatus === "WAIVED"
+            ? "Waived"
+            : "Pending",
+    badge: member.roleTitle || membershipType,
+    initials: name
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase() ?? "")
+      .join(""),
+    group:
+      membershipType === "Committee"
+        ? "Committee Members"
+        : membershipType === "Associate"
+          ? "Associate Members"
+          : membershipType === "Temporary Visit"
+            ? "Temporary Visitors"
+            : "Primary Members",
+    expiryStatus: "active",
+    appAccessStatus: "Approved",
+    customFieldValues: member.customFieldValues || {},
+  };
+}
 const vendorSummaryStats = [
   { value: "126", label: "Registered Vendors" },
   { value: "84", label: "Active" },
@@ -1484,6 +1633,8 @@ function MemberArenaContent({
   isAdmin,
   tabItems,
   selectedIds,
+  membershipFormFields,
+  membershipFieldDraft,
   isReminderPanelOpen,
   onToggleReminderPanel,
   onApplyReminderFilter,
@@ -1491,8 +1642,32 @@ function MemberArenaContent({
   onToggleSelectAll,
   onDeleteSelected,
   onDeleteOne,
-  onAddNew,
+  onOpenMemberForm,
+  onEditMember,
+  onDeleteMember,
+  onMembershipFieldDraftChange,
+  onAddMembershipField,
+  onUpdateMembershipField,
+  onDeleteMembershipField,
 }) {
+  if (activeTab === "Master") {
+    return (
+      <MemberMasterPanel
+        isAdmin={isAdmin}
+        members={tabItems}
+        membershipFormFields={membershipFormFields}
+        fieldDraft={membershipFieldDraft}
+        onOpenMemberForm={onOpenMemberForm}
+        onEditMember={onEditMember}
+        onDeleteMember={onDeleteMember}
+        onFieldDraftChange={onMembershipFieldDraftChange}
+        onAddField={onAddMembershipField}
+        onUpdateField={onUpdateMembershipField}
+        onDeleteField={onDeleteMembershipField}
+      />
+    );
+  }
+
   return (
     <section className="association-tab-section">
       <MemberCrudHeader
@@ -1505,7 +1680,7 @@ function MemberArenaContent({
         onApplyReminderFilter={onApplyReminderFilter}
         onToggleSelectAll={onToggleSelectAll}
         onDeleteSelected={onDeleteSelected}
-        onAddNew={onAddNew}
+        onAddNew={onOpenMemberForm}
         onContactSelected={() => {}}
         onSendNotice={() => {}}
       />
@@ -1524,6 +1699,353 @@ function MemberArenaContent({
         isAdmin={isAdmin}
         onToggleSelect={onToggleSelect}
       />
+    </section>
+  );
+}
+
+function getMemberFormValue(formData, field) {
+  if (field.key && field.key in formData) {
+    return formData[field.key] ?? "";
+  }
+
+  return formData.customFieldValues?.[field.id] ?? "";
+}
+
+function MemberMembershipForm({
+  fields,
+  formData,
+  editingId,
+  onFieldChange,
+  onSave,
+  onCancel,
+}) {
+  return (
+    <section className="member-table-panel">
+      <div className="panel-topline">
+        <h2>{editingId ? "Modify User" : "Add User"}</h2>
+        <span className="mini-label">Membership Form</span>
+      </div>
+
+      <div className="profile-form-grid">
+        <label className="profile-field">
+          <span>Company</span>
+          <input type="text" value={formData.company} onChange={(event) => onFieldChange("company", event.target.value)} />
+        </label>
+        <label className="profile-field">
+          <span>Email</span>
+          <input type="email" value={formData.email} onChange={(event) => onFieldChange("email", event.target.value)} />
+        </label>
+        <label className="profile-field">
+          <span>Phone</span>
+          <input type="text" value={formData.phone} onChange={(event) => onFieldChange("phone", event.target.value)} />
+        </label>
+        <label className="profile-field">
+          <span>Membership Type</span>
+          <select value={formData.membershipType} onChange={(event) => onFieldChange("membershipType", event.target.value)}>
+            <option value="Primary">Primary</option>
+            <option value="Associate">Associate</option>
+            <option value="Temporary Visit">Temporary Visit</option>
+            <option value="Committee">Committee</option>
+          </select>
+        </label>
+
+        {fields.map((field) => {
+          const label = `${field.label}${field.required ? " *" : ""}`;
+          const value = getMemberFormValue(formData, field);
+
+          if (field.type === "textarea") {
+            return (
+              <label key={field.id} className="profile-field profile-field-wide">
+                <span>{label}</span>
+                <textarea rows="3" value={value} onChange={(event) => onFieldChange(field.id, event.target.value)} />
+              </label>
+            );
+          }
+
+          return (
+            <label key={field.id} className="profile-field">
+              <span>{label}</span>
+              <input
+                type={field.type === "date" ? "date" : "text"}
+                value={value}
+                onChange={(event) => onFieldChange(field.id, event.target.value)}
+              />
+            </label>
+          );
+        })}
+
+        <label className="profile-field">
+          <span>Membership Start</span>
+          <input
+            type="date"
+            value={formData.membershipStartDate}
+            onChange={(event) => onFieldChange("membershipStartDate", event.target.value)}
+          />
+        </label>
+        <label className="profile-field">
+          <span>Membership End</span>
+          <input
+            type="date"
+            value={formData.membershipEndDate}
+            onChange={(event) => onFieldChange("membershipEndDate", event.target.value)}
+          />
+        </label>
+        <label className="profile-field">
+          <span>Payment Amount</span>
+          <input
+            type="text"
+            placeholder="Rs. 48,000"
+            value={formData.paymentAmount}
+            onChange={(event) => onFieldChange("paymentAmount", event.target.value)}
+          />
+        </label>
+        <label className="profile-field">
+          <span>Payment Status</span>
+          <select value={formData.paymentStatus} onChange={(event) => onFieldChange("paymentStatus", event.target.value)}>
+            <option value="Pending">Pending</option>
+            <option value="Paid">Paid</option>
+            <option value="Overdue">Overdue</option>
+            <option value="Waived">Waived</option>
+          </select>
+        </label>
+      </div>
+
+      <div className="profile-action-row">
+        <button className="secondary-link secondary-button" type="button" onClick={onCancel}>
+          Cancel
+        </button>
+        <button className="primary-link admin-action-button" type="button" onClick={onSave}>
+          {editingId ? "Update User" : "Save User"}
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function MembershipFormPreview({ fields }) {
+  return (
+    <div className="profile-form-grid">
+      {fields.map((field) => {
+        const label = `${field.label}${field.required ? " *" : ""}`;
+
+        if (field.type === "textarea") {
+          return (
+            <label key={field.id} className="profile-field profile-field-wide">
+              <span>{label}</span>
+              <textarea rows="3" placeholder={`Preview for ${field.label}`} disabled />
+            </label>
+          );
+        }
+
+        return (
+          <label key={field.id} className="profile-field">
+            <span>{label}</span>
+            <input
+              type={field.type === "date" ? "date" : "text"}
+              placeholder={`Preview for ${field.label}`}
+              disabled
+            />
+          </label>
+        );
+      })}
+      <label className="profile-field">
+        <span>Membership Start</span>
+        <input type="date" disabled />
+      </label>
+      <label className="profile-field">
+        <span>Membership End</span>
+        <input type="date" disabled />
+      </label>
+      <label className="profile-field">
+        <span>Payment Amount</span>
+        <input type="text" placeholder="Rs. 48,000" disabled />
+      </label>
+      <label className="profile-field">
+        <span>Payment Status</span>
+        <select disabled>
+          <option>Pending</option>
+        </select>
+      </label>
+    </div>
+  );
+}
+
+function MemberMasterPanel({
+  isAdmin,
+  members,
+  membershipFormFields,
+  fieldDraft,
+  onOpenMemberForm,
+  onEditMember,
+  onDeleteMember,
+  onFieldDraftChange,
+  onAddField,
+  onUpdateField,
+  onDeleteField,
+}) {
+  if (!isAdmin) {
+    return (
+      <article className="association-empty-state">
+        <span className="mini-label">Member Master</span>
+        <h2>Only admins can update the membership master.</h2>
+        <p>Switch to an admin login to manage users and the membership form fields.</p>
+      </article>
+    );
+  }
+
+  return (
+    <section className="association-tab-section member-master-layout">
+      <section className="member-table-panel">
+        <div className="panel-topline">
+          <h2>Membership Master</h2>
+          <span className="mini-label">Admin CRUD</span>
+        </div>
+
+        <div className="profile-action-row">
+          <button className="primary-link admin-action-button" type="button" onClick={onOpenMemberForm}>
+            Add User
+          </button>
+        </div>
+      </section>
+
+      <section className="member-table-panel">
+        <div className="panel-topline">
+          <h2>Existing Users</h2>
+          <span className="mini-label">Add, Modify, Delete</span>
+        </div>
+
+        <div className="member-table-wrap">
+          <table className="member-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Company</th>
+                <th>Membership</th>
+                <th>GST</th>
+                <th>Contact</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {members.map((member) => (
+                <tr key={member.id}>
+                  <td>{member.name}</td>
+                  <td>{member.company}</td>
+                  <td>{member.membershipType}</td>
+                  <td>{member.gst || "Not set"}</td>
+                  <td>
+                    <div className="member-table-contact">
+                      <a href={`mailto:${member.email}`}>{member.email}</a>
+                      <span>{member.phone}</span>
+                    </div>
+                  </td>
+                  <td>
+                    <div className="member-master-actions">
+                      <button className="secondary-link secondary-button table-button" type="button" onClick={() => onEditMember(member.id)}>
+                        Edit
+                      </button>
+                      <button className="secondary-link secondary-button danger-button table-button" type="button" onClick={() => onDeleteMember(member.id)}>
+                        Delete
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="member-table-panel">
+        <div className="panel-topline">
+          <h2>Membership Form Edit</h2>
+          <span className="mini-label">Admin Field Master</span>
+        </div>
+
+        <div className="admin-member-toolbar">
+          <label className="content-control-field admin-member-search">
+            <span>Field Label</span>
+            <input
+              type="text"
+              value={fieldDraft.label}
+              placeholder="Add a custom field label"
+              onChange={(event) => onFieldDraftChange("label", event.target.value)}
+            />
+          </label>
+          <label className="content-control-field">
+            <span>Field Type</span>
+            <select value={fieldDraft.type} onChange={(event) => onFieldDraftChange("type", event.target.value)}>
+              <option value="text">Text</option>
+              <option value="textarea">Long Text</option>
+              <option value="date">Date</option>
+            </select>
+          </label>
+          <label className="selection-chip">
+            <input
+              type="checkbox"
+              checked={fieldDraft.required}
+              onChange={(event) => onFieldDraftChange("required", event.target.checked)}
+            />
+            <span>Required</span>
+          </label>
+          <button className="secondary-link secondary-button" type="button" onClick={onAddField}>
+            Add Field
+          </button>
+        </div>
+
+        <div className="member-master-field-list">
+          {membershipFormFields.map((field) => (
+            <article key={field.id} className="member-master-field-card">
+              <div className="member-master-field-edit-grid">
+                <label className="content-control-field">
+                  <span>Field Label</span>
+                  <input
+                    type="text"
+                    value={field.label}
+                    onChange={(event) => onUpdateField(field.id, "label", event.target.value)}
+                  />
+                </label>
+                <label className="content-control-field">
+                  <span>Field Type</span>
+                  <select
+                    value={field.type}
+                    onChange={(event) => onUpdateField(field.id, "type", event.target.value)}
+                  >
+                    <option value="text">Text</option>
+                    <option value="textarea">Long Text</option>
+                    <option value="date">Date</option>
+                  </select>
+                </label>
+                <label className="selection-chip">
+                  <input
+                    type="checkbox"
+                    checked={field.required}
+                    onChange={(event) => onUpdateField(field.id, "required", event.target.checked)}
+                  />
+                  <span>Required</span>
+                </label>
+                {field.isDefault ? (
+                  <span className="content-member-chip active">Default</span>
+                ) : (
+                  <button
+                    className="secondary-link secondary-button danger-button"
+                    type="button"
+                    onClick={() => onDeleteField(field.id)}
+                  >
+                    Delete Field
+                  </button>
+                )}
+              </div>
+            </article>
+          ))}
+        </div>
+
+        <div className="panel-topline member-master-preview-topline">
+          <h2>Membership Form Preview</h2>
+          <span className="mini-label">Default fields stay fixed</span>
+        </div>
+        <MembershipFormPreview fields={membershipFormFields} />
+      </section>
     </section>
   );
 }
@@ -2637,6 +3159,15 @@ export default function HomePage() {
   });
   const [associationTabData, setAssociationTabData] = useState(initialAssociationTabData);
   const [memberTabData, setMemberTabData] = useState(initialMemberTabData);
+  const [memberMasterForm, setMemberMasterForm] = useState(defaultMemberAdminForm);
+  const [editingMemberId, setEditingMemberId] = useState("");
+  const [isMemberFormOpen, setIsMemberFormOpen] = useState(false);
+  const [membershipFormFields, setMembershipFormFields] = useState(initialMembershipFormFields);
+  const [membershipFieldDraft, setMembershipFieldDraft] = useState({
+    label: "",
+    type: "text",
+    required: false,
+  });
   const [selectedRecords, setSelectedRecords] = useState(
     Object.fromEntries(associationTabs.map((tab) => [tab, []])),
   );
@@ -2736,6 +3267,34 @@ export default function HomePage() {
     return () => mediaQuery.removeEventListener("change", syncSidebarViewportState);
   }, []);
 
+  useEffect(() => {
+    let isActive = true;
+
+    const loadMembers = async () => {
+      try {
+        const response = await fetch(`${apiBaseUrl}/members`);
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = await response.json();
+        if (!isActive || !Array.isArray(payload.members) || payload.members.length === 0) {
+          return;
+        }
+
+        setMemberTabData(buildMemberTabData(payload.members.map(mapApiMemberToUi)));
+      } catch (_error) {
+        // Keep seeded local data when the API is unavailable.
+      }
+    };
+
+    loadMembers();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
   const filteredFinanceStatementEntries = financeStatementEntries.filter((entry) => {
     const matchesType = !financeStatementFilterType || entry.entryType === financeStatementFilterType || entry.direction === financeStatementFilterType;
     const matchesFrom = !financeStatementDateFrom || entry.date >= financeStatementDateFrom;
@@ -2748,7 +3307,8 @@ export default function HomePage() {
       : associationTabData[activeAssociationTab] ?? [];
   const activeSelectedIds =
     activeAssociationTab === "Finance" ? [] : selectedRecords[activeAssociationTab] ?? [];
-  const activeMemberItems = memberTabData[activeMemberTab] ?? [];
+  const activeMemberItems =
+    activeMemberTab === "Master" ? memberTabData["All Members"] ?? [] : memberTabData[activeMemberTab] ?? [];
   const activeMemberSelectedIds = selectedMemberRecords[activeMemberTab] ?? [];
   const expiringMembersCount = (memberTabData["All Members"] ?? []).filter(
     (member) => member.expiryStatus === "expiring-soon",
@@ -2951,24 +3511,194 @@ export default function HomePage() {
     );
   };
 
-  const addNewMemberRecord = (tab) => {
-    const count = (memberTabData[tab] ?? []).length + 1;
-    const draftMember = {
-      id: `member-draft-${Date.now()}`,
-      name: `Draft Member ${count}`,
-      company: "New Company Name",
-      address: "Draft address",
-      phone: "+91 90000 00000",
-      whatsapp: "919000000000",
-      email: "draft.member@example.com",
-      membershipType: tab === "All Members" ? "Primary" : tab.replace(" Members", ""),
-      membershipPeriod: "Draft period",
-      badge: "Draft",
-      initials: "DM",
-      group: tab === "All Members" ? "Primary Members" : tab,
+  const openMemberForm = () => {
+    resetMemberMasterForm();
+    setIsMemberFormOpen(true);
+  };
+  const updateMemberMasterForm = (field, value) => {
+    setMemberMasterForm((current) => {
+      const matchingField = membershipFormFields.find((item) => item.id === field);
+      if (matchingField && !matchingField.key) {
+        return {
+          ...current,
+          customFieldValues: {
+            ...current.customFieldValues,
+            [field]: value,
+          },
+        };
+      }
+
+      const mappedKey = matchingField?.key ?? field;
+
+      return {
+        ...current,
+        [mappedKey]: value,
+      };
+    });
+  };
+  const resetMemberMasterForm = () => {
+    setMemberMasterForm(defaultMemberAdminForm);
+    setEditingMemberId("");
+  };
+  const editMemberRecord = (memberId) => {
+    const member = (memberTabData["All Members"] ?? []).find((item) => item.id === memberId);
+    if (!member) {
+      return;
+    }
+
+    setMemberMasterForm({
+      name: member.name ?? "",
+      company: member.company ?? "",
+      companyAddress: member.address ?? "",
+      gst: member.gst ?? "",
+      membershipDetails: member.membershipDetails ?? "",
+      email: member.email ?? "",
+      phone: member.phone ?? "",
+      membershipType: member.membershipType ?? "Primary",
+      membershipStartDate: member.membershipStartDate ?? "",
+      membershipEndDate: member.membershipEndDate ?? "",
+      paymentAmount: member.paymentAmount ?? "",
+      paymentStatus: member.paymentStatus ?? "Pending",
+      badge: member.badge ?? "Draft",
+      appAccessStatus: member.appAccessStatus ?? "Pending Approval",
+      customFieldValues: member.customFieldValues ?? {},
+    });
+    setEditingMemberId(memberId);
+    setIsMemberFormOpen(true);
+  };
+  const saveMemberRecord = () => {
+    void (async () => {
+    const normalizedName = memberMasterForm.name.trim();
+    const normalizedCompany = memberMasterForm.company.trim();
+    const normalizedEmail = memberMasterForm.email.trim();
+    if (!normalizedName || !normalizedCompany || !normalizedEmail) {
+      return;
+    }
+
+    const [firstName, ...restNameParts] = normalizedName.split(" ").filter(Boolean);
+    const payload = {
+      firstName: firstName || normalizedName,
+      lastName: restNameParts.join(" "),
+      email: normalizedEmail,
+      phone: memberMasterForm.phone.trim(),
+      address: memberMasterForm.companyAddress.trim(),
+      gst: memberMasterForm.gst.trim(),
+      companyName: normalizedCompany,
+      roleTitle: memberMasterForm.membershipType,
+      membershipDetails: memberMasterForm.membershipDetails.trim(),
+      membershipStartDate: memberMasterForm.membershipStartDate || undefined,
+      membershipEndDate: memberMasterForm.membershipEndDate || undefined,
+      paymentAmount: memberMasterForm.paymentAmount.trim(),
+      paymentStatus:
+        memberMasterForm.paymentStatus === "Paid"
+          ? "PAID"
+          : memberMasterForm.paymentStatus === "Overdue"
+            ? "OVERDUE"
+            : memberMasterForm.paymentStatus === "Waived"
+              ? "WAIVED"
+              : "PENDING",
+      customFieldValues: memberMasterForm.customFieldValues,
     };
 
-    setMemberTabData((current) => buildMemberTabData([draftMember, ...(current["All Members"] ?? [])]));
+    const response = await fetch(
+      `${apiBaseUrl}/members${editingMemberId ? `/${editingMemberId}` : ""}`,
+      {
+        method: editingMemberId ? "PATCH" : "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      },
+    );
+
+    if (!response.ok) {
+      return;
+    }
+
+    const savedPayload = await response.json();
+    const savedMember = mapApiMemberToUi(savedPayload.member);
+
+    setMemberTabData((current) => {
+      const allMembers = current["All Members"] ?? [];
+      const nextMembers = editingMemberId
+        ? allMembers.map((member) => (member.id === editingMemberId ? savedMember : member))
+        : [savedMember, ...allMembers];
+      return buildMemberTabData(nextMembers);
+    });
+    resetMemberMasterForm();
+    setIsMemberFormOpen(false);
+    })();
+  };
+  const removeMemberRecord = (memberId) => {
+    void (async () => {
+      const response = await fetch(`${apiBaseUrl}/members/${memberId}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok && response.status !== 204) {
+        return;
+      }
+
+      setMemberTabData((current) =>
+        buildMemberTabData((current["All Members"] ?? []).filter((item) => item.id !== memberId)),
+      );
+    setSelectedMemberRecords((current) =>
+      Object.fromEntries(memberArenaTabs.map((memberTab) => [memberTab, (current[memberTab] ?? []).filter((id) => id !== memberId)])),
+    );
+
+    if (editingMemberId === memberId) {
+      resetMemberMasterForm();
+      setIsMemberFormOpen(false);
+    }
+    })();
+  };
+  const updateMembershipFieldDraft = (field, value) => {
+    setMembershipFieldDraft((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  };
+  const addMembershipField = () => {
+    const label = membershipFieldDraft.label.trim();
+    if (!label) {
+      return;
+    }
+
+    setMembershipFormFields((current) => [
+      ...current,
+      {
+        id: `membership-field-${Date.now()}`,
+        label,
+        key: "",
+        type: membershipFieldDraft.type,
+        required: membershipFieldDraft.required,
+        isDefault: false,
+      },
+    ]);
+    setMembershipFieldDraft({
+      label: "",
+      type: "text",
+      required: false,
+    });
+  };
+  const deleteMembershipField = (fieldId) => {
+    setMembershipFormFields((current) =>
+      current.filter((field) => field.id !== fieldId || field.isDefault),
+    );
+    setMemberMasterForm((current) => {
+      const nextCustomValues = { ...current.customFieldValues };
+      delete nextCustomValues[fieldId];
+
+      return {
+        ...current,
+        customFieldValues: nextCustomValues,
+      };
+    });
+  };
+  const updateMembershipField = (fieldId, property, value) => {
+    setMembershipFormFields((current) =>
+      current.map((field) => (field.id === fieldId ? { ...field, [property]: value } : field)),
+    );
   };
 
   const toggleAdminMemberSelect = (memberId) => {
@@ -3113,7 +3843,9 @@ export default function HomePage() {
   };
 
   return (
-    <main className={`admin-shell ${isSidebarOpen ? "sidebar-open" : "sidebar-collapsed"}`}>
+    <main
+      className={`admin-shell ${isSidebarOpen ? "sidebar-open" : "sidebar-collapsed"} relative min-h-screen`}
+    >
       <aside className={`sidebar ${isSidebarOpen ? "" : "is-collapsed"}`}>
         <div className="sidebar-brand">
           <span className="brand-mark">S</span>
@@ -3397,6 +4129,8 @@ export default function HomePage() {
                 isAdmin={isMemberAdmin}
                 tabItems={activeMemberItems}
                 selectedIds={activeMemberSelectedIds}
+                membershipFormFields={membershipFormFields}
+                membershipFieldDraft={membershipFieldDraft}
                 isReminderPanelOpen={isReminderPanelOpen}
                 onToggleReminderPanel={() => setIsReminderPanelOpen((current) => !current)}
                 onApplyReminderFilter={applyReminderFilter}
@@ -3404,7 +4138,13 @@ export default function HomePage() {
                 onToggleSelectAll={() => toggleSelectAllMemberRecords(activeMemberTab)}
                 onDeleteSelected={() => deleteSelectedMemberRecords(activeMemberTab)}
                 onDeleteOne={(recordId) => deleteSingleMemberRecord(activeMemberTab, recordId)}
-                onAddNew={() => addNewMemberRecord(activeMemberTab)}
+                onOpenMemberForm={openMemberForm}
+                onEditMember={editMemberRecord}
+                onDeleteMember={removeMemberRecord}
+                onMembershipFieldDraftChange={updateMembershipFieldDraft}
+                onAddMembershipField={addMembershipField}
+                onUpdateMembershipField={updateMembershipField}
+                onDeleteMembershipField={deleteMembershipField}
               />
             </div>
 
@@ -3712,6 +4452,24 @@ export default function HomePage() {
           </>
         )}
       </section>
+
+      {isMemberFormOpen ? (
+        <div className="member-form-overlay" role="dialog" aria-modal="true" aria-label="Membership form">
+          <div className="member-form-dialog">
+            <MemberMembershipForm
+              fields={membershipFormFields}
+              formData={memberMasterForm}
+              editingId={editingMemberId}
+              onFieldChange={updateMemberMasterForm}
+              onSave={saveMemberRecord}
+              onCancel={() => {
+                resetMemberMasterForm();
+                setIsMemberFormOpen(false);
+              }}
+            />
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }
