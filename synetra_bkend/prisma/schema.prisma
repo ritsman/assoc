@@ -9,53 +9,216 @@ datasource db {
 }
 
 model Association {
-  id           String   @id @default(cuid())
-  name         String
-  slug         String   @unique
-  sector       String?
-  description  String?
-  logoUrl      String?
-  primaryColor String?
-  appName      String?
-  domain       String?  @unique
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  members      Member[]
-  users        User[]
+  id                 String                        @id @default(cuid())
+  name               String
+  slug               String                        @unique
+  sector             String?
+  description        String?
+  logoUrl            String?
+  primaryColor       String?
+  appName            String?
+  domain             String?                       @unique
+  headOfficeAddress  String?
+  city               String?
+  state              String?
+  pincode            String?
+  registrationNumber String?
+  gstNumber          String?
+  website            String?
+  contactNumbers     Json?
+  helpdeskNumber     String?
+  googleMapsLink     String?
+  isActive           Boolean                       @default(true)
+  createdAt          DateTime                      @default(now())
+  updatedAt          DateTime                      @updatedAt
+  members            Member[]
+  users              User[]
+  regionalAddresses  AssociationRegionalAddress[]
+  aboutContent       AssociationAboutContent?
+  galleryItems       AssociationGalleryItem[]
+  circularDocuments  AssociationCircularDocument[]
+  MemberPost         MemberPost[]
+  eventTypes         AssociationEventType[]
+  events             AssociationEvent[]
+}
+
+model AssociationRegionalAddress {
+  id                 String      @id @default(cuid())
+  associationId      String
+  label              String?
+  officeAddress      String?
+  city               String?
+  state              String?
+  pincode            String?
+  registrationNumber String?
+  gstNumber          String?
+  website            String?
+  contactNumbers     Json?
+  helpdeskNumber     String?
+  googleMapsLink     String?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+  association        Association @relation(fields: [associationId], references: [id], onDelete: Cascade)
+
+  @@index([associationId])
+}
+
+model AssociationAboutContent {
+  id              String      @id @default(cuid())
+  associationId   String      @unique
+  heroTitle       String?
+  heroIntro       String?
+  missionTitle    String?
+  missionText     String?
+  goalsTitle      String?
+  goalsText       String?
+  journeyTitle    String?
+  journeyText     String?
+  headOfficeImage String?
+  galleryImageOne String?
+  galleryImageTwo String?
+  stats           Json?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  association     Association @relation(fields: [associationId], references: [id], onDelete: Cascade)
+}
+
+model AssociationGalleryItem {
+  id            String      @id @default(cuid())
+  associationId String
+  imageUrl      String?
+  headline      String
+  tagline       String?
+  description   String?
+  displayOrder  Int         @default(0)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  association   Association @relation(fields: [associationId], references: [id], onDelete: Cascade)
+
+  @@index([associationId, displayOrder])
+}
+
+model AssociationCircularDocument {
+  id               String      @id @default(cuid())
+  associationId    String
+  headline         String
+  tagline          String?
+  summary          String?
+  originalFileName String
+  storedFileName   String
+  storagePath      String
+  mimeType         String
+  fileSize         Int
+  displayOrder     Int         @default(0)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  association      Association @relation(fields: [associationId], references: [id], onDelete: Cascade)
+
+  @@index([associationId, displayOrder])
+}
+
+model AssociationEventType {
+  id            String      @id @default(cuid())
+  associationId String
+  name          String
+  description   String
+  displayOrder  Int         @default(0)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  association   Association @relation(fields: [associationId], references: [id], onDelete: Cascade)
+
+  @@index([associationId, displayOrder])
+}
+
+model AssociationEvent {
+  id                   String      @id @default(cuid())
+  associationId        String
+  name                 String
+  type                 String
+  audience             String?
+  entryType            String?
+  entryCharges         String?
+  participationCharges String?
+  date                 DateTime
+  venue                String?
+  startTime            String?
+  endTime              String?
+  summary              String?
+  bannerUrl            String?
+  bannerFileName       String?
+  promoVideoUrl        String?
+  promoVideoFileName   String?
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+  association          Association @relation(fields: [associationId], references: [id], onDelete: Cascade)
+
+  @@index([associationId, date])
 }
 
 model Member {
-  id                  String        @id @default(cuid())
-  associationId       String
-  firstName           String
-  lastName            String
-  email               String
-  phone               String?
-  address             String?
-  gst                 String?
-  companyName         String?
-  roleTitle           String?
-  specialization      String?
-  membershipDetails   String?
-  membershipStartDate DateTime?
-  membershipEndDate   DateTime?
-  paymentAmount       String?
-  paymentStatus       PaymentStatus @default(PENDING)
-  customFieldValues   Json?
-  membershipStatus    MemberStatus  @default(ACTIVE)
-  joinedAt            DateTime      @default(now())
-  createdAt           DateTime      @default(now())
-  updatedAt           DateTime      @updatedAt
-  association         Association   @relation(fields: [associationId], references: [id], onDelete: Cascade)
+  id                   String        @id @default(cuid())
+  associationId        String
+  firstName            String
+  lastName             String
+  email                String
+  phone                String?
+  address              String?
+  gst                  String?
+  photoUrl             String?
+  companyName          String?
+  roleTitle            String?
+  specialization       String?
+  committeePost        String?
+  committeeTenureStart DateTime?
+  committeeTenureEnd   DateTime?
+  memberBio            String?
+  membershipDetails    String?
+  membershipStartDate  DateTime?
+  membershipEndDate    DateTime?
+  paymentAmount        String?
+  paymentStatus        PaymentStatus @default(PENDING)
+  customFieldValues    Json?
+  membershipStatus     MemberStatus  @default(ACTIVE)
+  joinedAt             DateTime      @default(now())
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  association          Association   @relation(fields: [associationId], references: [id], onDelete: Cascade)
+  user                 User?
+  posts                MemberPost[]
 
   @@unique([associationId, email])
   @@index([associationId])
 }
 
+model MemberPost {
+  id            String           @id @default(cuid())
+  memberId      String
+  associationId String
+  title         String
+  summary       String
+  body          String?
+  mediaUrl      String?
+  mediaType     String?
+  postType      String?
+  reviewStatus  PostReviewStatus @default(PENDING)
+  displayStart  DateTime?
+  displayEnd    DateTime?
+  approvedAt    DateTime?
+  rejectedAt    DateTime?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  association   Association      @relation(fields: [associationId], references: [id], onDelete: Cascade)
+  member        Member           @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([associationId, createdAt])
+  @@index([memberId, createdAt])
+  @@index([reviewStatus])
+}
+
 model User {
   id             String         @id @default(cuid())
   associationId  String?
+  memberId       String?        @unique
   firstName      String
   lastName       String
   email          String         @unique
@@ -73,6 +236,7 @@ model User {
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
   association    Association?   @relation(fields: [associationId], references: [id], onDelete: SetNull)
+  member         Member?        @relation(fields: [memberId], references: [id], onDelete: SetNull)
   approvedBy     User?          @relation("UserApprovals", fields: [approvedById], references: [id], onDelete: SetNull)
   approvedUsers  User[]         @relation("UserApprovals")
 
@@ -98,4 +262,10 @@ enum PaymentStatus {
   PAID
   OVERDUE
   WAIVED
+}
+
+enum PostReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }

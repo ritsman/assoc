@@ -74,7 +74,7 @@ const navSections = [
   },
 ];
 
-const adminAccessSections = ["App Access", "Member Access", "Vendor Access"];
+const adminAccessSections = ["App Access", "Member Access", "Vendor Access", "Event Access"];
 const flutterAppPermissions = [
   {
     key: "approveMembersLogin",
@@ -345,62 +345,7 @@ const financeStatementEntries = [
     amount: "Rs. 1,65,000",
   },
 ];
-const eventTimelineGroups = [
-  {
-    title: "Past Events",
-    tone: "tone-gallery",
-    items: [
-      {
-        id: "event-past-1",
-        title: "Annual Manufacturing Meet 2025",
-        meta: "Hosted in Ahmedabad with 420 attendees and 18 vendor showcases.",
-        badge: "Past",
-      },
-      {
-        id: "event-past-2",
-        title: "Safety Workshop Series",
-        meta: "Three-city workshop completed for plant supervisors and line managers.",
-        badge: "Past",
-      },
-    ],
-  },
-  {
-    title: "Current Events",
-    tone: "tone-circular",
-    items: [
-      {
-        id: "event-current-1",
-        title: "Quarterly Technical Training",
-        meta: "Live multi-session program for members on automation and process controls.",
-        badge: "Current",
-      },
-      {
-        id: "event-current-2",
-        title: "Vendor Discovery Week",
-        meta: "Running spotlight series featuring preferred vendors and demos.",
-        badge: "Current",
-      },
-    ],
-  },
-  {
-    title: "Coming Events",
-    tone: "tone-advertisement",
-    items: [
-      {
-        id: "event-upcoming-1",
-        title: "Association Leadership Summit",
-        meta: "Scheduled for June 2026 with cross-city committee representation.",
-        badge: "Coming",
-      },
-      {
-        id: "event-upcoming-2",
-        title: "Industrial Innovation Expo",
-        meta: "Upcoming member and vendor networking day with demo booths and talks.",
-        badge: "Coming",
-      },
-    ],
-  },
-];
+const eventTimelineGroups = [];
 const eventMasterRecords = [
   {
     id: "event-master-1",
@@ -421,50 +366,7 @@ const eventMasterRecords = [
     badge: "Master",
   },
 ];
-const initialEventTypeRecords = [
-  {
-    id: "event-type-1",
-    title: "Conference",
-    meta: "Large-scale annual and strategic gatherings for members and partners.",
-    badge: "Type",
-  },
-  {
-    id: "event-type-2",
-    title: "Workshop",
-    meta: "Skill-focused sessions for operations, safety, and technical training.",
-    badge: "Type",
-  },
-  {
-    id: "event-type-3",
-    title: "Expo",
-    meta: "Showcase events for vendors, products, member discovery, and networking.",
-    badge: "Type",
-  },
-  {
-    id: "event-type-4",
-    title: "Seminar",
-    meta: "Focused knowledge-sharing sessions with speakers, panels, and discussion rounds.",
-    badge: "Type",
-  },
-  {
-    id: "event-type-5",
-    title: "Trade Show",
-    meta: "Business-facing networking and product visibility events for industry partners.",
-    badge: "Type",
-  },
-  {
-    id: "event-type-6",
-    title: "Exhibition",
-    meta: "Display-led event format for products, member showcases, and association initiatives.",
-    badge: "Type",
-  },
-  {
-    id: "event-type-7",
-    title: "Online Seminar",
-    meta: "Virtual seminar format for remote participation, live sessions, and digital Q and A.",
-    badge: "Type",
-  },
-];
+const initialEventTypeRecords = [];
 
 const cityMemberships = [
   { city: "Delhi", count: 23 },
@@ -499,44 +401,29 @@ const memberArenaTabs = [
 ];
 const vendorArenaTabs = ["Registration", "Membership & Payment", "Master"];
 const eventsArenaTabs = ["Master", "Create New Event", "Type of Event", "Event"];
-const initialCreatedEvents = [
-  {
-    id: "created-event-1",
-    name: "Quarterly Technical Training",
-    type: "Workshop",
-    audience: "Primary Members",
-    entryType: "Paid",
-    entryCharges: "Rs. 1,500",
-    participationCharges: "Rs. 2,500",
-    date: "2026-05-14",
-    venue: "Association Hall, Ahmedabad",
-    startTime: "10:00",
-    endTime: "16:00",
-    summary: "Hands-on training program covering automation, process checks, and plant safety.",
-    imageName: "technical-training-banner.jpg",
-    videoName: "technical-training-intro.mp4",
-    liveStatus: "Scheduled",
-    scheduledGoLive: "2026-05-01",
-  },
-  {
-    id: "created-event-2",
-    name: "Industrial Innovation Expo",
-    type: "Exhibition",
-    audience: "Open for All",
-    entryType: "Free",
-    entryCharges: "Rs. 0",
-    participationCharges: "Rs. 5,000",
-    date: "2026-06-22",
-    venue: "Expo Grounds, Pune",
-    startTime: "09:30",
-    endTime: "18:00",
-    summary: "Member and vendor expo with product showcases, networking zones, and technical sessions.",
-    imageName: "innovation-expo-banner.jpg",
-    videoName: "",
-    liveStatus: "Live",
-    scheduledGoLive: "",
-  },
-];
+const initialCreatedEvents = [];
+const defaultEventForm = {
+  name: "",
+  type: "",
+  audience: "",
+  entryType: "",
+  entryCharges: "",
+  participationCharges: "",
+  date: "",
+  venue: "",
+  startTime: "",
+  endTime: "",
+  summary: "",
+};
+
+const defaultEventMedia = {
+  imageName: "",
+  videoName: "",
+  imageFile: null,
+  videoFile: null,
+  bannerUrl: "",
+  promoVideoUrl: "",
+};
 
 const memberRecords = [
   {
@@ -748,6 +635,7 @@ const defaultMemberAdminForm = {
   company: "",
   companyAddress: "",
   gst: "",
+  photoUrl: "",
   membershipDetails: "",
   email: "",
   phone: "",
@@ -761,6 +649,14 @@ const defaultMemberAdminForm = {
   customFieldValues: {},
 };
 
+const defaultCommitteeMemberForm = {
+  memberId: "",
+  committeePost: "",
+  committeeTenureStart: "",
+  committeeTenureEnd: "",
+  memberBio: "",
+};
+
 function formatMembershipPeriod(startDate, endDate) {
   if (!startDate || !endDate) {
     return "Membership period pending";
@@ -769,11 +665,84 @@ function formatMembershipPeriod(startDate, endDate) {
   return `${startDate} to ${endDate}`;
 }
 
-function mapApiMemberToUi(member) {
+function getMemberAccessStatus(user, membershipStatus) {
+  if (user?.approvalStatus === "REJECTED") {
+    return "Cancelled";
+  }
+
+  if (user?.approvalStatus === "APPROVED" && user?.isActive === false) {
+    return "Suspended";
+  }
+
+  if (user?.approvalStatus === "APPROVED") {
+    return "Approved";
+  }
+
+  if (membershipStatus === "INACTIVE") {
+    return "Suspended";
+  }
+
+  return "Pending Approval";
+}
+
+function formatCommitteeTenure(startDate, endDate) {
+  if (!startDate && !endDate) {
+    return "Tenure not added yet";
+  }
+
+  if (startDate && endDate) {
+    return `${startDate} to ${endDate}`;
+  }
+
+  if (startDate) {
+    return `${startDate} onwards`;
+  }
+
+  return `Until ${endDate}`;
+}
+
+function getCommitteeRank(post) {
+  switch ((post || "").toLowerCase()) {
+    case "chairman":
+      return 1;
+    case "secretary":
+      return 2;
+    case "treasurer":
+      return 3;
+    case "vice chairman":
+      return 4;
+    case "member":
+      return 5;
+    default:
+      return 6;
+  }
+}
+
+function getCommitteeMembers(allMembers) {
+  return [...allMembers]
+    .filter((member) => member.isCommitteeMember)
+    .sort((left, right) => {
+      const rankDiff = getCommitteeRank(left.committeePost) - getCommitteeRank(right.committeePost);
+      if (rankDiff !== 0) {
+        return rankDiff;
+      }
+
+      return left.name.localeCompare(right.name);
+    });
+}
+
+function mapApiMemberToUi(member, linkedUser = member.user ?? null) {
   const firstName = member.firstName ?? "";
   const lastName = member.lastName ?? "";
   const name = `${firstName} ${lastName}`.trim();
   const membershipType = member.roleTitle || "Primary";
+  const membershipStatus = member.membershipStatus ?? "PENDING";
+  const isPendingMember = membershipStatus === "PENDING";
+  const isInactiveMember = membershipStatus === "INACTIVE";
+  const appAccessStatus = getMemberAccessStatus(linkedUser, membershipStatus);
+  const committeePost = member.committeePost || "";
+  const committeeTenureStart = member.committeeTenureStart?.slice?.(0, 10) || "";
+  const committeeTenureEnd = member.committeeTenureEnd?.slice?.(0, 10) || "";
 
   return {
     id: member.id,
@@ -785,6 +754,7 @@ function mapApiMemberToUi(member) {
     phone: member.phone || "",
     whatsapp: (member.phone || "").replace(/\D/g, ""),
     email: member.email,
+    photoUrl: member.photoUrl || "",
     membershipType,
     membershipPeriod: formatMembershipPeriod(
       member.membershipStartDate?.slice?.(0, 10) || "",
@@ -802,6 +772,12 @@ function mapApiMemberToUi(member) {
             ? "Waived"
             : "Pending",
     badge: member.roleTitle || membershipType,
+    committeePost,
+    committeeTenureStart,
+    committeeTenureEnd,
+    committeeTenure: formatCommitteeTenure(committeeTenureStart, committeeTenureEnd),
+    memberBio: member.memberBio || "",
+    isCommitteeMember: Boolean(committeePost),
     initials: name
       .split(" ")
       .filter(Boolean)
@@ -816,70 +792,88 @@ function mapApiMemberToUi(member) {
           : membershipType === "Temporary Visit"
             ? "Temporary Visitors"
             : "Primary Members",
-    expiryStatus: "active",
-    appAccessStatus: "Approved",
+    expiryStatus: isPendingMember ? "expiring-soon" : isInactiveMember ? "expiring-soon" : "active",
+    appAccessStatus,
+    accessUserId: linkedUser?.id ?? "",
+    approvalStatus: linkedUser?.approvalStatus ?? "",
+    membershipStatus,
     customFieldValues: member.customFieldValues || {},
   };
+}
+
+function mapApiMemberPostToUi(post) {
+  const status =
+    post.reviewStatus === "APPROVED"
+      ? "Approved"
+      : post.reviewStatus === "REJECTED"
+        ? "Rejected"
+        : "Pending Review";
+  const displayPeriod =
+    post.displayStart && post.displayEnd
+      ? `${post.displayStart} to ${post.displayEnd}`
+      : status === "Rejected"
+        ? "Rejected"
+        : "Pending approval";
+
+  return {
+    id: post.id,
+    memberId: post.memberId,
+    title: post.title,
+    summary: post.summary,
+    status,
+    postedBy: post.member?.name ?? "Member",
+    postedOn: post.postedOn,
+    displayStart: post.displayStart,
+    displayEnd: post.displayEnd,
+    displayPeriod,
+    badge: post.postType || "Post",
+    mediaUrl: post.mediaUrl || "",
+    mediaType: post.mediaType || "",
+    memberPhotoUrl: post.member?.photoUrl || "",
+    memberCompany: post.member?.company || "",
+  };
+}
+
+function buildEventTimelineGroups(events) {
+  const today = new Date().toISOString().slice(0, 10);
+  const groupedEvents = [
+    {
+      title: "Past Events",
+      tone: "tone-gallery",
+      badge: "Past",
+      items: events.filter((event) => event.date < today),
+    },
+    {
+      title: "Current Events",
+      tone: "tone-circular",
+      badge: "Current",
+      items: events.filter((event) => event.date === today),
+    },
+    {
+      title: "Coming Events",
+      tone: "tone-advertisement",
+      badge: "Coming",
+      items: events.filter((event) => event.date > today),
+    },
+  ];
+
+  return groupedEvents.map((group) => ({
+    ...group,
+    items: group.items.map((event) => ({
+      id: event.id,
+      title: event.name,
+      meta: `${event.summary || "Event details saved in the event desk."}${event.venue ? ` Venue: ${event.venue}.` : ""}`,
+      badge: group.badge,
+      bannerUrl: event.bannerUrl || "",
+      eventDate: event.date,
+    })),
+  }));
 }
 const vendorSummaryStats = [
   { value: "126", label: "Registered Vendors" },
   { value: "84", label: "Active" },
   { value: "21", label: "Suspended" },
   { value: "21", label: "Lapsed" },
-];
-const memberContentPosts = [
-  {
-    id: "post-1",
-    memberId: "member-3",
-    title: "Automation Upgrade Showcase",
-    summary: "A short banner update on the shop-floor automation rollout and performance gains.",
-    status: "Approved",
-    postedBy: "Kunal Sethi",
-    postedOn: "20 Apr 2026",
-    displayPeriod: "20 Apr 2026 - 10 May 2026",
-    displayStart: "2026-04-20",
-    displayEnd: "2026-05-10",
-    badge: "Banner",
-  },
-  {
-    id: "post-2",
-    memberId: "member-4",
-    title: "Precision Casting Process Note",
-    summary: "Article snippet about process controls, sampling, and traceability improvements.",
-    status: "Rejected",
-    postedBy: "Rhea Patel",
-    postedOn: "19 Apr 2026",
-    displayPeriod: "Rejected",
-    displayStart: "2026-04-19",
-    displayEnd: "2026-04-25",
-    badge: "Article",
-  },
-  {
-    id: "post-3",
-    memberId: "member-5",
-    title: "Associate Partner Training Invite",
-    summary: "Promotional banner for the upcoming technical workshop open to associate members.",
-    status: "Approved",
-    postedBy: "Dev Khanna",
-    postedOn: "18 Apr 2026",
-    displayPeriod: "18 Apr 2026 - 28 Apr 2026",
-    displayStart: "2026-04-18",
-    displayEnd: "2026-04-28",
-    badge: "Banner",
-  },
-  {
-    id: "post-4",
-    memberId: "member-1",
-    title: "Chairman Message For Members",
-    summary: "Short article introducing the next quarter priorities for the community and vendors.",
-    status: "Approved",
-    postedBy: "Aarav Mehta",
-    postedOn: "17 Apr 2026",
-    displayPeriod: "17 Apr 2026 - 30 Apr 2026",
-    displayStart: "2026-04-17",
-    displayEnd: "2026-04-30",
-    badge: "Article",
-  },
 ];
 const vendorRecords = [
   {
@@ -1061,6 +1055,248 @@ const initialAssociationTabData = {
   })),
 };
 
+const defaultRegionalAddress = {
+  id: "",
+  label: "",
+  officeAddress: "",
+  city: "",
+  state: "",
+  pincode: "",
+  registrationNumber: "",
+  gstNumber: "",
+  website: "",
+  contactNumbers: "",
+  helpdeskNumber: "",
+  googleMapsLink: "",
+};
+
+const defaultAssociationProfile = {
+  id: "",
+  name: "Association 1",
+  slug: "association-1",
+  headOfficeAddress: "",
+  city: "",
+  state: "",
+  pincode: "",
+  registrationNumber: "",
+  gstNumber: "",
+  website: "",
+  contactNumbers: "",
+  helpdeskNumber: "",
+  googleMapsLink: "",
+  regionalAddresses: [],
+};
+
+const defaultAssociationAbout = {
+  heroTitle: "Forging a stronger industrial community together.",
+  heroIntro:
+    "Association 1 brings manufacturers, exporters, service partners, and industry leaders onto one shared platform to grow capability, trust, and regional influence.",
+  missionTitle: "Our Mission",
+  missionText:
+    "We exist to help member businesses collaborate more easily, represent shared interests more confidently, and build long-term industrial strength through knowledge exchange and collective action.",
+  goalsTitle: "What We Focus On",
+  goalsText:
+    "From business networking and policy representation to technical training, exhibitions, vendor discovery, and regional expansion, our work is designed to make every member more connected and more competitive.",
+  journeyTitle: "Journey So Far",
+  journeyText:
+    "What started as a focused local trade body has grown into a vibrant association with members across multiple cities, active committees, regular events, and an expanding support network for both established firms and emerging businesses.",
+  stats: [
+    { label: "Years of collective legacy", value: "18+" },
+    { label: "Member companies connected", value: "1,200+" },
+    { label: "Industry events hosted", value: "85+" },
+  ],
+  headOfficeImage:
+    "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=1200&q=80",
+  galleryImageOne:
+    "https://images.unsplash.com/photo-1517048676732-d65bc937f952?auto=format&fit=crop&w=900&q=80",
+  galleryImageTwo:
+    "https://images.unsplash.com/photo-1520607162513-77705c0f0d4a?auto=format&fit=crop&w=900&q=80",
+};
+
+const defaultGalleryItemForm = {
+  id: "",
+  imageUrl: "",
+  headline: "",
+  tagline: "",
+  description: "",
+};
+
+const defaultCircularDocumentForm = {
+  id: "",
+  headline: "",
+  tagline: "",
+  summary: "",
+  file: null,
+  fileName: "",
+  documentUrl: "",
+  previewUrl: "",
+  mimeType: "",
+  fileExtension: "",
+};
+
+function mapAssociationAboutToForm(aboutContent) {
+  return {
+    heroTitle: aboutContent?.heroTitle ?? defaultAssociationAbout.heroTitle,
+    heroIntro: aboutContent?.heroIntro ?? defaultAssociationAbout.heroIntro,
+    missionTitle: aboutContent?.missionTitle ?? defaultAssociationAbout.missionTitle,
+    missionText: aboutContent?.missionText ?? defaultAssociationAbout.missionText,
+    goalsTitle: aboutContent?.goalsTitle ?? defaultAssociationAbout.goalsTitle,
+    goalsText: aboutContent?.goalsText ?? defaultAssociationAbout.goalsText,
+    journeyTitle: aboutContent?.journeyTitle ?? defaultAssociationAbout.journeyTitle,
+    journeyText: aboutContent?.journeyText ?? defaultAssociationAbout.journeyText,
+    headOfficeImage: aboutContent?.headOfficeImage ?? defaultAssociationAbout.headOfficeImage,
+    galleryImageOne: aboutContent?.galleryImageOne ?? defaultAssociationAbout.galleryImageOne,
+    galleryImageTwo: aboutContent?.galleryImageTwo ?? defaultAssociationAbout.galleryImageTwo,
+    stats:
+      Array.isArray(aboutContent?.stats) && aboutContent.stats.length > 0
+        ? aboutContent.stats
+        : defaultAssociationAbout.stats,
+  };
+}
+
+function mapAssociationGalleryItems(items) {
+  if (!Array.isArray(items)) {
+    return [];
+  }
+
+  return items.map((item) => ({
+    id: item.id ?? "",
+    imageUrl: item.imageUrl ?? "",
+    headline: item.headline ?? "",
+    tagline: item.tagline ?? "",
+    description: item.description ?? "",
+  }));
+}
+
+function mapAssociationCircularDocuments(items) {
+  if (!Array.isArray(items)) {
+    return [];
+  }
+
+  return items.map((item) => ({
+    id: item.id ?? "",
+    headline: item.headline ?? "",
+    tagline: item.tagline ?? "",
+    summary: item.summary ?? "",
+    fileName: item.originalFileName ?? "",
+    mimeType: item.mimeType ?? "",
+    fileExtension: item.fileExtension ?? "",
+    documentUrl: item.documentUrl ?? "",
+    previewUrl: item.previewUrl ?? "",
+  }));
+}
+
+const INDIA_STATE_CITY_OPTIONS = {
+  "Andhra Pradesh": ["Visakhapatnam", "Vijayawada", "Guntur", "Nellore", "Kurnool"],
+  "Arunachal Pradesh": ["Itanagar", "Naharlagun", "Tawang", "Pasighat", "Ziro"],
+  Assam: ["Guwahati", "Dibrugarh", "Silchar", "Jorhat", "Tezpur"],
+  Bihar: ["Patna", "Gaya", "Muzaffarpur", "Bhagalpur", "Purnia"],
+  Chhattisgarh: ["Raipur", "Bhilai", "Bilaspur", "Korba", "Durg"],
+  Goa: ["Panaji", "Margao", "Vasco da Gama", "Mapusa", "Ponda"],
+  Gujarat: ["Ahmedabad", "Surat", "Vadodara", "Rajkot", "Gandhinagar"],
+  Haryana: ["Gurugram", "Faridabad", "Panipat", "Ambala", "Hisar"],
+  "Himachal Pradesh": ["Shimla", "Dharamshala", "Solan", "Mandi", "Kullu"],
+  Jharkhand: ["Ranchi", "Jamshedpur", "Dhanbad", "Bokaro", "Deoghar"],
+  Karnataka: ["Bengaluru", "Mysuru", "Mangaluru", "Hubballi", "Belagavi"],
+  Kerala: ["Thiruvananthapuram", "Kochi", "Kozhikode", "Thrissur", "Kollam"],
+  "Madhya Pradesh": ["Bhopal", "Indore", "Jabalpur", "Gwalior", "Ujjain"],
+  Maharashtra: ["Mumbai", "Pune", "Nagpur", "Nashik", "Aurangabad"],
+  Manipur: ["Imphal", "Thoubal", "Bishnupur", "Churachandpur", "Ukhrul"],
+  Meghalaya: ["Shillong", "Tura", "Jowai", "Nongpoh", "Baghmara"],
+  Mizoram: ["Aizawl", "Lunglei", "Champhai", "Serchhip", "Kolasib"],
+  Nagaland: ["Kohima", "Dimapur", "Mokokchung", "Wokha", "Tuensang"],
+  Odisha: ["Bhubaneswar", "Cuttack", "Rourkela", "Sambalpur", "Berhampur"],
+  Punjab: ["Ludhiana", "Amritsar", "Jalandhar", "Patiala", "Mohali"],
+  Rajasthan: ["Jaipur", "Jodhpur", "Udaipur", "Kota", "Ajmer"],
+  Sikkim: ["Gangtok", "Namchi", "Geyzing", "Mangan", "Singtam"],
+  "Tamil Nadu": ["Chennai", "Coimbatore", "Madurai", "Salem", "Tiruchirappalli"],
+  Telangana: ["Hyderabad", "Warangal", "Nizamabad", "Karimnagar", "Khammam"],
+  Tripura: ["Agartala", "Udaipur", "Dharmanagar", "Kailashahar", "Belonia"],
+  "Uttar Pradesh": ["Lucknow", "Kanpur", "Noida", "Varanasi", "Agra"],
+  Uttarakhand: ["Dehradun", "Haridwar", "Roorkee", "Haldwani", "Rishikesh"],
+  "West Bengal": ["Kolkata", "Howrah", "Siliguri", "Durgapur", "Asansol"],
+  "Andaman and Nicobar Islands": ["Port Blair"],
+  Chandigarh: ["Chandigarh"],
+  "Dadra and Nagar Haveli and Daman and Diu": ["Daman", "Diu", "Silvassa"],
+  Delhi: ["New Delhi", "Central Delhi", "Dwarka", "Rohini", "Saket"],
+  "Jammu and Kashmir": ["Srinagar", "Jammu", "Anantnag", "Baramulla", "Pulwama"],
+  Ladakh: ["Leh", "Kargil"],
+  Lakshadweep: ["Kavaratti"],
+  Puducherry: ["Puducherry", "Karaikal", "Mahe", "Yanam"],
+};
+
+const INDIA_STATES = Object.keys(INDIA_STATE_CITY_OPTIONS);
+
+function mapAssociationProfileToForm(association) {
+  return {
+    id: association?.id ?? "",
+    name: association?.name ?? "Association 1",
+    slug: association?.slug ?? "association-1",
+    headOfficeAddress: association?.headOfficeAddress ?? "",
+    city: association?.city ?? "",
+    state: association?.state ?? "",
+    pincode: association?.pincode ?? "",
+    registrationNumber: association?.registrationNumber ?? "",
+    gstNumber: association?.gstNumber ?? "",
+    website: association?.website ?? "",
+    contactNumbers: Array.isArray(association?.contactNumbers)
+      ? association.contactNumbers.join(", ")
+      : "",
+    helpdeskNumber: association?.helpdeskNumber ?? "",
+    googleMapsLink: association?.googleMapsLink ?? "",
+    regionalAddresses: Array.isArray(association?.regionalAddresses)
+      ? association.regionalAddresses.map((address) => ({
+          id: address.id ?? "",
+          label: address.label ?? "",
+          officeAddress: address.officeAddress ?? "",
+          city: address.city ?? "",
+          state: address.state ?? "",
+          pincode: address.pincode ?? "",
+          registrationNumber: address.registrationNumber ?? "",
+          gstNumber: address.gstNumber ?? "",
+          website: address.website ?? "",
+          contactNumbers: Array.isArray(address.contactNumbers)
+            ? address.contactNumbers.join(", ")
+            : "",
+          helpdeskNumber: address.helpdeskNumber ?? "",
+          googleMapsLink: address.googleMapsLink ?? "",
+        }))
+      : [],
+  };
+}
+
+function splitContactNumbers(value) {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function getIndianCities(state) {
+  return INDIA_STATE_CITY_OPTIONS[state] ?? [];
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+function mergeMemberUsers(members, users) {
+  const userByMemberId = new Map(
+    users.filter((user) => user.memberId).map((user) => [user.memberId, user]),
+  );
+  const userByEmail = new Map(users.map((user) => [user.email, user]));
+
+  return members.map((member) => {
+    const linkedUser = userByMemberId.get(member.id) ?? userByEmail.get(member.email) ?? member.user ?? null;
+    return mapApiMemberToUi(member, linkedUser);
+  });
+}
+
 const initialMemberTabData = buildMemberTabData(memberRecords);
 
 function CarouselSection({ title, items, tone, compact = false }) {
@@ -1129,7 +1365,7 @@ function MemberCarouselSection({ title, items, tone }) {
               className={`carousel-card member-carousel-card ${tone}`}
             >
               <div className="member-carousel-photo">
-                <span>{member.initials}</span>
+                {member.photoUrl ? <img className="member-record-photo-image" src={member.photoUrl} alt={member.name} /> : <span>{member.initials}</span>}
               </div>
               <div className="member-carousel-copy">
                 <em className="carousel-badge">{member.badge}</em>
@@ -1343,6 +1579,51 @@ function AssociationTabContent({
   onFinanceStatementFilterTypeChange,
   onFinanceStatementDateFromChange,
   onFinanceStatementDateToChange,
+  associationProfile,
+  associationProfileForm,
+  isEditingAssociationProfile,
+  onEditAssociationProfile,
+  onAssociationProfileFieldChange,
+  onAssociationRegionalFieldChange,
+  onAddRegionalAddress,
+  onRemoveRegionalAddress,
+  onCancelAssociationProfileEdit,
+  onSaveAssociationProfile,
+  associationAbout,
+  associationAboutForm,
+  isEditingAssociationAbout,
+  onEditAssociationAbout,
+  onAssociationAboutFieldChange,
+  onAssociationAboutImageChange,
+  onCancelAssociationAboutEdit,
+  onSaveAssociationAbout,
+  committeeMembers,
+  allMembers,
+  editingCommitteeMemberId,
+  committeeMemberForm,
+  onOpenCommitteeMemberEditor,
+  onCommitteeMemberFormChange,
+  onCancelCommitteeMemberEdit,
+  onSaveCommitteeMember,
+  onRemoveCommitteeMember,
+  galleryItems,
+  editingGalleryItemId,
+  galleryItemForm,
+  onOpenGalleryItemEditor,
+  onGalleryItemFieldChange,
+  onGalleryItemImageChange,
+  onCancelGalleryItemEdit,
+  onSaveGalleryItem,
+  onDeleteGalleryItem,
+  circularDocuments,
+  editingCircularDocumentId,
+  circularDocumentForm,
+  onOpenCircularDocumentEditor,
+  onCircularDocumentFieldChange,
+  onCircularDocumentFileChange,
+  onCancelCircularDocumentEdit,
+  onSaveCircularDocument,
+  onDeleteCircularDocument,
 }) {
   const toneMap = {
     Profile: "tone-circular",
@@ -1353,6 +1634,89 @@ function AssociationTabContent({
     Gallery: "tone-gallery",
     Master: "tone-advertisement",
   };
+
+  if (activeTab === "Profile") {
+    return (
+      <AssociationProfilePanel
+        associationProfile={associationProfile}
+        formData={associationProfileForm}
+        isEditing={isEditingAssociationProfile}
+        onEdit={onEditAssociationProfile}
+        onFieldChange={onAssociationProfileFieldChange}
+        onRegionalFieldChange={onAssociationRegionalFieldChange}
+        onAddRegionalAddress={onAddRegionalAddress}
+        onRemoveRegionalAddress={onRemoveRegionalAddress}
+        onCancel={onCancelAssociationProfileEdit}
+        onSave={onSaveAssociationProfile}
+      />
+    );
+  }
+
+  if (activeTab === "About Us") {
+    return (
+      <AssociationAboutPanel
+        aboutData={associationAbout}
+        formData={associationAboutForm}
+        isEditing={isEditingAssociationAbout}
+        onEdit={onEditAssociationAbout}
+        onFieldChange={onAssociationAboutFieldChange}
+        onImageChange={onAssociationAboutImageChange}
+        onCancel={onCancelAssociationAboutEdit}
+        onSave={onSaveAssociationAbout}
+      />
+    );
+  }
+
+  if (activeTab === "Management Committee") {
+    return (
+      <ManagementCommitteePanel
+        committeeMembers={committeeMembers}
+        allMembers={allMembers}
+        isAdmin={isAdmin}
+        editingMemberId={editingCommitteeMemberId}
+        formData={committeeMemberForm}
+        onOpenEditor={onOpenCommitteeMemberEditor}
+        onFormChange={onCommitteeMemberFormChange}
+        onCancelEdit={onCancelCommitteeMemberEdit}
+        onSave={onSaveCommitteeMember}
+        onRemove={onRemoveCommitteeMember}
+      />
+    );
+  }
+
+  if (activeTab === "Gallery") {
+    return (
+      <AssociationGalleryPanel
+        items={galleryItems}
+        isAdmin={isAdmin}
+        editingItemId={editingGalleryItemId}
+        formData={galleryItemForm}
+        onOpenEditor={onOpenGalleryItemEditor}
+        onFieldChange={onGalleryItemFieldChange}
+        onImageChange={onGalleryItemImageChange}
+        onCancelEdit={onCancelGalleryItemEdit}
+        onSave={onSaveGalleryItem}
+        onDelete={onDeleteGalleryItem}
+      />
+    );
+  }
+
+  if (activeTab === "Circulars") {
+    return (
+      <AssociationCircularsPanel
+        items={circularDocuments}
+        isAdmin={isAdmin}
+        editingItemId={editingCircularDocumentId}
+        formData={circularDocumentForm}
+        onOpenEditor={onOpenCircularDocumentEditor}
+        onFieldChange={onCircularDocumentFieldChange}
+        onFileChange={onCircularDocumentFileChange}
+        onCancelEdit={onCancelCircularDocumentEdit}
+        onSave={onSaveCircularDocument}
+        onDelete={onDeleteCircularDocument}
+      />
+    );
+  }
 
   return (
     <section className="association-tab-section">
@@ -1404,6 +1768,896 @@ function AssociationTabContent({
           />
         </>
       )}
+    </section>
+  );
+}
+
+function AssociationProfilePanel({
+  associationProfile,
+  formData,
+  isEditing,
+  onEdit,
+  onFieldChange,
+  onRegionalFieldChange,
+  onAddRegionalAddress,
+  onRemoveRegionalAddress,
+  onCancel,
+  onSave,
+}) {
+  const headOfficeCities = getIndianCities(formData.state);
+
+  if (isEditing) {
+    return (
+      <section className="association-tab-section">
+        <section className="member-table-panel">
+          <div className="panel-topline">
+            <h2>Edit Association Profile</h2>
+            <span className="mini-label">Profile</span>
+          </div>
+
+          <div className="profile-form-grid">
+            <label className="profile-field">
+              <span>Association Name</span>
+              <input type="text" value={formData.name} onChange={(event) => onFieldChange("name", event.target.value)} />
+            </label>
+            <label className="profile-field">
+              <span>Registration Number</span>
+              <input
+                type="text"
+                value={formData.registrationNumber}
+                onChange={(event) => onFieldChange("registrationNumber", event.target.value)}
+              />
+            </label>
+            <label className="profile-field profile-field-wide">
+              <span>Head Office Address</span>
+              <textarea
+                rows="3"
+                value={formData.headOfficeAddress}
+                onChange={(event) => onFieldChange("headOfficeAddress", event.target.value)}
+              />
+            </label>
+            <label className="profile-field">
+              <span>City</span>
+              <select value={formData.city} onChange={(event) => onFieldChange("city", event.target.value)} disabled={!formData.state}>
+                <option value="">{formData.state ? "Select city" : "Select state first"}</option>
+                {headOfficeCities.map((city) => (
+                  <option key={city} value={city}>
+                    {city}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="profile-field">
+              <span>State</span>
+              <select value={formData.state} onChange={(event) => onFieldChange("state", event.target.value)}>
+                <option value="">Select state</option>
+                {INDIA_STATES.map((state) => (
+                  <option key={state} value={state}>
+                    {state}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="profile-field">
+              <span>Pincode</span>
+              <input type="text" value={formData.pincode} onChange={(event) => onFieldChange("pincode", event.target.value)} />
+            </label>
+            <label className="profile-field">
+              <span>GST Number</span>
+              <input type="text" value={formData.gstNumber} onChange={(event) => onFieldChange("gstNumber", event.target.value)} />
+            </label>
+            <label className="profile-field">
+              <span>Website</span>
+              <input type="text" value={formData.website} onChange={(event) => onFieldChange("website", event.target.value)} />
+            </label>
+            <label className="profile-field">
+              <span>Helpdesk Number</span>
+              <input
+                type="text"
+                value={formData.helpdeskNumber}
+                onChange={(event) => onFieldChange("helpdeskNumber", event.target.value)}
+              />
+            </label>
+            <label className="profile-field profile-field-wide">
+              <span>Contact Numbers</span>
+              <input
+                type="text"
+                value={formData.contactNumbers}
+                placeholder="Comma separated numbers"
+                onChange={(event) => onFieldChange("contactNumbers", event.target.value)}
+              />
+            </label>
+            <label className="profile-field profile-field-wide">
+              <span>Google Map Access Location</span>
+              <input
+                type="text"
+                value={formData.googleMapsLink}
+                placeholder="Google Maps URL"
+                onChange={(event) => onFieldChange("googleMapsLink", event.target.value)}
+              />
+            </label>
+          </div>
+
+          <div className="association-regional-header">
+            <div>
+              <span className="mini-label">Regional Offices</span>
+              <h3>Regional Address List</h3>
+            </div>
+            <button className="secondary-link secondary-button" type="button" onClick={onAddRegionalAddress}>
+              Add Regional Address
+            </button>
+          </div>
+
+          <div className="association-profile-stack">
+            {formData.regionalAddresses.map((address, index) => {
+              const regionalCities = getIndianCities(address.state);
+
+              return (
+                <article key={address.id || `regional-${index}`} className="association-profile-card">
+                  <div className="panel-topline">
+                    <h3>Regional Office {index + 1}</h3>
+                    <button className="secondary-link secondary-button danger-button" type="button" onClick={() => onRemoveRegionalAddress(index)}>
+                      Remove
+                    </button>
+                  </div>
+
+                  <div className="profile-form-grid">
+                    <label className="profile-field">
+                      <span>Label</span>
+                      <input
+                        type="text"
+                        value={address.label}
+                        onChange={(event) => onRegionalFieldChange(index, "label", event.target.value)}
+                      />
+                    </label>
+                    <label className="profile-field">
+                      <span>Registration Number</span>
+                      <input
+                        type="text"
+                        value={address.registrationNumber}
+                        onChange={(event) => onRegionalFieldChange(index, "registrationNumber", event.target.value)}
+                      />
+                    </label>
+                    <label className="profile-field profile-field-wide">
+                      <span>Office Address</span>
+                      <textarea
+                        rows="3"
+                        value={address.officeAddress}
+                        onChange={(event) => onRegionalFieldChange(index, "officeAddress", event.target.value)}
+                      />
+                    </label>
+                    <label className="profile-field">
+                      <span>City</span>
+                      <select
+                        value={address.city}
+                        onChange={(event) => onRegionalFieldChange(index, "city", event.target.value)}
+                        disabled={!address.state}
+                      >
+                        <option value="">{address.state ? "Select city" : "Select state first"}</option>
+                        {regionalCities.map((city) => (
+                          <option key={city} value={city}>
+                            {city}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="profile-field">
+                      <span>State</span>
+                      <select value={address.state} onChange={(event) => onRegionalFieldChange(index, "state", event.target.value)}>
+                        <option value="">Select state</option>
+                        {INDIA_STATES.map((state) => (
+                          <option key={state} value={state}>
+                            {state}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="profile-field">
+                      <span>Pincode</span>
+                      <input type="text" value={address.pincode} onChange={(event) => onRegionalFieldChange(index, "pincode", event.target.value)} />
+                    </label>
+                    <label className="profile-field">
+                      <span>GST Number</span>
+                      <input type="text" value={address.gstNumber} onChange={(event) => onRegionalFieldChange(index, "gstNumber", event.target.value)} />
+                    </label>
+                    <label className="profile-field">
+                      <span>Website</span>
+                      <input type="text" value={address.website} onChange={(event) => onRegionalFieldChange(index, "website", event.target.value)} />
+                    </label>
+                    <label className="profile-field">
+                      <span>Helpdesk Number</span>
+                      <input
+                        type="text"
+                        value={address.helpdeskNumber}
+                        onChange={(event) => onRegionalFieldChange(index, "helpdeskNumber", event.target.value)}
+                      />
+                    </label>
+                    <label className="profile-field profile-field-wide">
+                      <span>Contact Numbers</span>
+                      <input
+                        type="text"
+                        value={address.contactNumbers}
+                        placeholder="Comma separated numbers"
+                        onChange={(event) => onRegionalFieldChange(index, "contactNumbers", event.target.value)}
+                      />
+                    </label>
+                    <label className="profile-field profile-field-wide">
+                      <span>Google Map Access Location</span>
+                      <input
+                        type="text"
+                        value={address.googleMapsLink}
+                        onChange={(event) => onRegionalFieldChange(index, "googleMapsLink", event.target.value)}
+                      />
+                    </label>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+
+          <div className="profile-action-row">
+            <button className="secondary-link secondary-button" type="button" onClick={onCancel}>
+              Cancel
+            </button>
+            <button className="primary-link admin-action-button" type="button" onClick={onSave}>
+              Save Profile
+            </button>
+          </div>
+        </section>
+      </section>
+    );
+  }
+
+  return (
+    <section className="association-tab-section">
+      <section className="association-profile-stack">
+        <article className="association-profile-card">
+          <div className="panel-topline">
+            <h2>{associationProfile.name || "Association Profile"}</h2>
+            <button className="primary-link admin-action-button" type="button" onClick={onEdit}>
+              Edit
+            </button>
+          </div>
+
+          <div className="association-profile-grid">
+            <div>
+              <span className="mini-label">Head Office Address</span>
+              <p>{associationProfile.headOfficeAddress || "Not added yet"}</p>
+            </div>
+            <div>
+              <span className="mini-label">City, State with Pincode</span>
+              <p>
+                {[associationProfile.city, associationProfile.state, associationProfile.pincode]
+                  .filter(Boolean)
+                  .join(", ") || "Not added yet"}
+              </p>
+            </div>
+            <div>
+              <span className="mini-label">Registration Number</span>
+              <p>{associationProfile.registrationNumber || "Not added yet"}</p>
+            </div>
+            <div>
+              <span className="mini-label">GST Number</span>
+              <p>{associationProfile.gstNumber || "Not added yet"}</p>
+            </div>
+            <div>
+              <span className="mini-label">Website</span>
+              <p>{associationProfile.website || "Not added yet"}</p>
+            </div>
+            <div>
+              <span className="mini-label">Helpdesk Number</span>
+              <p>{associationProfile.helpdeskNumber || "Not added yet"}</p>
+            </div>
+            <div className="association-profile-wide">
+              <span className="mini-label">Contact Numbers</span>
+              <p>{associationProfile.contactNumbers || "Not added yet"}</p>
+            </div>
+            <div className="association-profile-wide">
+              <span className="mini-label">Google Map Access Location</span>
+              <p>{associationProfile.googleMapsLink || "Not added yet"}</p>
+            </div>
+          </div>
+        </article>
+
+        {associationProfile.regionalAddresses.length > 0 ? (
+          <div className="association-profile-stack">
+            {associationProfile.regionalAddresses.map((address, index) => (
+              <article key={address.id || `regional-card-${index}`} className="association-profile-card">
+                <div className="panel-topline">
+                  <h3>{address.label || `Regional Office ${index + 1}`}</h3>
+                  <span className="mini-label">Regional Address</span>
+                </div>
+
+                <div className="association-profile-grid">
+                  <div className="association-profile-wide">
+                    <span className="mini-label">Office Address</span>
+                    <p>{address.officeAddress || "Not added yet"}</p>
+                  </div>
+                  <div>
+                    <span className="mini-label">City, State with Pincode</span>
+                    <p>{[address.city, address.state, address.pincode].filter(Boolean).join(", ") || "Not added yet"}</p>
+                  </div>
+                  <div>
+                    <span className="mini-label">Registration Number</span>
+                    <p>{address.registrationNumber || "Not added yet"}</p>
+                  </div>
+                  <div>
+                    <span className="mini-label">GST Number</span>
+                    <p>{address.gstNumber || "Not added yet"}</p>
+                  </div>
+                  <div>
+                    <span className="mini-label">Website</span>
+                    <p>{address.website || "Not added yet"}</p>
+                  </div>
+                  <div>
+                    <span className="mini-label">Helpdesk Number</span>
+                    <p>{address.helpdeskNumber || "Not added yet"}</p>
+                  </div>
+                  <div className="association-profile-wide">
+                    <span className="mini-label">Contact Numbers</span>
+                    <p>{address.contactNumbers || "Not added yet"}</p>
+                  </div>
+                  <div className="association-profile-wide">
+                    <span className="mini-label">Google Map Access Location</span>
+                    <p>{address.googleMapsLink || "Not added yet"}</p>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : null}
+      </section>
+    </section>
+  );
+}
+
+function AssociationAboutPanel({
+  aboutData,
+  formData,
+  isEditing,
+  onEdit,
+  onFieldChange,
+  onImageChange,
+  onCancel,
+  onSave,
+}) {
+  if (isEditing) {
+    return (
+      <section className="association-tab-section">
+        <section className="member-table-panel">
+          <div className="panel-topline">
+            <h2>Edit About Us</h2>
+            <span className="mini-label">Landing Page Content</span>
+          </div>
+
+          <div className="profile-form-grid">
+            <label className="profile-field profile-field-wide">
+              <span>Hero Title</span>
+              <input type="text" value={formData.heroTitle} onChange={(event) => onFieldChange("heroTitle", event.target.value)} />
+            </label>
+            <label className="profile-field profile-field-wide">
+              <span>Hero Intro</span>
+              <textarea rows="3" value={formData.heroIntro} onChange={(event) => onFieldChange("heroIntro", event.target.value)} />
+            </label>
+            <label className="profile-field">
+              <span>Mission Title</span>
+              <input type="text" value={formData.missionTitle} onChange={(event) => onFieldChange("missionTitle", event.target.value)} />
+            </label>
+            <label className="profile-field">
+              <span>Goals Title</span>
+              <input type="text" value={formData.goalsTitle} onChange={(event) => onFieldChange("goalsTitle", event.target.value)} />
+            </label>
+            <label className="profile-field profile-field-wide">
+              <span>Mission Text</span>
+              <textarea rows="4" value={formData.missionText} onChange={(event) => onFieldChange("missionText", event.target.value)} />
+            </label>
+            <label className="profile-field profile-field-wide">
+              <span>Goals Text</span>
+              <textarea rows="4" value={formData.goalsText} onChange={(event) => onFieldChange("goalsText", event.target.value)} />
+            </label>
+            <label className="profile-field">
+              <span>Journey Title</span>
+              <input type="text" value={formData.journeyTitle} onChange={(event) => onFieldChange("journeyTitle", event.target.value)} />
+            </label>
+            <label className="profile-field profile-field-wide">
+              <span>Journey Text</span>
+              <textarea rows="4" value={formData.journeyText} onChange={(event) => onFieldChange("journeyText", event.target.value)} />
+            </label>
+            <label className="profile-field">
+              <span>Head Office Image</span>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(event) => onImageChange("headOfficeImage", event.target.files?.[0] ?? null)}
+              />
+            </label>
+            <label className="profile-field">
+              <span>Gallery Image One</span>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(event) => onImageChange("galleryImageOne", event.target.files?.[0] ?? null)}
+              />
+            </label>
+            <label className="profile-field">
+              <span>Gallery Image Two</span>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(event) => onImageChange("galleryImageTwo", event.target.files?.[0] ?? null)}
+              />
+            </label>
+            <div className="about-edit-preview-row profile-field-wide">
+              <img src={formData.headOfficeImage} alt="Head office preview" />
+              <img src={formData.galleryImageOne} alt="Gallery preview one" />
+              <img src={formData.galleryImageTwo} alt="Gallery preview two" />
+            </div>
+          </div>
+
+          <div className="profile-action-row">
+            <button className="secondary-link secondary-button" type="button" onClick={onCancel}>
+              Cancel
+            </button>
+            <button className="primary-link admin-action-button" type="button" onClick={onSave}>
+              Save About Us
+            </button>
+          </div>
+        </section>
+      </section>
+    );
+  }
+
+  return (
+    <section className="association-tab-section">
+      <section className="about-landing-shell">
+        <article className="about-hero-card">
+          <div className="about-hero-copy">
+            <span className="mini-label">Head Office Story</span>
+            <h2>{aboutData.heroTitle}</h2>
+            <p>{aboutData.heroIntro}</p>
+            <div className="about-stat-row">
+              {aboutData.stats.map((item) => (
+                <article key={item.label} className="about-stat-card">
+                  <strong>{item.value}</strong>
+                  <span>{item.label}</span>
+                </article>
+              ))}
+            </div>
+          </div>
+          <div className="about-hero-visual">
+            <img src={aboutData.headOfficeImage} alt="Association head office" />
+          </div>
+        </article>
+
+        <div className="about-story-grid">
+          <article className="about-story-card">
+            <span className="mini-label">Mission</span>
+            <h3>{aboutData.missionTitle}</h3>
+            <p>{aboutData.missionText}</p>
+          </article>
+          <article className="about-story-card">
+            <span className="mini-label">Goals</span>
+            <h3>{aboutData.goalsTitle}</h3>
+            <p>{aboutData.goalsText}</p>
+          </article>
+        </div>
+
+        <article className="about-journey-card">
+          <div className="about-journey-copy">
+            <span className="mini-label">So Far</span>
+            <h3>{aboutData.journeyTitle}</h3>
+            <p>{aboutData.journeyText}</p>
+            <button className="primary-link admin-action-button" type="button" onClick={onEdit}>
+              Edit
+            </button>
+          </div>
+          <div className="about-gallery-grid">
+            <img src={aboutData.galleryImageOne} alt="Association community event" />
+            <img src={aboutData.galleryImageTwo} alt="Association industry journey" />
+          </div>
+        </article>
+      </section>
+    </section>
+  );
+}
+
+function ManagementCommitteePanel({
+  committeeMembers,
+  allMembers,
+  isAdmin,
+  editingMemberId,
+  formData,
+  onOpenEditor,
+  onCancelEdit,
+  onFormChange,
+  onSave,
+  onRemove,
+}) {
+  const availableMembers = allMembers.filter((member) => {
+    if (member.id === editingMemberId) {
+      return true;
+    }
+
+    return !member.isCommitteeMember;
+  });
+
+  return (
+    <section className="association-tab-section">
+      <section className="association-profile-stack">
+        <article className="association-profile-card committee-hero-card">
+          <div className="panel-topline">
+            <div>
+              <span className="mini-label">Management Committee</span>
+              <h2>Leadership Panel</h2>
+            </div>
+            {isAdmin ? (
+              <button className="primary-link admin-action-button" type="button" onClick={() => onOpenEditor("")}>
+                Add Committee Member
+              </button>
+            ) : null}
+          </div>
+          <p className="committee-hero-copy">
+            Leadership cards are driven from the member table. Admins can assign a post, set tenure, and update a short
+            bio for each committee representative.
+          </p>
+        </article>
+
+        {editingMemberId !== null ? (
+          <article className="association-profile-card">
+            <div className="panel-topline">
+              <h3>{editingMemberId ? "Edit Committee Member" : "Assign Committee Member"}</h3>
+              <span className="mini-label">Admin Editor</span>
+            </div>
+
+            <div className="profile-form-grid">
+              <label className="profile-field profile-field-wide">
+                <span>Member</span>
+                <select value={formData.memberId} onChange={(event) => onFormChange("memberId", event.target.value)}>
+                  <option value="">Select member</option>
+                  {availableMembers.map((member) => (
+                    <option key={member.id} value={member.id}>
+                      {member.name} · {member.company || "No company"}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="profile-field">
+                <span>Post</span>
+                <select value={formData.committeePost} onChange={(event) => onFormChange("committeePost", event.target.value)}>
+                  <option value="">Select post</option>
+                  <option value="Chairman">Chairman</option>
+                  <option value="Secretary">Secretary</option>
+                  <option value="Treasurer">Treasurer</option>
+                  <option value="Vice Chairman">Vice Chairman</option>
+                  <option value="Member">Member</option>
+                </select>
+              </label>
+              <label className="profile-field">
+                <span>Tenure Start</span>
+                <input
+                  type="date"
+                  value={formData.committeeTenureStart}
+                  onChange={(event) => onFormChange("committeeTenureStart", event.target.value)}
+                />
+              </label>
+              <label className="profile-field">
+                <span>Tenure End</span>
+                <input
+                  type="date"
+                  value={formData.committeeTenureEnd}
+                  onChange={(event) => onFormChange("committeeTenureEnd", event.target.value)}
+                />
+              </label>
+              <label className="profile-field profile-field-wide">
+                <span>Brief About Member</span>
+                <textarea rows="4" value={formData.memberBio} onChange={(event) => onFormChange("memberBio", event.target.value)} />
+              </label>
+            </div>
+
+            <div className="profile-action-row">
+              <button className="secondary-link secondary-button" type="button" onClick={onCancelEdit}>
+                Cancel
+              </button>
+              <button className="primary-link admin-action-button" type="button" onClick={onSave}>
+                Save Committee Details
+              </button>
+            </div>
+          </article>
+        ) : null}
+
+        {committeeMembers.length > 0 ? (
+          <div className="committee-card-grid">
+            {committeeMembers.map((member) => (
+              <article key={member.id} className="committee-member-card">
+                <div className="committee-member-head">
+                  <div className="member-record-photo committee-member-photo">
+                    {member.photoUrl ? <img className="member-record-photo-image" src={member.photoUrl} alt={member.name} /> : <span>{member.initials}</span>}
+                  </div>
+                  <div>
+                    <span className="mini-label">{member.committeePost || "Committee"}</span>
+                    <h3>{member.name}</h3>
+                    <p className="member-company">{member.company || "Company not added yet"}</p>
+                  </div>
+                </div>
+
+                <div className="committee-member-meta">
+                  <p>
+                    <strong>Membership Type:</strong> {member.membershipType}
+                  </p>
+                  <p>
+                    <strong>Tenure:</strong> {member.committeeTenure}
+                  </p>
+                </div>
+
+                <p className="committee-member-bio">{member.memberBio || "Brief introduction not added yet."}</p>
+
+                {isAdmin ? (
+                  <div className="record-actions">
+                    <button className="secondary-link secondary-button" type="button" onClick={() => onOpenEditor(member.id)}>
+                      Edit
+                    </button>
+                    <button className="secondary-link secondary-button danger-button" type="button" onClick={() => onRemove(member.id)}>
+                      Remove From Committee
+                    </button>
+                  </div>
+                ) : null}
+              </article>
+            ))}
+          </div>
+        ) : (
+          <article className="association-profile-card committee-empty-card">
+            <span className="mini-label">Management Committee</span>
+            <h3>No committee members assigned yet</h3>
+            <p>Assign members to posts like Chairman, Secretary, Treasurer, or Committee Member to populate this section.</p>
+          </article>
+        )}
+      </section>
+    </section>
+  );
+}
+
+function AssociationGalleryPanel({
+  items,
+  isAdmin,
+  editingItemId,
+  formData,
+  onOpenEditor,
+  onFieldChange,
+  onImageChange,
+  onCancelEdit,
+  onSave,
+  onDelete,
+}) {
+  return (
+    <section className="association-tab-section">
+      <section className="association-profile-stack">
+        <article className="association-profile-card">
+          <div className="panel-topline">
+            <div>
+              <span className="mini-label">Gallery</span>
+              <h2>Visual Stories</h2>
+            </div>
+            {isAdmin ? (
+              <button className="primary-link admin-action-button" type="button" onClick={() => onOpenEditor("")}>
+                Add New
+              </button>
+            ) : null}
+          </div>
+          <p className="committee-hero-copy">
+            Each gallery entry uses one main image on top with a clear headline, short tagline, and full description below.
+          </p>
+        </article>
+
+        {editingItemId !== null ? (
+          <article className="association-profile-card">
+            <div className="panel-topline">
+              <h3>{editingItemId ? "Edit Gallery Item" : "Add Gallery Item"}</h3>
+              <span className="mini-label">Gallery CMS</span>
+            </div>
+
+            <div className="profile-form-grid">
+              <div className="profile-avatar-panel profile-field-wide member-photo-field">
+                <div className="gallery-form-preview">
+                  {formData.imageUrl ? (
+                    <img src={formData.imageUrl} alt="Gallery preview" />
+                  ) : (
+                    <div className="gallery-form-placeholder">Image preview</div>
+                  )}
+                </div>
+                <button className="secondary-link secondary-button profile-upload-button" type="button">
+                  Upload Gallery Picture
+                  <input type="file" accept="image/*" onChange={(event) => onImageChange(event.target.files?.[0] ?? null)} />
+                </button>
+              </div>
+              <label className="profile-field profile-field-wide">
+                <span>Headline</span>
+                <input type="text" value={formData.headline} onChange={(event) => onFieldChange("headline", event.target.value)} />
+              </label>
+              <label className="profile-field profile-field-wide">
+                <span>Tagline</span>
+                <input type="text" value={formData.tagline} onChange={(event) => onFieldChange("tagline", event.target.value)} />
+              </label>
+              <label className="profile-field profile-field-wide">
+                <span>Description</span>
+                <textarea rows="5" value={formData.description} onChange={(event) => onFieldChange("description", event.target.value)} />
+              </label>
+            </div>
+
+            <div className="profile-action-row">
+              <button className="secondary-link secondary-button" type="button" onClick={onCancelEdit}>
+                Cancel
+              </button>
+              <button className="primary-link admin-action-button" type="button" onClick={onSave}>
+                Save Gallery Item
+              </button>
+            </div>
+          </article>
+        ) : null}
+
+        {items.length > 0 ? (
+          <div className="association-gallery-grid">
+            {items.map((item) => (
+              <article key={item.id} className="association-gallery-card">
+                <div className="association-gallery-visual">
+                  {item.imageUrl ? <img src={item.imageUrl} alt={item.headline} /> : <div className="gallery-form-placeholder">No image</div>}
+                </div>
+                <div className="association-gallery-copy">
+                  <h3>{item.headline}</h3>
+                  <span className="mini-label">{item.tagline || "No tagline added yet"}</span>
+                  <p>{item.description || "No description added yet."}</p>
+                </div>
+                {isAdmin ? (
+                  <div className="record-actions">
+                    <button className="secondary-link secondary-button" type="button" onClick={() => onOpenEditor(item.id)}>
+                      Edit
+                    </button>
+                    <button className="secondary-link secondary-button danger-button" type="button" onClick={() => onDelete(item.id)}>
+                      Delete
+                    </button>
+                  </div>
+                ) : null}
+              </article>
+            ))}
+          </div>
+        ) : (
+          <article className="association-profile-card committee-empty-card">
+            <span className="mini-label">Gallery</span>
+            <h3>No gallery entries yet</h3>
+            <p>Add a gallery item to start showing image-led stories for the association.</p>
+          </article>
+        )}
+      </section>
+    </section>
+  );
+}
+
+function AssociationCircularsPanel({
+  items,
+  isAdmin,
+  editingItemId,
+  formData,
+  onOpenEditor,
+  onFieldChange,
+  onFileChange,
+  onCancelEdit,
+  onSave,
+  onDelete,
+}) {
+  return (
+    <section className="association-tab-section">
+      <section className="association-profile-stack">
+        <article className="association-profile-card">
+          <div className="panel-topline">
+            <div>
+              <span className="mini-label">Circulars</span>
+              <h2>Document Library</h2>
+            </div>
+            {isAdmin ? (
+              <button className="primary-link admin-action-button" type="button" onClick={() => onOpenEditor("")}>
+                Add New
+              </button>
+            ) : null}
+          </div>
+          <p className="committee-hero-copy">
+            Upload PDFs, DOC files, or scanned items with a headline, tagline, and brief summary. Opening a card takes the user to the full document in a new tab.
+          </p>
+        </article>
+
+        {editingItemId !== null ? (
+          <article className="association-profile-card">
+            <div className="panel-topline">
+              <h3>{editingItemId ? "Edit Circular" : "Add Circular"}</h3>
+              <span className="mini-label">Circular CMS</span>
+            </div>
+
+            <div className="profile-form-grid">
+              <div className="profile-avatar-panel profile-field-wide member-photo-field">
+                <div className="gallery-form-preview circular-preview-panel">
+                  {formData.previewUrl ? (
+                    <img src={formData.previewUrl} alt="Circular preview" />
+                  ) : (
+                    <div className="gallery-form-placeholder circular-file-placeholder">
+                      <strong>{formData.fileExtension || "DOC"}</strong>
+                      <span>{formData.fileName || "Upload a PDF, DOC, or scan"}</span>
+                    </div>
+                  )}
+                </div>
+                <button className="secondary-link secondary-button profile-upload-button" type="button">
+                  Upload Document
+                  <input
+                    type="file"
+                    accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.webp,.tif,.tiff"
+                    onChange={(event) => onFileChange(event.target.files?.[0] ?? null)}
+                  />
+                </button>
+              </div>
+              <label className="profile-field profile-field-wide">
+                <span>Headline</span>
+                <input type="text" value={formData.headline} onChange={(event) => onFieldChange("headline", event.target.value)} />
+              </label>
+              <label className="profile-field profile-field-wide">
+                <span>Tagline</span>
+                <input type="text" value={formData.tagline} onChange={(event) => onFieldChange("tagline", event.target.value)} />
+              </label>
+              <label className="profile-field profile-field-wide">
+                <span>Brief Text</span>
+                <textarea rows="5" value={formData.summary} onChange={(event) => onFieldChange("summary", event.target.value)} />
+              </label>
+            </div>
+
+            <div className="profile-action-row">
+              <button className="secondary-link secondary-button" type="button" onClick={onCancelEdit}>
+                Cancel
+              </button>
+              <button className="primary-link admin-action-button" type="button" onClick={onSave}>
+                Save Circular
+              </button>
+            </div>
+          </article>
+        ) : null}
+
+        {items.length > 0 ? (
+          <div className="association-gallery-grid">
+            {items.map((item) => (
+              <article key={item.id} className="association-gallery-card circular-card">
+                <a className="circular-card-link" href={item.documentUrl} target="_blank" rel="noreferrer">
+                  <div className="association-gallery-visual">
+                    {item.previewUrl ? (
+                      <img src={item.previewUrl} alt={item.headline} />
+                    ) : (
+                      <div className="circular-file-placeholder">
+                        <strong>{item.fileExtension || "DOC"}</strong>
+                        <span>{item.fileName}</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="association-gallery-copy">
+                    <h3>{item.headline}</h3>
+                    <span className="mini-label">{item.tagline || "No tagline added yet"}</span>
+                    <p>{item.summary || "No brief text added yet."}</p>
+                  </div>
+                </a>
+                {isAdmin ? (
+                  <div className="record-actions circular-card-actions">
+                    <button className="secondary-link secondary-button" type="button" onClick={() => onOpenEditor(item.id)}>
+                      Edit
+                    </button>
+                    <button className="secondary-link secondary-button danger-button" type="button" onClick={() => onDelete(item.id)}>
+                      Delete
+                    </button>
+                  </div>
+                ) : null}
+              </article>
+            ))}
+          </div>
+        ) : (
+          <article className="association-profile-card committee-empty-card">
+            <span className="mini-label">Circulars</span>
+            <h3>No circular documents yet</h3>
+            <p>Upload your first circular to start building the document library.</p>
+          </article>
+        )}
+      </section>
     </section>
   );
 }
@@ -1491,7 +2745,7 @@ function MemberCardGrid({ items, selectedIds, isAdmin, onToggleSelect, onDeleteO
         <article key={member.id} className="member-record-card">
           <div className="member-record-head">
             <div className="member-record-photo">
-              <span>{member.initials}</span>
+              {member.photoUrl ? <img className="member-record-photo-image" src={member.photoUrl} alt={member.name} /> : <span>{member.initials}</span>}
             </div>
             <div className="member-record-heading">
               <em className="carousel-badge">{member.badge}</em>
@@ -1716,6 +2970,7 @@ function MemberMembershipForm({
   formData,
   editingId,
   onFieldChange,
+  onImageChange,
   onSave,
   onCancel,
 }) {
@@ -1727,6 +2982,27 @@ function MemberMembershipForm({
       </div>
 
       <div className="profile-form-grid">
+        <div className="profile-avatar-panel profile-field-wide member-photo-field">
+          <div className="profile-avatar-wrap">
+            {formData.photoUrl ? (
+              <img className="profile-avatar-image" src={formData.photoUrl} alt="Member preview" />
+            ) : (
+              <span className="profile-avatar-placeholder">
+                {formData.name
+                  .split(" ")
+                  .filter(Boolean)
+                  .slice(0, 2)
+                  .map((part) => part[0]?.toUpperCase() ?? "")
+                  .join("") || "MB"}
+              </span>
+            )}
+          </div>
+          <button className="secondary-link secondary-button profile-upload-button" type="button">
+            Upload Member Picture
+            <input type="file" accept="image/*" onChange={(event) => onImageChange(event.target.files?.[0] ?? null)} />
+          </button>
+        </div>
+
         <label className="profile-field">
           <span>Company</span>
           <input type="text" value={formData.company} onChange={(event) => onFieldChange("company", event.target.value)} />
@@ -2428,10 +3704,28 @@ function VendorArenaContent({
   );
 }
 
-function EventTimelineCards() {
+function EventTimelineCards({ groups = [], onSelectEvent }) {
+  if (!groups.length) {
+    return (
+      <div className="association-record-grid">
+        <article className="association-record-card tone-upcoming">
+          <div className="association-record-visual">
+            <span>Events</span>
+          </div>
+          <div className="association-record-copy">
+            <div className="association-record-topline">
+              <em className="carousel-badge">No events yet</em>
+            </div>
+            <p>Create an event or add an event type to start building the events desk.</p>
+          </div>
+        </article>
+      </div>
+    );
+  }
+
   return (
     <div className="association-record-grid">
-      {eventTimelineGroups.map((group) => (
+      {groups.map((group) => (
         <article key={group.title} className={`association-record-card ${group.tone}`}>
           <div className="association-record-visual">
             <span>{group.title.split(" ")[0]}</span>
@@ -2441,10 +3735,15 @@ function EventTimelineCards() {
               <em className="carousel-badge">{group.title}</em>
             </div>
             {group.items.map((item) => (
-              <div key={item.id} className="event-card-entry">
+              <button
+                key={item.id}
+                type="button"
+                className="event-card-entry"
+                onClick={() => onSelectEvent?.(item.id)}
+              >
                 <strong>{item.title}</strong>
                 <p>{item.meta}</p>
-              </div>
+              </button>
             ))}
           </div>
         </article>
@@ -2453,11 +3752,11 @@ function EventTimelineCards() {
   );
 }
 
-function EventCreateForm({ formData, mediaState, onChange, onMediaChange }) {
+function EventCreateForm({ formData, mediaState, onChange, onMediaChange, eventTypes, onSave, onCancel }) {
   return (
     <section className="member-table-panel">
       <div className="panel-topline">
-        <h2>Create New Event</h2>
+        <h2>{formData.id ? "Edit Event" : "Create New Event"}</h2>
         <span className="mini-label">Event Setup</span>
       </div>
 
@@ -2468,7 +3767,14 @@ function EventCreateForm({ formData, mediaState, onChange, onMediaChange }) {
         </label>
         <label className="profile-field">
           <span>Type of Event</span>
-          <input type="text" value={formData.type} onChange={(event) => onChange("type", event.target.value)} />
+          <select value={formData.type} onChange={(event) => onChange("type", event.target.value)}>
+            <option value="">Select event type</option>
+            {eventTypes.map((eventType) => (
+              <option key={eventType.id} value={eventType.title}>
+                {eventType.title}
+              </option>
+            ))}
+          </select>
         </label>
         <label className="profile-field">
           <span>Audience</span>
@@ -2543,7 +3849,7 @@ function EventCreateForm({ formData, mediaState, onChange, onMediaChange }) {
           <input
             type="file"
             accept="image/*"
-            onChange={(event) => onMediaChange("imageName", event.target.files?.[0]?.name ?? "")}
+            onChange={(event) => onMediaChange("imageFile", event.target.files?.[0] ?? null)}
           />
         </label>
         <label className="profile-field profile-field-wide">
@@ -2551,7 +3857,7 @@ function EventCreateForm({ formData, mediaState, onChange, onMediaChange }) {
           <input
             type="file"
             accept="video/*"
-            onChange={(event) => onMediaChange("videoName", event.target.files?.[0]?.name ?? "")}
+            onChange={(event) => onMediaChange("videoFile", event.target.files?.[0] ?? null)}
           />
         </label>
       </div>
@@ -2559,11 +3865,22 @@ function EventCreateForm({ formData, mediaState, onChange, onMediaChange }) {
       <div className="content-member-selector">
         {mediaState.imageName ? <span className="content-member-chip active">Image: {mediaState.imageName}</span> : null}
         {mediaState.videoName ? <span className="content-member-chip active">Video: {mediaState.videoName}</span> : null}
+        {mediaState.bannerUrl && !mediaState.imageFile ? (
+          <span className="content-member-chip">Current banner attached</span>
+        ) : null}
+        {mediaState.promoVideoUrl && !mediaState.videoFile ? (
+          <span className="content-member-chip">Current promo video attached</span>
+        ) : null}
       </div>
 
       <div className="profile-action-row">
-        <button className="primary-link admin-action-button" type="button">
-          Save Event Draft
+        {formData.id ? (
+          <button className="secondary-link secondary-button" type="button" onClick={onCancel}>
+            Cancel Edit
+          </button>
+        ) : null}
+        <button className="primary-link admin-action-button" type="button" onClick={onSave}>
+          {formData.id ? "Save Event Changes" : "Save Event Draft"}
         </button>
       </div>
     </section>
@@ -2639,8 +3956,12 @@ function EventsArenaContent({
   activeTab,
   formData,
   mediaState,
+  eventTimelineGroups,
   onFormChange,
   onMediaChange,
+  onSaveEvent,
+  onCancelEventEdit,
+  onEditEvent,
   eventTypes,
   eventTypeDraft,
   onEventTypeDraftChange,
@@ -2675,15 +3996,115 @@ function EventsArenaContent({
     );
   }
 
+  if (activeTab === "Event") {
+    return (
+      <section className="association-tab-section">
+        <EventTimelineCards groups={eventTimelineGroups} onSelectEvent={onEditEvent} />
+      </section>
+    );
+  }
+
   return (
     <section className="association-tab-section">
       <EventCreateForm
         formData={formData}
         mediaState={mediaState}
+        eventTypes={eventTypes}
         onChange={onFormChange}
         onMediaChange={onMediaChange}
+        onSave={onSaveEvent}
+        onCancel={onCancelEventEdit}
       />
     </section>
+  );
+}
+
+function AdminEventAccessPanel({
+  items,
+  searchQuery,
+  formData,
+  mediaState,
+  eventTypes,
+  onSearchChange,
+  onEditEvent,
+  onDeleteEvent,
+  onFormChange,
+  onMediaChange,
+  onSaveEvent,
+  onCancelEventEdit,
+}) {
+  return (
+    <article className="admin-access-panel">
+      <div className="panel-topline">
+        <h2>Event Access Controls</h2>
+        <span className="mini-label">Search, Edit, Delete</span>
+      </div>
+
+      <div className="admin-member-toolbar">
+        <div className="search-wrap admin-member-search">
+          <input
+            className="search-input"
+            type="search"
+            placeholder="Search event name, type, venue, date..."
+            value={searchQuery}
+            onChange={(event) => onSearchChange(event.target.value)}
+          />
+        </div>
+      </div>
+
+      <div className="member-table-wrap">
+        <table className="member-table">
+          <thead>
+            <tr>
+              <th>Event</th>
+              <th>Type</th>
+              <th>Date</th>
+              <th>Venue</th>
+              <th>Audience</th>
+              <th>Entry</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((eventItem) => (
+              <tr key={eventItem.id}>
+                <td>{eventItem.name}</td>
+                <td>{eventItem.type || "Not set"}</td>
+                <td>{eventItem.date || "Not set"}</td>
+                <td>{eventItem.venue || "Not set"}</td>
+                <td>{eventItem.audience || "Not set"}</td>
+                <td>{eventItem.entryType || "Not set"}</td>
+                <td>
+                  <div className="member-master-actions">
+                    <button className="secondary-link secondary-button table-button" type="button" onClick={() => onEditEvent(eventItem.id)}>
+                      Edit
+                    </button>
+                    <button className="secondary-link secondary-button danger-button table-button" type="button" onClick={() => onDeleteEvent(eventItem.id)}>
+                      Delete
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {items.length === 0 ? (
+              <tr>
+                <td colSpan="7">No events match the current search.</td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+
+      <EventCreateForm
+        formData={formData}
+        mediaState={mediaState}
+        eventTypes={eventTypes}
+        onChange={onFormChange}
+        onMediaChange={onMediaChange}
+        onSave={onSaveEvent}
+        onCancel={onCancelEventEdit}
+      />
+    </article>
   );
 }
 
@@ -2705,6 +4126,12 @@ function AdminMemberAccessPanel({
   onToggleSelect,
   onToggleSelectAll,
   onToggleContentMember,
+  onUpdateMemberAccessStatus,
+  onApplyBulkMemberAccessStatus,
+  onSaveMemberAccessChanges,
+  onSaveContentAccessChanges,
+  onSelectAllContentMembers,
+  onClearContentMemberSelection,
   onUpdateContentPost,
 }) {
   const allSelected = items.length > 0 && selectedIds.length === items.length;
@@ -2745,14 +4172,26 @@ function AdminMemberAccessPanel({
               <input type="checkbox" checked={allSelected} onChange={onToggleSelectAll} />
               <span>Select filtered</span>
             </label>
-            <button className="secondary-link secondary-button" type="button">
-              Restrict App Usage
+            <button
+              className="secondary-link secondary-button"
+              type="button"
+              onClick={() => onApplyBulkMemberAccessStatus("APPROVED")}
+            >
+              Approve Membership
             </button>
-            <button className="secondary-link secondary-button" type="button">
-              Suspend Access
+            <button
+              className="secondary-link secondary-button"
+              type="button"
+              onClick={() => onApplyBulkMemberAccessStatus("SUSPENDED")}
+            >
+              Suspend Membership
             </button>
-            <button className="secondary-link secondary-button danger-button" type="button">
-              Remove App Usage
+            <button
+              className="secondary-link secondary-button danger-button"
+              type="button"
+              onClick={() => onApplyBulkMemberAccessStatus("CANCELLED")}
+            >
+              Cancel Membership
             </button>
           </div>
 
@@ -2799,7 +4238,18 @@ function AdminMemberAccessPanel({
                     <td>{member.membershipType}</td>
                     <td>{member.membershipPeriod}</td>
                     <td>
-                      <span className="access-status-chip">{member.appAccessStatus}</span>
+                      <select
+                        className="member-access-select"
+                        value={member.appAccessStatus}
+                        onChange={(event) =>
+                          onUpdateMemberAccessStatus(member.id, event.target.value)
+                        }
+                      >
+                        <option value="Pending Approval">Pending Approval</option>
+                        <option value="Approved">Approved</option>
+                        <option value="Suspended">Suspended</option>
+                        <option value="Cancelled">Cancelled</option>
+                      </select>
                     </td>
                     <td>
                       <div className="member-table-contact">
@@ -2825,6 +4275,12 @@ function AdminMemberAccessPanel({
                 onChange={(event) => onContentSearchChange(event.target.value)}
               />
             </div>
+            <button className="secondary-link secondary-button" type="button" onClick={onSelectAllContentMembers}>
+              Select All Matched Members
+            </button>
+            <button className="secondary-link secondary-button" type="button" onClick={onClearContentMemberSelection}>
+              Clear Selection
+            </button>
           </div>
 
           <div className="content-member-selector">
@@ -2915,7 +4371,11 @@ function AdminMemberAccessPanel({
       )}
 
       <div className="profile-action-row">
-        <button className="primary-link admin-action-button" type="button">
+        <button
+          className="primary-link admin-action-button"
+          type="button"
+          onClick={activeView === "app" ? onSaveMemberAccessChanges : onSaveContentAccessChanges}
+        >
           {activeView === "app" ? "Save Member Access Changes" : "Save Content Access Changes"}
         </button>
       </div>
@@ -3158,7 +4618,21 @@ export default function HomePage() {
     disableAdminFunctionsFromApp: false,
   });
   const [associationTabData, setAssociationTabData] = useState(initialAssociationTabData);
+  const [associationProfile, setAssociationProfile] = useState(defaultAssociationProfile);
+  const [associationProfileForm, setAssociationProfileForm] = useState(defaultAssociationProfile);
+  const [isEditingAssociationProfile, setIsEditingAssociationProfile] = useState(false);
+  const [associationAbout, setAssociationAbout] = useState(defaultAssociationAbout);
+  const [associationAboutForm, setAssociationAboutForm] = useState(defaultAssociationAbout);
+  const [isEditingAssociationAbout, setIsEditingAssociationAbout] = useState(false);
+  const [galleryItems, setGalleryItems] = useState([]);
+  const [editingGalleryItemId, setEditingGalleryItemId] = useState(null);
+  const [galleryItemForm, setGalleryItemForm] = useState(defaultGalleryItemForm);
+  const [circularDocuments, setCircularDocuments] = useState([]);
+  const [editingCircularDocumentId, setEditingCircularDocumentId] = useState(null);
+  const [circularDocumentForm, setCircularDocumentForm] = useState(defaultCircularDocumentForm);
   const [memberTabData, setMemberTabData] = useState(initialMemberTabData);
+  const [editingCommitteeMemberId, setEditingCommitteeMemberId] = useState(null);
+  const [committeeMemberForm, setCommitteeMemberForm] = useState(defaultCommitteeMemberForm);
   const [memberMasterForm, setMemberMasterForm] = useState(defaultMemberAdminForm);
   const [editingMemberId, setEditingMemberId] = useState("");
   const [isMemberFormOpen, setIsMemberFormOpen] = useState(false);
@@ -3180,23 +4654,15 @@ export default function HomePage() {
   const [adminContentMemberSearch, setAdminContentMemberSearch] = useState("");
   const [activeAdminMemberFilter, setActiveAdminMemberFilter] = useState("All");
   const [selectedAdminMembers, setSelectedAdminMembers] = useState([]);
+  const [memberAccessEdits, setMemberAccessEdits] = useState({});
   const [selectedContentMemberIds, setSelectedContentMemberIds] = useState([]);
+  const [memberContentPosts, setMemberContentPosts] = useState([]);
   const [adminVendorSearch, setAdminVendorSearch] = useState("");
   const [adminVendorAccessView, setAdminVendorAccessView] = useState("app");
   const [selectedAdminVendors, setSelectedAdminVendors] = useState([]);
   const [selectedContentVendorIds, setSelectedContentVendorIds] = useState([]);
-  const [contentPostEdits, setContentPostEdits] = useState(
-    Object.fromEntries(
-      memberContentPosts.map((post) => [
-        post.id,
-        {
-          status: post.status,
-          displayStart: post.displayStart,
-          displayEnd: post.displayEnd,
-        },
-      ]),
-    ),
-  );
+  const [adminEventSearch, setAdminEventSearch] = useState("");
+  const [contentPostEdits, setContentPostEdits] = useState({});
   const [vendorContentPostEdits, setVendorContentPostEdits] = useState(
     Object.fromEntries(
       vendorContentPosts.map((post) => [
@@ -3228,29 +4694,103 @@ export default function HomePage() {
     city: "",
   });
   const [eventForm, setEventForm] = useState({
-    name: "",
-    type: "",
-    audience: "",
-    entryType: "",
-    entryCharges: "",
-    participationCharges: "",
-    date: "",
-    venue: "",
-    startTime: "",
-    endTime: "",
-    summary: "",
+    ...defaultEventForm,
+    id: "",
   });
-  const [eventMedia, setEventMedia] = useState({
-    imageName: "",
-    videoName: "",
-  });
+  const [eventMedia, setEventMedia] = useState(defaultEventMedia);
   const [eventTypes, setEventTypes] = useState(initialEventTypeRecords);
+  const [createdEvents, setCreatedEvents] = useState(initialCreatedEvents);
   const [eventTypeDraft, setEventTypeDraft] = useState({
     title: "",
     meta: "",
   });
   const isAssociationAdmin = true;
   const isMemberAdmin = true;
+
+  const loadMembers = async () => {
+    const [membersResponse, usersResponse] = await Promise.all([
+      fetch(`${apiBaseUrl}/members`),
+      fetch(`${apiBaseUrl}/users?role=member`),
+    ]);
+
+    if (!membersResponse.ok) {
+      return;
+    }
+
+    const membersPayload = await membersResponse.json();
+    const usersPayload = usersResponse.ok ? await usersResponse.json() : { users: [] };
+
+    if (!Array.isArray(membersPayload.members) || membersPayload.members.length === 0) {
+      return;
+    }
+
+    setMemberTabData(
+      buildMemberTabData(
+        mergeMemberUsers(
+          membersPayload.members,
+          Array.isArray(usersPayload.users) ? usersPayload.users : [],
+        ),
+      ),
+    );
+    setMemberAccessEdits({});
+  };
+
+  const loadMemberPosts = async () => {
+    const response = await fetch(`${apiBaseUrl}/member-posts`);
+    if (!response.ok) {
+      return;
+    }
+
+    const payload = await response.json();
+    const posts = Array.isArray(payload.posts) ? payload.posts.map(mapApiMemberPostToUi) : [];
+    setMemberContentPosts(posts);
+    setContentPostEdits(
+      Object.fromEntries(
+        posts.map((post) => [
+          post.id,
+          {
+            status: post.status,
+            displayStart: post.displayStart,
+            displayEnd: post.displayEnd,
+          },
+        ]),
+      ),
+    );
+  };
+
+  const loadAssociationProfile = async () => {
+    const response = await fetch(`${apiBaseUrl}/associations/current`);
+    if (!response.ok) {
+      return;
+    }
+
+    const payload = await response.json();
+    const nextProfile = mapAssociationProfileToForm(payload.association ?? defaultAssociationProfile);
+    setAssociationProfile(nextProfile);
+    setAssociationProfileForm(nextProfile);
+    const nextAbout = mapAssociationAboutToForm(payload.association?.aboutContent);
+    setAssociationAbout(nextAbout);
+    setAssociationAboutForm(nextAbout);
+    setGalleryItems(mapAssociationGalleryItems(payload.association?.galleryItems));
+    setCircularDocuments(mapAssociationCircularDocuments(payload.association?.circularDocuments));
+  };
+
+  const loadEventsArena = async () => {
+    const [eventTypesResponse, eventsResponse] = await Promise.all([
+      fetch(`${apiBaseUrl}/events/types`),
+      fetch(`${apiBaseUrl}/events`),
+    ]);
+
+    if (eventTypesResponse.ok) {
+      const payload = await eventTypesResponse.json();
+      setEventTypes(Array.isArray(payload.eventTypes) ? payload.eventTypes : []);
+    }
+
+    if (eventsResponse.ok) {
+      const payload = await eventsResponse.json();
+      setCreatedEvents(Array.isArray(payload.events) ? payload.events : []);
+    }
+  };
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(max-width: 900px)");
@@ -3270,25 +4810,93 @@ export default function HomePage() {
   useEffect(() => {
     let isActive = true;
 
-    const loadMembers = async () => {
+    const loadMembersData = async () => {
       try {
-        const response = await fetch(`${apiBaseUrl}/members`);
-        if (!response.ok) {
+        const [membersResponse, usersResponse, postsResponse] = await Promise.all([
+          fetch(`${apiBaseUrl}/members`),
+          fetch(`${apiBaseUrl}/users?role=member`),
+          fetch(`${apiBaseUrl}/member-posts`),
+        ]);
+
+        if (!membersResponse.ok) {
           return;
         }
 
-        const payload = await response.json();
-        if (!isActive || !Array.isArray(payload.members) || payload.members.length === 0) {
+        const membersPayload = await membersResponse.json();
+        const usersPayload = usersResponse.ok ? await usersResponse.json() : { users: [] };
+
+        if (!isActive || !Array.isArray(membersPayload.members) || membersPayload.members.length === 0) {
           return;
         }
 
-        setMemberTabData(buildMemberTabData(payload.members.map(mapApiMemberToUi)));
+        setMemberTabData(
+          buildMemberTabData(
+            mergeMemberUsers(
+              membersPayload.members,
+              Array.isArray(usersPayload.users) ? usersPayload.users : [],
+            ),
+          ),
+        );
+
+        if (postsResponse.ok) {
+          const postsPayload = await postsResponse.json();
+          const posts = Array.isArray(postsPayload.posts) ? postsPayload.posts.map(mapApiMemberPostToUi) : [];
+          setMemberContentPosts(posts);
+          setContentPostEdits(
+            Object.fromEntries(
+              posts.map((post) => [
+                post.id,
+                {
+                  status: post.status,
+                  displayStart: post.displayStart,
+                  displayEnd: post.displayEnd,
+                },
+              ]),
+            ),
+          );
+        }
       } catch (_error) {
         // Keep seeded local data when the API is unavailable.
       }
     };
 
-    loadMembers();
+    loadMembersData();
+    void loadEventsArena();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isActive = true;
+
+    const loadAssociationData = async () => {
+      try {
+        const response = await fetch(`${apiBaseUrl}/associations/current`);
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = await response.json();
+        if (!isActive) {
+          return;
+        }
+
+        const nextProfile = mapAssociationProfileToForm(payload.association ?? defaultAssociationProfile);
+        setAssociationProfile(nextProfile);
+        setAssociationProfileForm(nextProfile);
+        const nextAbout = mapAssociationAboutToForm(payload.association?.aboutContent);
+        setAssociationAbout(nextAbout);
+        setAssociationAboutForm(nextAbout);
+        setGalleryItems(mapAssociationGalleryItems(payload.association?.galleryItems));
+        setCircularDocuments(mapAssociationCircularDocuments(payload.association?.circularDocuments));
+      } catch (_error) {
+        // Keep default local profile state when the API is unavailable.
+      }
+    };
+
+    loadAssociationData();
 
     return () => {
       isActive = false;
@@ -3309,33 +4917,38 @@ export default function HomePage() {
     activeAssociationTab === "Finance" ? [] : selectedRecords[activeAssociationTab] ?? [];
   const activeMemberItems =
     activeMemberTab === "Master" ? memberTabData["All Members"] ?? [] : memberTabData[activeMemberTab] ?? [];
+  const committeeMembers = getCommitteeMembers(memberTabData["All Members"] ?? []);
+  const eventTimelineData = buildEventTimelineGroups(createdEvents);
   const activeMemberSelectedIds = selectedMemberRecords[activeMemberTab] ?? [];
   const expiringMembersCount = (memberTabData["All Members"] ?? []).filter(
     (member) => member.expiryStatus === "expiring-soon",
   ).length;
-  const filteredAdminMembers = (memberTabData["All Members"] ?? []).filter((member) => {
-    const query = adminMemberSearch.trim().toLowerCase();
-    const matchesFilter =
-      activeAdminMemberFilter === "All"
-        ? ["Primary", "Associate", "Temporary Visit", "Committee"].includes(member.membershipType)
-        : activeAdminMemberFilter === "Guest"
-          ? member.membershipType === "Temporary Visit"
-          : activeAdminMemberFilter === "Committee"
-            ? member.membershipType === "Committee"
-            : member.membershipType === activeAdminMemberFilter;
+  const filteredAdminMembers = (memberTabData["All Members"] ?? [])
+    .filter((member) => {
+      const query = adminMemberSearch.trim().toLowerCase();
+      const matchesFilter =
+        activeAdminMemberFilter === "All"
+          ? ["Primary", "Associate", "Temporary Visit", "Committee"].includes(member.membershipType)
+          : activeAdminMemberFilter === "Guest"
+            ? member.membershipType === "Temporary Visit"
+            : activeAdminMemberFilter === "Committee"
+              ? member.membershipType === "Committee"
+              : member.membershipType === activeAdminMemberFilter;
 
-    if (!matchesFilter) {
-      return false;
-    }
+      if (!matchesFilter) {
+        return false;
+      }
 
-    if (!query) {
-      return true;
-    }
+      if (!query) {
+        return true;
+      }
 
-    return (
-      `${member.name} ${member.company} ${member.membershipType}`.toLowerCase().includes(query)
-    );
-  });
+      return `${member.name} ${member.company} ${member.membershipType}`.toLowerCase().includes(query);
+    })
+    .map((member) => ({
+      ...member,
+      appAccessStatus: memberAccessEdits[member.id] ?? member.appAccessStatus,
+    }));
   const contentMemberMatches = (memberTabData["All Members"] ?? []).filter((member) => {
     const query = adminContentMemberSearch.trim().toLowerCase();
     if (!query) {
@@ -3385,6 +4998,16 @@ export default function HomePage() {
     }
 
     return selectedContentVendorIds.includes(post.vendorId);
+  });
+  const filteredAdminEvents = createdEvents.filter((eventItem) => {
+    const query = adminEventSearch.trim().toLowerCase();
+    if (!query) {
+      return true;
+    }
+
+    return `${eventItem.name} ${eventItem.type} ${eventItem.venue} ${eventItem.date} ${eventItem.audience}`
+      .toLowerCase()
+      .includes(query);
   });
 
   const toggleSelectRecord = (tab, recordId) => {
@@ -3536,6 +5159,19 @@ export default function HomePage() {
       };
     });
   };
+  const updateMemberMasterImage = (file) => {
+    void (async () => {
+      if (!file) {
+        return;
+      }
+
+      const nextImage = await readFileAsDataUrl(file);
+      setMemberMasterForm((current) => ({
+        ...current,
+        photoUrl: nextImage,
+      }));
+    })();
+  };
   const resetMemberMasterForm = () => {
     setMemberMasterForm(defaultMemberAdminForm);
     setEditingMemberId("");
@@ -3551,6 +5187,7 @@ export default function HomePage() {
       company: member.company ?? "",
       companyAddress: member.address ?? "",
       gst: member.gst ?? "",
+      photoUrl: member.photoUrl ?? "",
       membershipDetails: member.membershipDetails ?? "",
       email: member.email ?? "",
       phone: member.phone ?? "",
@@ -3583,6 +5220,7 @@ export default function HomePage() {
       phone: memberMasterForm.phone.trim(),
       address: memberMasterForm.companyAddress.trim(),
       gst: memberMasterForm.gst.trim(),
+      photoUrl: memberMasterForm.photoUrl,
       companyName: normalizedCompany,
       roleTitle: memberMasterForm.membershipType,
       membershipDetails: memberMasterForm.membershipDetails.trim(),
@@ -3625,6 +5263,7 @@ export default function HomePage() {
         : [savedMember, ...allMembers];
       return buildMemberTabData(nextMembers);
     });
+    await loadMembers();
     resetMemberMasterForm();
     setIsMemberFormOpen(false);
     })();
@@ -3701,6 +5340,101 @@ export default function HomePage() {
     );
   };
 
+  const applyMemberAccessStatusLocally = (memberIds, appAccessStatus) => {
+    setMemberTabData((current) =>
+      buildMemberTabData(
+        (current["All Members"] ?? []).map((member) => {
+          if (!memberIds.includes(member.id)) {
+            return member;
+          }
+
+          return {
+            ...member,
+            appAccessStatus,
+            membershipStatus:
+              appAccessStatus === "Approved"
+                ? "ACTIVE"
+                : appAccessStatus === "Pending Approval"
+                  ? "PENDING"
+                  : "INACTIVE",
+            expiryStatus: appAccessStatus === "Approved" ? "active" : "expiring-soon",
+          };
+        }),
+      ),
+    );
+  };
+
+  const updateMemberAccessStatus = (memberId, nextStatusLabel) => {
+    setMemberAccessEdits((current) => ({
+      ...current,
+      [memberId]: nextStatusLabel,
+    }));
+  };
+
+  const applyBulkMemberAccessStatus = (accessStatus) => {
+    const nextStatusLabel =
+      accessStatus === "APPROVED"
+        ? "Approved"
+        : accessStatus === "SUSPENDED"
+          ? "Suspended"
+          : accessStatus === "CANCELLED"
+            ? "Cancelled"
+            : "Pending Approval";
+
+    setMemberAccessEdits((current) => ({
+      ...current,
+      ...Object.fromEntries(selectedAdminMembers.map((memberId) => [memberId, nextStatusLabel])),
+    }));
+  };
+
+  const saveMemberAccessChanges = () => {
+    void (async () => {
+      const updates = Object.entries(memberAccessEdits);
+
+      if (updates.length === 0) {
+        return;
+      }
+
+      const memberLookup = new Map((memberTabData["All Members"] ?? []).map((member) => [member.id, member]));
+
+      await Promise.all(
+        updates.map(async ([memberId, nextStatusLabel]) => {
+          const targetMember = memberLookup.get(memberId);
+          if (!targetMember) {
+            return;
+          }
+
+          const accessStatus =
+            nextStatusLabel === "Approved"
+              ? "APPROVED"
+              : nextStatusLabel === "Suspended"
+                ? "SUSPENDED"
+                : nextStatusLabel === "Cancelled"
+                  ? "CANCELLED"
+                  : "PENDING";
+
+          const response = await fetch(`${apiBaseUrl}/members/${memberId}/access`, {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ accessStatus }),
+          });
+
+          if (!response.ok) {
+            return;
+          }
+
+          applyMemberAccessStatusLocally([memberId], nextStatusLabel);
+        }),
+      );
+
+      setMemberAccessEdits({});
+      setSelectedAdminMembers([]);
+      await loadMembers();
+    })();
+  };
+
   const toggleAdminMemberSelect = (memberId) => {
     setSelectedAdminMembers((current) =>
       current.includes(memberId) ? current.filter((id) => id !== memberId) : [...current, memberId],
@@ -3719,6 +5453,12 @@ export default function HomePage() {
       current.includes(memberId) ? current.filter((id) => id !== memberId) : [...current, memberId],
     );
   };
+  const selectAllContentMembers = () => {
+    setSelectedContentMemberIds(contentMemberMatches.map((member) => member.id));
+  };
+  const clearContentMemberSelection = () => {
+    setSelectedContentMemberIds([]);
+  };
 
   const updateContentPost = (postId, field, value) => {
     setContentPostEdits((current) => ({
@@ -3728,6 +5468,39 @@ export default function HomePage() {
         [field]: value,
       },
     }));
+  };
+  const saveContentPostModeration = () => {
+    void (async () => {
+      await Promise.all(
+        memberContentPosts.map((post) => {
+          const nextEdit = contentPostEdits[post.id];
+          if (!nextEdit) {
+            return Promise.resolve();
+          }
+
+          const reviewStatus =
+            nextEdit.status === "Approved"
+              ? "APPROVED"
+              : nextEdit.status === "Rejected"
+                ? "REJECTED"
+                : "PENDING";
+
+          return fetch(`${apiBaseUrl}/member-posts/${post.id}/moderation`, {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              reviewStatus,
+              displayStart: nextEdit.displayStart || null,
+              displayEnd: nextEdit.displayEnd || null,
+            }),
+          });
+        }),
+      );
+
+      await loadMemberPosts();
+    })();
   };
   const toggleSelectAdminVendor = (vendorId) => {
     setSelectedAdminVendors((current) =>
@@ -3784,8 +5557,61 @@ export default function HomePage() {
   const updateEventMedia = (field, value) => {
     setEventMedia((current) => ({
       ...current,
-      [field]: value,
+      ...(field === "imageFile"
+        ? {
+            imageFile: value,
+            imageName: value?.name ?? "",
+          }
+        : field === "videoFile"
+          ? {
+              videoFile: value,
+              videoName: value?.name ?? "",
+            }
+          : {
+              [field]: value,
+        }),
     }));
+  };
+  const resetEventEditor = () => {
+    setEventForm({
+      ...defaultEventForm,
+      id: "",
+    });
+    setEventMedia(defaultEventMedia);
+  };
+  const editEventRecord = (eventId) => {
+    const event = createdEvents.find((item) => item.id === eventId);
+    if (!event) {
+      return;
+    }
+
+    setEventForm({
+      id: event.id,
+      name: event.name ?? "",
+      type: event.type ?? "",
+      audience: event.audience ?? "",
+      entryType: event.entryType ?? "",
+      entryCharges: event.entryCharges ?? "",
+      participationCharges: event.participationCharges ?? "",
+      date: event.date ?? "",
+      venue: event.venue ?? "",
+      startTime: event.startTime ?? "",
+      endTime: event.endTime ?? "",
+      summary: event.summary ?? "",
+    });
+    setEventMedia({
+      ...defaultEventMedia,
+      imageName: event.imageName ?? "",
+      videoName: event.videoName ?? "",
+      bannerUrl: event.bannerUrl ?? "",
+      promoVideoUrl: event.promoVideoUrl ?? "",
+    });
+    if (activeSection === "Events Arena") {
+      setActiveEventsTab("Create New Event");
+    }
+  };
+  const cancelEventEdit = () => {
+    resetEventEditor();
   };
   const updateEventTypeDraft = (field, value) => {
     setEventTypeDraft((current) => ({
@@ -3794,27 +5620,594 @@ export default function HomePage() {
     }));
   };
   const addEventType = () => {
-    const title = eventTypeDraft.title.trim();
-    const meta = eventTypeDraft.meta.trim();
-    if (!title || !meta) {
+    void (async () => {
+      const title = eventTypeDraft.title.trim();
+      const meta = eventTypeDraft.meta.trim();
+      if (!title || !meta) {
+        return;
+      }
+
+      const response = await fetch(`${apiBaseUrl}/events/types`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: title,
+          description: meta,
+        }),
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      await loadEventsArena();
+      setEventTypeDraft({ title: "", meta: "" });
+    })();
+  };
+  const updateEventType = (eventTypeId, field, value) => {
+    setEventTypes((current) => current.map((item) => (item.id === eventTypeId ? { ...item, [field]: value } : item)));
+    void (async () => {
+      const targetEventType = eventTypes.find((item) => item.id === eventTypeId);
+      if (!targetEventType) {
+        return;
+      }
+
+      const nextTitle = field === "title" ? value : targetEventType.title;
+      const nextMeta = field === "meta" ? value : targetEventType.meta;
+      if (!nextTitle.trim() || !nextMeta.trim()) {
+        return;
+      }
+
+      await fetch(`${apiBaseUrl}/events/types/${eventTypeId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: nextTitle.trim(),
+          description: nextMeta.trim(),
+        }),
+      });
+    })();
+  };
+
+  const saveEventDraft = () => {
+    void (async () => {
+      if (!eventForm.name.trim() || !eventForm.type.trim() || !eventForm.date) {
+        return;
+      }
+
+      const payload = new FormData();
+      payload.append("name", eventForm.name.trim());
+      payload.append("type", eventForm.type.trim());
+      payload.append("audience", eventForm.audience);
+      payload.append("entryType", eventForm.entryType);
+      payload.append("entryCharges", eventForm.entryCharges);
+      payload.append("participationCharges", eventForm.participationCharges);
+      payload.append("date", eventForm.date);
+      payload.append("venue", eventForm.venue);
+      payload.append("startTime", eventForm.startTime);
+      payload.append("endTime", eventForm.endTime);
+      payload.append("summary", eventForm.summary);
+      if (eventMedia.imageFile) {
+        payload.append("bannerFile", eventMedia.imageFile);
+      }
+      if (eventMedia.videoFile) {
+        payload.append("videoFile", eventMedia.videoFile);
+      }
+
+      const response = await fetch(`${apiBaseUrl}/events${eventForm.id ? `/${eventForm.id}` : ""}`, {
+        method: eventForm.id ? "PATCH" : "POST",
+        body: payload,
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      await loadEventsArena();
+      resetEventEditor();
+      setActiveEventsTab("Event");
+    })();
+  };
+  const removeEventRecord = (eventId) => {
+    void (async () => {
+      const response = await fetch(`${apiBaseUrl}/events/${eventId}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok && response.status !== 204) {
+        return;
+      }
+
+      await loadEventsArena();
+
+      if (eventForm.id === eventId) {
+        resetEventEditor();
+      }
+    })();
+  };
+
+  const openAssociationProfileEditor = () => {
+    setAssociationProfileForm(associationProfile);
+    setIsEditingAssociationProfile(true);
+  };
+
+  const updateAssociationProfileField = (field, value) => {
+    setAssociationProfileForm((current) => ({
+      ...current,
+      ...(field === "state" ? { city: "" } : {}),
+      [field]: value,
+    }));
+  };
+
+  const updateAssociationRegionalField = (index, field, value) => {
+    setAssociationProfileForm((current) => ({
+      ...current,
+      regionalAddresses: current.regionalAddresses.map((address, addressIndex) =>
+        addressIndex === index
+          ? {
+              ...address,
+              ...(field === "state" ? { city: "" } : {}),
+              [field]: value,
+            }
+          : address,
+      ),
+    }));
+  };
+
+  const addAssociationRegionalAddress = () => {
+    setAssociationProfileForm((current) => ({
+      ...current,
+      regionalAddresses: [
+        ...current.regionalAddresses,
+        { ...defaultRegionalAddress, id: `regional-${Date.now()}` },
+      ],
+    }));
+  };
+
+  const removeAssociationRegionalAddress = (index) => {
+    setAssociationProfileForm((current) => ({
+      ...current,
+      regionalAddresses: current.regionalAddresses.filter((_, addressIndex) => addressIndex !== index),
+    }));
+  };
+
+  const cancelAssociationProfileEdit = () => {
+    setAssociationProfileForm(associationProfile);
+    setIsEditingAssociationProfile(false);
+  };
+
+  const saveAssociationProfile = () => {
+    void (async () => {
+      const normalizedName = associationProfileForm.name.trim();
+      if (!normalizedName || !associationProfile.id) {
+        return;
+      }
+
+      const payload = {
+        name: normalizedName,
+        slug:
+          associationProfileForm.slug.trim() ||
+          normalizedName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
+        headOfficeAddress: associationProfileForm.headOfficeAddress.trim(),
+        city: associationProfileForm.city.trim(),
+        state: associationProfileForm.state.trim(),
+        pincode: associationProfileForm.pincode.trim(),
+        registrationNumber: associationProfileForm.registrationNumber.trim(),
+        gstNumber: associationProfileForm.gstNumber.trim(),
+        website: associationProfileForm.website.trim(),
+        contactNumbers: splitContactNumbers(associationProfileForm.contactNumbers),
+        helpdeskNumber: associationProfileForm.helpdeskNumber.trim(),
+        googleMapsLink: associationProfileForm.googleMapsLink.trim(),
+        regionalAddresses: associationProfileForm.regionalAddresses.map((address) => ({
+          label: address.label.trim(),
+          officeAddress: address.officeAddress.trim(),
+          city: address.city.trim(),
+          state: address.state.trim(),
+          pincode: address.pincode.trim(),
+          registrationNumber: address.registrationNumber.trim(),
+          gstNumber: address.gstNumber.trim(),
+          website: address.website.trim(),
+          contactNumbers: splitContactNumbers(address.contactNumbers),
+          helpdeskNumber: address.helpdeskNumber.trim(),
+          googleMapsLink: address.googleMapsLink.trim(),
+        })),
+      };
+
+      const response = await fetch(`${apiBaseUrl}/associations/${associationProfile.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      await loadAssociationProfile();
+      setIsEditingAssociationProfile(false);
+    })();
+  };
+
+  const openAssociationAboutEditor = () => {
+    setAssociationAboutForm(associationAbout);
+    setIsEditingAssociationAbout(true);
+  };
+
+  const updateAssociationAboutField = (field, value) => {
+    setAssociationAboutForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  };
+
+  const updateAssociationAboutImage = (field, file) => {
+    void (async () => {
+      if (!file) {
+        return;
+      }
+
+      const nextImage = await readFileAsDataUrl(file);
+      setAssociationAboutForm((current) => ({
+        ...current,
+        [field]: nextImage,
+      }));
+    })();
+  };
+
+  const cancelAssociationAboutEdit = () => {
+    setAssociationAboutForm(associationAbout);
+    setIsEditingAssociationAbout(false);
+  };
+
+  const saveAssociationAbout = () => {
+    void (async () => {
+      if (!associationProfile.id) {
+        return;
+      }
+
+      const payload = {
+        heroTitle: associationAboutForm.heroTitle.trim(),
+        heroIntro: associationAboutForm.heroIntro.trim(),
+        missionTitle: associationAboutForm.missionTitle.trim(),
+        missionText: associationAboutForm.missionText.trim(),
+        goalsTitle: associationAboutForm.goalsTitle.trim(),
+        goalsText: associationAboutForm.goalsText.trim(),
+        journeyTitle: associationAboutForm.journeyTitle.trim(),
+        journeyText: associationAboutForm.journeyText.trim(),
+        headOfficeImage: associationAboutForm.headOfficeImage,
+        galleryImageOne: associationAboutForm.galleryImageOne,
+        galleryImageTwo: associationAboutForm.galleryImageTwo,
+        stats: associationAboutForm.stats,
+      };
+
+      const response = await fetch(`${apiBaseUrl}/associations/${associationProfile.id}/about`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      const savedPayload = await response.json();
+      const nextAbout = mapAssociationAboutToForm(savedPayload.aboutContent);
+      setAssociationAbout(nextAbout);
+      setAssociationAboutForm(nextAbout);
+      setIsEditingAssociationAbout(false);
+    })();
+  };
+
+  const openCommitteeMemberEditor = (memberId) => {
+    if (!memberId) {
+      setEditingCommitteeMemberId("");
+      setCommitteeMemberForm(defaultCommitteeMemberForm);
       return;
     }
 
-    setEventTypes((current) => [
-      ...current,
-      {
-        id: `event-type-${Date.now()}`,
-        title,
-        meta,
-        badge: "Type",
-      },
-    ]);
-    setEventTypeDraft({ title: "", meta: "" });
+    const member = (memberTabData["All Members"] ?? []).find((item) => item.id === memberId);
+    if (!member) {
+      return;
+    }
+
+    setEditingCommitteeMemberId(memberId);
+    setCommitteeMemberForm({
+      memberId: member.id,
+      committeePost: member.committeePost ?? "",
+      committeeTenureStart: member.committeeTenureStart ?? "",
+      committeeTenureEnd: member.committeeTenureEnd ?? "",
+      memberBio: member.memberBio ?? "",
+    });
   };
-  const updateEventType = (eventTypeId, field, value) => {
-    setEventTypes((current) =>
-      current.map((item) => (item.id === eventTypeId ? { ...item, [field]: value } : item)),
-    );
+
+  const updateCommitteeMemberForm = (field, value) => {
+    setCommitteeMemberForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  };
+
+  const closeCommitteeMemberEditor = () => {
+    setEditingCommitteeMemberId(null);
+    setCommitteeMemberForm(defaultCommitteeMemberForm);
+  };
+
+  const saveCommitteeMember = () => {
+    void (async () => {
+      const targetMemberId = committeeMemberForm.memberId;
+      if (!targetMemberId || !committeeMemberForm.committeePost.trim()) {
+        return;
+      }
+
+      const response = await fetch(`${apiBaseUrl}/members/${targetMemberId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          committeePost: committeeMemberForm.committeePost.trim(),
+          committeeTenureStart: committeeMemberForm.committeeTenureStart || null,
+          committeeTenureEnd: committeeMemberForm.committeeTenureEnd || null,
+          memberBio: committeeMemberForm.memberBio.trim(),
+        }),
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      await loadMembers();
+      closeCommitteeMemberEditor();
+    })();
+  };
+
+  const removeCommitteeMember = (memberId) => {
+    void (async () => {
+      const response = await fetch(`${apiBaseUrl}/members/${memberId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          committeePost: "",
+          committeeTenureStart: null,
+          committeeTenureEnd: null,
+          memberBio: "",
+        }),
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      await loadMembers();
+      if (editingCommitteeMemberId === memberId) {
+        closeCommitteeMemberEditor();
+      }
+    })();
+  };
+
+  const openGalleryItemEditor = (itemId) => {
+    if (!itemId) {
+      setEditingGalleryItemId("");
+      setGalleryItemForm(defaultGalleryItemForm);
+      return;
+    }
+
+    const item = galleryItems.find((galleryItem) => galleryItem.id === itemId);
+    if (!item) {
+      return;
+    }
+
+    setEditingGalleryItemId(itemId);
+    setGalleryItemForm({
+      id: item.id,
+      imageUrl: item.imageUrl ?? "",
+      headline: item.headline ?? "",
+      tagline: item.tagline ?? "",
+      description: item.description ?? "",
+    });
+  };
+
+  const updateGalleryItemField = (field, value) => {
+    setGalleryItemForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  };
+
+  const updateGalleryItemImage = (file) => {
+    void (async () => {
+      if (!file) {
+        return;
+      }
+
+      const nextImage = await readFileAsDataUrl(file);
+      setGalleryItemForm((current) => ({
+        ...current,
+        imageUrl: nextImage,
+      }));
+    })();
+  };
+
+  const cancelGalleryItemEdit = () => {
+    setEditingGalleryItemId(null);
+    setGalleryItemForm(defaultGalleryItemForm);
+  };
+
+  const saveGalleryItem = () => {
+    void (async () => {
+      if (!associationProfile.id || !galleryItemForm.headline.trim()) {
+        return;
+      }
+
+      const payload = {
+        imageUrl: galleryItemForm.imageUrl,
+        headline: galleryItemForm.headline.trim(),
+        tagline: galleryItemForm.tagline.trim(),
+        description: galleryItemForm.description.trim(),
+      };
+
+      const response = await fetch(
+        `${apiBaseUrl}/associations/${associationProfile.id}/gallery${editingGalleryItemId ? `/${editingGalleryItemId}` : ""}`,
+        {
+          method: editingGalleryItemId ? "PATCH" : "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        },
+      );
+
+      if (!response.ok) {
+        return;
+      }
+
+      await loadAssociationProfile();
+      cancelGalleryItemEdit();
+    })();
+  };
+
+  const deleteGalleryItem = (itemId) => {
+    void (async () => {
+      if (!associationProfile.id) {
+        return;
+      }
+
+      const response = await fetch(`${apiBaseUrl}/associations/${associationProfile.id}/gallery/${itemId}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok && response.status !== 204) {
+        return;
+      }
+
+      await loadAssociationProfile();
+      if (editingGalleryItemId === itemId) {
+        cancelGalleryItemEdit();
+      }
+    })();
+  };
+
+  const openCircularDocumentEditor = (itemId) => {
+    if (!itemId) {
+      setEditingCircularDocumentId("");
+      setCircularDocumentForm(defaultCircularDocumentForm);
+      return;
+    }
+
+    const item = circularDocuments.find((document) => document.id === itemId);
+    if (!item) {
+      return;
+    }
+
+    setEditingCircularDocumentId(itemId);
+    setCircularDocumentForm({
+      id: item.id,
+      headline: item.headline ?? "",
+      tagline: item.tagline ?? "",
+      summary: item.summary ?? "",
+      file: null,
+      fileName: item.fileName ?? "",
+      documentUrl: item.documentUrl ?? "",
+      previewUrl: item.previewUrl ?? "",
+      mimeType: item.mimeType ?? "",
+      fileExtension: item.fileExtension ?? "",
+    });
+  };
+
+  const updateCircularDocumentField = (field, value) => {
+    setCircularDocumentForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  };
+
+  const updateCircularDocumentFile = (file) => {
+    void (async () => {
+      if (!file) {
+        return;
+      }
+
+      const previewUrl = file.type.startsWith("image/") ? await readFileAsDataUrl(file) : "";
+      setCircularDocumentForm((current) => ({
+        ...current,
+        file,
+        fileName: file.name,
+        mimeType: file.type,
+        fileExtension: file.name.split(".").pop()?.toUpperCase() ?? "FILE",
+        previewUrl,
+      }));
+    })();
+  };
+
+  const cancelCircularDocumentEdit = () => {
+    setEditingCircularDocumentId(null);
+    setCircularDocumentForm(defaultCircularDocumentForm);
+  };
+
+  const saveCircularDocument = () => {
+    void (async () => {
+      if (!associationProfile.id || !circularDocumentForm.headline.trim()) {
+        return;
+      }
+
+      if (!editingCircularDocumentId && !circularDocumentForm.file) {
+        return;
+      }
+
+      const payload = new FormData();
+      payload.append("headline", circularDocumentForm.headline.trim());
+      payload.append("tagline", circularDocumentForm.tagline.trim());
+      payload.append("summary", circularDocumentForm.summary.trim());
+      if (circularDocumentForm.file) {
+        payload.append("file", circularDocumentForm.file);
+      }
+
+      const response = await fetch(
+        `${apiBaseUrl}/associations/${associationProfile.id}/circulars${editingCircularDocumentId ? `/${editingCircularDocumentId}` : ""}`,
+        {
+          method: editingCircularDocumentId ? "PATCH" : "POST",
+          body: payload,
+        },
+      );
+
+      if (!response.ok) {
+        return;
+      }
+
+      await loadAssociationProfile();
+      cancelCircularDocumentEdit();
+    })();
+  };
+
+  const deleteCircularDocument = (itemId) => {
+    void (async () => {
+      if (!associationProfile.id) {
+        return;
+      }
+
+      const response = await fetch(`${apiBaseUrl}/associations/${associationProfile.id}/circulars/${itemId}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok && response.status !== 204) {
+        return;
+      }
+
+      await loadAssociationProfile();
+      if (editingCircularDocumentId === itemId) {
+        cancelCircularDocumentEdit();
+      }
+    })();
   };
 
   const toggleAppPermission = (permissionKey) => {
@@ -4024,6 +6417,51 @@ export default function HomePage() {
                 onFinanceStatementFilterTypeChange={setFinanceStatementFilterType}
                 onFinanceStatementDateFromChange={setFinanceStatementDateFrom}
                 onFinanceStatementDateToChange={setFinanceStatementDateTo}
+                associationProfile={associationProfile}
+                associationProfileForm={associationProfileForm}
+                isEditingAssociationProfile={isEditingAssociationProfile}
+                onEditAssociationProfile={openAssociationProfileEditor}
+                onAssociationProfileFieldChange={updateAssociationProfileField}
+                onAssociationRegionalFieldChange={updateAssociationRegionalField}
+                onAddRegionalAddress={addAssociationRegionalAddress}
+                onRemoveRegionalAddress={removeAssociationRegionalAddress}
+                onCancelAssociationProfileEdit={cancelAssociationProfileEdit}
+                onSaveAssociationProfile={saveAssociationProfile}
+                associationAbout={associationAbout}
+                associationAboutForm={associationAboutForm}
+                isEditingAssociationAbout={isEditingAssociationAbout}
+                onEditAssociationAbout={openAssociationAboutEditor}
+                onAssociationAboutFieldChange={updateAssociationAboutField}
+                onAssociationAboutImageChange={updateAssociationAboutImage}
+                onCancelAssociationAboutEdit={cancelAssociationAboutEdit}
+                onSaveAssociationAbout={saveAssociationAbout}
+                committeeMembers={committeeMembers}
+                allMembers={memberTabData["All Members"] ?? []}
+                editingCommitteeMemberId={editingCommitteeMemberId}
+                committeeMemberForm={committeeMemberForm}
+                onOpenCommitteeMemberEditor={openCommitteeMemberEditor}
+                onCommitteeMemberFormChange={updateCommitteeMemberForm}
+                onCancelCommitteeMemberEdit={closeCommitteeMemberEditor}
+                onSaveCommitteeMember={saveCommitteeMember}
+                onRemoveCommitteeMember={removeCommitteeMember}
+                galleryItems={galleryItems}
+                editingGalleryItemId={editingGalleryItemId}
+                galleryItemForm={galleryItemForm}
+                onOpenGalleryItemEditor={openGalleryItemEditor}
+                onGalleryItemFieldChange={updateGalleryItemField}
+                onGalleryItemImageChange={updateGalleryItemImage}
+                onCancelGalleryItemEdit={cancelGalleryItemEdit}
+                onSaveGalleryItem={saveGalleryItem}
+                onDeleteGalleryItem={deleteGalleryItem}
+                circularDocuments={circularDocuments}
+                editingCircularDocumentId={editingCircularDocumentId}
+                circularDocumentForm={circularDocumentForm}
+                onOpenCircularDocumentEditor={openCircularDocumentEditor}
+                onCircularDocumentFieldChange={updateCircularDocumentField}
+                onCircularDocumentFileChange={updateCircularDocumentFile}
+                onCancelCircularDocumentEdit={cancelCircularDocumentEdit}
+                onSaveCircularDocument={saveCircularDocument}
+                onDeleteCircularDocument={deleteCircularDocument}
               />
             </div>
 
@@ -4244,8 +6682,6 @@ export default function HomePage() {
             </section>
         ) : activeSection === "Events Arena" ? (
           <section className="association-workspace">
-            <EventTimelineCards />
-
             <nav className="association-tabbar" aria-label="Event sections">
               {eventsArenaTabs.map((tab) => (
                 <button
@@ -4264,8 +6700,12 @@ export default function HomePage() {
                 activeTab={activeEventsTab}
                 formData={eventForm}
                 mediaState={eventMedia}
+                eventTimelineGroups={eventTimelineData}
                 onFormChange={updateEventForm}
                 onMediaChange={updateEventMedia}
+                onSaveEvent={saveEventDraft}
+                onCancelEventEdit={cancelEventEdit}
+                onEditEvent={editEventRecord}
                 eventTypes={eventTypes}
                 eventTypeDraft={eventTypeDraft}
                 onEventTypeDraftChange={updateEventTypeDraft}
@@ -4315,7 +6755,7 @@ export default function HomePage() {
               <div className="association-header-meta">
                 <div className="association-dashboard-grid">
                   <article className="association-dashboard-card">
-                    <strong>3</strong>
+                    <strong>4</strong>
                     <span>Access Sections</span>
                   </article>
                   <article className="association-dashboard-card">
@@ -4383,6 +6823,12 @@ export default function HomePage() {
                   onToggleSelect={toggleAdminMemberSelect}
                   onToggleSelectAll={toggleSelectAllAdminMembers}
                   onToggleContentMember={toggleContentMember}
+                  onUpdateMemberAccessStatus={updateMemberAccessStatus}
+                  onApplyBulkMemberAccessStatus={applyBulkMemberAccessStatus}
+                  onSaveMemberAccessChanges={saveMemberAccessChanges}
+                  onSaveContentAccessChanges={saveContentPostModeration}
+                  onSelectAllContentMembers={selectAllContentMembers}
+                  onClearContentMemberSelection={clearContentMemberSelection}
                   onUpdateContentPost={updateContentPost}
                 />
               ) : activeAdminAccessSection === "Vendor Access" ? (
@@ -4401,6 +6847,21 @@ export default function HomePage() {
                   onToggleSelectAll={toggleSelectAllAdminVendors}
                   onToggleVendor={toggleContentVendor}
                   onUpdateContentPost={updateVendorContentPost}
+                />
+              ) : activeAdminAccessSection === "Event Access" ? (
+                <AdminEventAccessPanel
+                  items={filteredAdminEvents}
+                  searchQuery={adminEventSearch}
+                  formData={eventForm}
+                  mediaState={eventMedia}
+                  eventTypes={eventTypes}
+                  onSearchChange={setAdminEventSearch}
+                  onEditEvent={editEventRecord}
+                  onDeleteEvent={removeEventRecord}
+                  onFormChange={updateEventForm}
+                  onMediaChange={updateEventMedia}
+                  onSaveEvent={saveEventDraft}
+                  onCancelEventEdit={cancelEventEdit}
                 />
               ) : (
                 <article className="association-empty-state">
@@ -4461,6 +6922,7 @@ export default function HomePage() {
               formData={memberMasterForm}
               editingId={editingMemberId}
               onFieldChange={updateMemberMasterForm}
+              onImageChange={updateMemberMasterImage}
               onSave={saveMemberRecord}
               onCancel={() => {
                 resetMemberMasterForm();
