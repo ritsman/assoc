@@ -392,6 +392,7 @@ const committeeHighlights = [
 ];
 
 const memberArenaTabs = [
+  "Media",
   "All Members",
   "Primary Members",
   "Associate Members",
@@ -423,6 +424,16 @@ const defaultEventMedia = {
   videoFile: null,
   bannerUrl: "",
   promoVideoUrl: "",
+};
+
+const defaultMemberMediaPostForm = {
+  memberId: "",
+  title: "",
+  summary: "",
+  body: "",
+  imageFile: null,
+  imagePreviewUrl: "",
+  imageName: "",
 };
 
 const memberRecords = [
@@ -820,6 +831,7 @@ function mapApiMemberPostToUi(post) {
     memberId: post.memberId,
     title: post.title,
     summary: post.summary,
+    body: post.body || "",
     status,
     postedBy: post.member?.name ?? "Member",
     postedOn: post.postedOn,
@@ -832,6 +844,169 @@ function mapApiMemberPostToUi(post) {
     memberPhotoUrl: post.member?.photoUrl || "",
     memberCompany: post.member?.company || "",
   };
+}
+
+function MemberMediaPanel({
+  isAdmin,
+  members,
+  posts,
+  form,
+  isSaving,
+  onFieldChange,
+  onImageChange,
+  onSubmit,
+  onClearImage,
+  onStatusChange,
+}) {
+  return (
+    <section className="association-tab-section member-media-layout">
+      <article className="member-media-composer">
+        <div className="panel-topline">
+          <h2>Member Media</h2>
+          <span className="mini-label">Image posts only</span>
+        </div>
+
+        <div className="profile-form-grid">
+          <label className="profile-field">
+            <span>Post as Member</span>
+            <select value={form.memberId} onChange={(event) => onFieldChange("memberId", event.target.value)}>
+              <option value="">Select member</option>
+              {members.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.name} {member.company ? `- ${member.company}` : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="profile-field">
+            <span>Headline</span>
+            <input
+              type="text"
+              value={form.title}
+              placeholder="Give the post a short headline"
+              onChange={(event) => onFieldChange("title", event.target.value)}
+            />
+          </label>
+
+          <label className="profile-field profile-field-wide">
+            <span>Summary</span>
+            <textarea
+              rows="3"
+              value={form.summary}
+              placeholder="Short intro shown in the feed"
+              onChange={(event) => onFieldChange("summary", event.target.value)}
+            />
+          </label>
+
+          <label className="profile-field profile-field-wide">
+            <span>Description</span>
+            <textarea
+              rows="5"
+              value={form.body}
+              placeholder="Optional details for the member post"
+              onChange={(event) => onFieldChange("body", event.target.value)}
+            />
+          </label>
+
+          <div className="profile-field profile-field-wide">
+            <span>Picture</span>
+            <label className="member-media-upload">
+              <input type="file" accept="image/*" onChange={(event) => onImageChange(event.target.files?.[0] ?? null)} />
+              <span>{form.imageName || "Choose picture"}</span>
+            </label>
+            <p className="member-media-hint">Only image uploads are allowed here. Videos are not supported.</p>
+          </div>
+        </div>
+
+        {form.imagePreviewUrl ? (
+          <div className="member-media-preview-card">
+            <img src={form.imagePreviewUrl} alt="Member post preview" />
+            <button className="secondary-link secondary-button" type="button" onClick={onClearImage}>
+              Remove picture
+            </button>
+          </div>
+        ) : null}
+
+        <div className="profile-action-row">
+          <button className="primary-link admin-action-button" type="button" onClick={onSubmit} disabled={isSaving}>
+            {isSaving ? "Posting..." : "Publish Member Post"}
+          </button>
+        </div>
+      </article>
+
+      <section className="member-media-feed">
+        <div className="panel-topline">
+          <h2>Member Feed</h2>
+          <span className="mini-label">Newest first</span>
+        </div>
+
+        {posts.length > 0 ? (
+          <div className="member-media-feed-list">
+            {posts.map((post) => (
+              <article key={post.id} className="member-feed-card">
+                <div className="member-feed-card-head">
+                  <div className="member-feed-avatar">
+                    {post.memberPhotoUrl ? (
+                      <img src={post.memberPhotoUrl} alt={post.postedBy} />
+                    ) : (
+                      <span>
+                        {post.postedBy
+                          .split(" ")
+                          .filter(Boolean)
+                          .slice(0, 2)
+                          .map((part) => part[0]?.toUpperCase() ?? "")
+                          .join("") || "MB"}
+                      </span>
+                    )}
+                  </div>
+                  <div className="member-feed-heading">
+                    <strong>{post.postedBy}</strong>
+                    <p>{post.memberCompany || "Member update"}</p>
+                    <span>{post.postedOn}</span>
+                  </div>
+                  <span className={`member-feed-status status-${(post.status || "pending").toLowerCase().replace(/\s+/g, "-")}`}>
+                    {post.status}
+                  </span>
+                </div>
+
+                <div className="member-feed-card-copy">
+                  <h3>{post.title}</h3>
+                  <p>{post.summary}</p>
+                  {post.body ? <div className="member-feed-body">{post.body}</div> : null}
+                </div>
+
+                {post.mediaUrl ? (
+                  <div className="member-feed-image-wrap">
+                    <img src={post.mediaUrl} alt={post.title} />
+                  </div>
+                ) : null}
+
+                {isAdmin ? (
+                  <div className="member-feed-admin-row">
+                    <label className="content-control-field">
+                      <span>Post Status</span>
+                      <select value={post.status} onChange={(event) => onStatusChange(post.id, event.target.value)}>
+                        <option value="Approved">Approved</option>
+                        <option value="Rejected">Rejected</option>
+                        <option value="Pending Review">Pending Review</option>
+                      </select>
+                    </label>
+                  </div>
+                ) : null}
+              </article>
+            ))}
+          </div>
+        ) : (
+          <article className="association-empty-state">
+            <span className="mini-label">No Posts</span>
+            <h2>No member media posts yet.</h2>
+            <p>The first approved or pending image post will appear here as soon as it is submitted.</p>
+          </article>
+        )}
+      </section>
+    </section>
+  );
 }
 
 function buildEventTimelineGroups(events) {
@@ -2886,6 +3061,10 @@ function MemberArenaContent({
   activeTab,
   isAdmin,
   tabItems,
+  allMembers,
+  memberPosts,
+  memberPostForm,
+  isSavingMemberPost,
   selectedIds,
   membershipFormFields,
   membershipFieldDraft,
@@ -2903,7 +3082,29 @@ function MemberArenaContent({
   onAddMembershipField,
   onUpdateMembershipField,
   onDeleteMembershipField,
+  onMemberPostFieldChange,
+  onMemberPostImageChange,
+  onClearMemberPostImage,
+  onSubmitMemberPost,
+  onUpdateMemberPostStatus,
 }) {
+  if (activeTab === "Media") {
+    return (
+      <MemberMediaPanel
+        isAdmin={isAdmin}
+        members={allMembers}
+        posts={memberPosts}
+        form={memberPostForm}
+        isSaving={isSavingMemberPost}
+        onFieldChange={onMemberPostFieldChange}
+        onImageChange={onMemberPostImageChange}
+        onSubmit={onSubmitMemberPost}
+        onClearImage={onClearMemberPostImage}
+        onStatusChange={onUpdateMemberPostStatus}
+      />
+    );
+  }
+
   if (activeTab === "Master") {
     return (
       <MemberMasterPanel
@@ -4606,7 +4807,7 @@ export default function HomePage() {
   const [financeStatementFilterType, setFinanceStatementFilterType] = useState("");
   const [financeStatementDateFrom, setFinanceStatementDateFrom] = useState("");
   const [financeStatementDateTo, setFinanceStatementDateTo] = useState("");
-  const [activeMemberTab, setActiveMemberTab] = useState("All Members");
+  const [activeMemberTab, setActiveMemberTab] = useState("Media");
   const [activeVendorTab, setActiveVendorTab] = useState("Registration");
   const [isAdminAccessOpen, setIsAdminAccessOpen] = useState(false);
   const [activeAdminAccessSection, setActiveAdminAccessSection] = useState("App Access");
@@ -4657,6 +4858,8 @@ export default function HomePage() {
   const [memberAccessEdits, setMemberAccessEdits] = useState({});
   const [selectedContentMemberIds, setSelectedContentMemberIds] = useState([]);
   const [memberContentPosts, setMemberContentPosts] = useState([]);
+  const [memberMediaPostForm, setMemberMediaPostForm] = useState(defaultMemberMediaPostForm);
+  const [isSavingMemberMediaPost, setIsSavingMemberMediaPost] = useState(false);
   const [adminVendorSearch, setAdminVendorSearch] = useState("");
   const [adminVendorAccessView, setAdminVendorAccessView] = useState("app");
   const [selectedAdminVendors, setSelectedAdminVendors] = useState([]);
@@ -4806,6 +5009,22 @@ export default function HomePage() {
 
     return () => mediaQuery.removeEventListener("change", syncSidebarViewportState);
   }, []);
+
+  useEffect(() => {
+    const firstMemberId = (memberTabData["All Members"] ?? [])[0]?.id ?? "";
+    if (!firstMemberId) {
+      return;
+    }
+
+    setMemberMediaPostForm((current) =>
+      current.memberId
+        ? current
+        : {
+            ...current,
+            memberId: firstMemberId,
+          },
+    );
+  }, [memberTabData]);
 
   useEffect(() => {
     let isActive = true;
@@ -5468,6 +5687,123 @@ export default function HomePage() {
         [field]: value,
       },
     }));
+  };
+  const resetMemberMediaPostForm = () => {
+    setMemberMediaPostForm({
+      ...defaultMemberMediaPostForm,
+      memberId: (memberTabData["All Members"] ?? [])[0]?.id ?? "",
+    });
+  };
+  const updateMemberMediaPostForm = (field, value) => {
+    setMemberMediaPostForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  };
+  const updateMemberMediaPostImage = (file) => {
+    void (async () => {
+      if (!file) {
+        setMemberMediaPostForm((current) => ({
+          ...current,
+          imageFile: null,
+          imagePreviewUrl: "",
+          imageName: "",
+        }));
+        return;
+      }
+
+      const previewUrl = await readFileAsDataUrl(file);
+      setMemberMediaPostForm((current) => ({
+        ...current,
+        imageFile: file,
+        imagePreviewUrl: previewUrl,
+        imageName: file.name,
+      }));
+    })();
+  };
+  const clearMemberMediaPostImage = () => {
+    setMemberMediaPostForm((current) => ({
+      ...current,
+      imageFile: null,
+      imagePreviewUrl: "",
+      imageName: "",
+    }));
+  };
+  const submitMemberMediaPost = () => {
+    void (async () => {
+      if (
+        isSavingMemberMediaPost ||
+        !memberMediaPostForm.memberId ||
+        !memberMediaPostForm.title.trim() ||
+        !memberMediaPostForm.summary.trim() ||
+        !memberMediaPostForm.imageFile
+      ) {
+        return;
+      }
+
+      setIsSavingMemberMediaPost(true);
+
+      try {
+        const payload = new FormData();
+        payload.append("memberId", memberMediaPostForm.memberId);
+        payload.append("title", memberMediaPostForm.title.trim());
+        payload.append("summary", memberMediaPostForm.summary.trim());
+        payload.append("body", memberMediaPostForm.body.trim());
+        payload.append("postType", "Media");
+        payload.append("imageFile", memberMediaPostForm.imageFile);
+
+        const response = await fetch(`${apiBaseUrl}/member-posts`, {
+          method: "POST",
+          body: payload,
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        await loadMemberPosts();
+        resetMemberMediaPostForm();
+      } finally {
+        setIsSavingMemberMediaPost(false);
+      }
+    })();
+  };
+  const updateMemberMediaPostStatus = (postId, nextStatusLabel) => {
+    void (async () => {
+      setContentPostEdits((current) => ({
+        ...current,
+        [postId]: {
+          ...current[postId],
+          status: nextStatusLabel,
+        },
+      }));
+
+      const currentPost = memberContentPosts.find((post) => post.id === postId);
+      const reviewStatus =
+        nextStatusLabel === "Approved"
+          ? "APPROVED"
+          : nextStatusLabel === "Rejected"
+            ? "REJECTED"
+            : "PENDING";
+
+      const response = await fetch(`${apiBaseUrl}/member-posts/${postId}/moderation`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          reviewStatus,
+          displayStart: currentPost?.displayStart || null,
+          displayEnd: currentPost?.displayEnd || null,
+        }),
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      await loadMemberPosts();
+    })();
   };
   const saveContentPostModeration = () => {
     void (async () => {
@@ -6566,6 +6902,10 @@ export default function HomePage() {
                 activeTab={activeMemberTab}
                 isAdmin={isMemberAdmin}
                 tabItems={activeMemberItems}
+                allMembers={memberTabData["All Members"] ?? []}
+                memberPosts={memberContentPosts}
+                memberPostForm={memberMediaPostForm}
+                isSavingMemberPost={isSavingMemberMediaPost}
                 selectedIds={activeMemberSelectedIds}
                 membershipFormFields={membershipFormFields}
                 membershipFieldDraft={membershipFieldDraft}
@@ -6583,6 +6923,11 @@ export default function HomePage() {
                 onAddMembershipField={addMembershipField}
                 onUpdateMembershipField={updateMembershipField}
                 onDeleteMembershipField={deleteMembershipField}
+                onMemberPostFieldChange={updateMemberMediaPostForm}
+                onMemberPostImageChange={updateMemberMediaPostImage}
+                onClearMemberPostImage={clearMemberMediaPostImage}
+                onSubmitMemberPost={submitMemberMediaPost}
+                onUpdateMemberPostStatus={updateMemberMediaPostStatus}
               />
             </div>
 

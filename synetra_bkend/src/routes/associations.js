@@ -106,6 +106,13 @@ const associationSchema = z.object({
 });
 
 const associationUpdateSchema = associationSchema.partial();
+const appAccessSchema = z.object({
+  approveMembersLogin: z.boolean(),
+  disableScreenshots: z.boolean(),
+  approveMembership: z.boolean(),
+  approveRegistrationRequest: z.boolean(),
+  disableAdminFunctionsFromApp: z.boolean(),
+});
 
 function buildPublicAssetUrl(req, storagePath) {
   return `${req.protocol}://${req.get("host")}/${storagePath.replace(/^\/+/, "")}`;
@@ -140,6 +147,33 @@ function serializeAssociation(req, association) {
   };
 }
 
+function serializeAppAccess(appAccess) {
+  return {
+    approveMembersLogin: appAccess.approveMembersLogin,
+    disableScreenshots: appAccess.disableScreenshots,
+    approveMembership: appAccess.approveMembership,
+    approveRegistrationRequest: appAccess.approveRegistrationRequest,
+    disableAdminFunctionsFromApp: appAccess.disableAdminFunctionsFromApp,
+    updatedAt: appAccess.updatedAt,
+  };
+}
+
+async function ensureAssociationAppAccess(associationId) {
+  const existingAppAccess = await prisma.associationAppAccess.findUnique({
+    where: { associationId },
+  });
+
+  if (existingAppAccess) {
+    return existingAppAccess;
+  }
+
+  return prisma.associationAppAccess.create({
+    data: {
+      associationId,
+    },
+  });
+}
+
 async function ensureCurrentAssociation() {
   const existingAssociation = await prisma.association.findFirst({
     orderBy: { createdAt: "asc" },
@@ -148,6 +182,7 @@ async function ensureCurrentAssociation() {
       circularDocuments: {
         orderBy: [{ displayOrder: "asc" }, { createdAt: "asc" }],
       },
+      appAccess: true,
       galleryItems: {
         orderBy: [{ displayOrder: "asc" }, { createdAt: "asc" }],
       },
@@ -173,6 +208,7 @@ async function ensureCurrentAssociation() {
       circularDocuments: {
         orderBy: [{ displayOrder: "asc" }, { createdAt: "asc" }],
       },
+      appAccess: true,
       galleryItems: {
         orderBy: [{ displayOrder: "asc" }, { createdAt: "asc" }],
       },
@@ -222,6 +258,33 @@ router.get("/current/about", async (_req, res) => {
     }));
 
   res.json({ aboutContent, associationId: association.id });
+});
+
+router.get("/current/app-access", async (_req, res) => {
+  const association = await ensureCurrentAssociation();
+  const appAccess = await ensureAssociationAppAccess(association.id);
+  res.json({ appAccess: serializeAppAccess(appAccess), associationId: association.id });
+});
+
+router.patch("/current/app-access", async (req, res) => {
+  const parsed = appAccessSchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    return res.status(400).json({
+      error: "Invalid app access payload",
+      details: parsed.error.flatten(),
+    });
+  }
+
+  const association = await ensureCurrentAssociation();
+  await ensureAssociationAppAccess(association.id);
+
+  const appAccess = await prisma.associationAppAccess.update({
+    where: { associationId: association.id },
+    data: parsed.data,
+  });
+
+  res.json({ appAccess: serializeAppAccess(appAccess), associationId: association.id });
 });
 
 router.post("/", async (req, res) => {

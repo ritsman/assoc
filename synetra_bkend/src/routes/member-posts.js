@@ -1,10 +1,19 @@
+import fs from "fs";
+import path from "path";
+import multer from "multer";
 import { Router } from "express";
-import prismaPkg from "@prisma/client";
+import { fileURLToPath } from "url";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 
 const router = Router();
-const { PostReviewStatus } = prismaPkg;
+const postReviewStatuses = ["PENDING", "APPROVED", "REJECTED"];
+const currentFilePath = fileURLToPath(import.meta.url);
+const currentDirPath = path.dirname(currentFilePath);
+const memberPostUploadsDirPath = path.resolve(
+  currentDirPath,
+  "../../uploads/member-posts",
+);
 
 const optionalDateField = z.preprocess(
   (value) => (value === "" || value === null ? undefined : value),
@@ -23,14 +32,48 @@ const memberPostSchema = z.object({
   displayEnd: optionalDateField,
 });
 
+const memberPostStorage = multer.diskStorage({
+  destination: (_req, _file, callback) => {
+    fs.mkdirSync(memberPostUploadsDirPath, { recursive: true });
+    callback(null, memberPostUploadsDirPath);
+  },
+  filename: (_req, file, callback) => {
+    const safeBaseName = path
+      .basename(file.originalname, path.extname(file.originalname))
+      .replace(/[^a-zA-Z0-9-_]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 60);
+    callback(
+      null,
+      `${Date.now()}-${safeBaseName || "member-post"}${path.extname(file.originalname)}`,
+    );
+  },
+});
+
+const memberPostUpload = multer({
+  storage: memberPostStorage,
+  limits: {
+    fileSize: 10 * 1024 * 1024,
+  },
+  fileFilter: (_req, file, callback) => {
+    if (!file.mimetype.startsWith("image/")) {
+      callback(new Error("Only image uploads are allowed for member posts."));
+      return;
+    }
+
+    callback(null, true);
+  },
+});
+
 const moderationSchema = z.object({
-  reviewStatus: z.nativeEnum(PostReviewStatus),
+  reviewStatus: z.enum(postReviewStatuses),
   displayStart: optionalDateField,
   displayEnd: optionalDateField,
 });
 
 function serializeMemberPost(post) {
-  const memberName = `${post.member.firstName ?? ""} ${post.member.lastName ?? ""}`.trim();
+  const memberName =
+    `${post.member.firstName ?? ""} ${post.member.lastName ?? ""}`.trim();
   return {
     id: post.id,
     memberId: post.memberId,
@@ -55,13 +98,23 @@ function serializeMemberPost(post) {
   };
 }
 
+function buildPublicAssetUrl(req, storagePath) {
+  return `${req.protocol}://${req.get("host")}/${storagePath.replace(/^\/+/, "")}`;
+}
+
 router.get("/", async (req, res) => {
-  const { associationId, memberId } = req.query;
+  const { associationId, memberId, reviewStatus } = req.query;
+  const statusFilter =
+    typeof reviewStatus === "string" &&
+    postReviewStatuses.includes(reviewStatus)
+      ? reviewStatus
+      : undefined;
 
   const posts = await prisma.memberPost.findMany({
     where: {
       ...(associationId ? { associationId: String(associationId) } : {}),
       ...(memberId ? { memberId: String(memberId) } : {}),
+      ...(statusFilter ? { reviewStatus: statusFilter } : {}),
     },
     include: {
       member: true,
@@ -72,7 +125,7 @@ router.get("/", async (req, res) => {
   return res.json({ posts: posts.map(serializeMemberPost) });
 });
 
-router.post("/", async (req, res) => {
+router.post("/", memberPostUpload.single("imageFile"), async (req, res) => {
   const parsed = memberPostSchema.safeParse(req.body);
 
   if (!parsed.success) {
@@ -97,8 +150,10 @@ router.post("/", async (req, res) => {
       title: parsed.data.title,
       summary: parsed.data.summary,
       body: parsed.data.body,
-      mediaUrl: parsed.data.mediaUrl,
-      mediaType: parsed.data.mediaType,
+      mediaUrl: req.file
+        ? buildPublicAssetUrl(req, `uploads/member-posts/${req.file.filename}`)
+        : parsed.data.mediaUrl,
+      mediaType: req.file ? req.file.mimetype : parsed.data.mediaType,
       postType: parsed.data.postType,
       displayStart: parsed.data.displayStart,
       displayEnd: parsed.data.displayEnd,
@@ -136,8 +191,8 @@ router.patch("/:id/moderation", async (req, res) => {
       reviewStatus: nextReviewStatus,
       displayStart: parsed.data.displayStart,
       displayEnd: parsed.data.displayEnd,
-      approvedAt: nextReviewStatus === PostReviewStatus.APPROVED ? new Date() : null,
-      rejectedAt: nextReviewStatus === PostReviewStatus.REJECTED ? new Date() : null,
+      approvedAt: nextReviewStatus === "APPROVED" ? new Date() : null,
+      rejectedAt: nextReviewStatus === "REJECTED" ? new Date() : null,
     },
     include: {
       member: true,

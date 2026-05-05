@@ -14,14 +14,38 @@ const port = Number(process.env.PORT || 8083);
 const currentFilePath = fileURLToPath(import.meta.url);
 const currentDirPath = path.dirname(currentFilePath);
 const uploadsDirPath = path.resolve(currentDirPath, "../uploads");
+const configuredOrigins =
+  process.env.CORS_ORIGIN?.split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean) || ["*"];
+
+function isAllowedOrigin(origin) {
+  if (!origin) {
+    return true;
+  }
+
+  if (configuredOrigins.includes("*") || configuredOrigins.includes(origin)) {
+    return true;
+  }
+
+  return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+}
 
 app.use(
   cors({
-    origin: process.env.CORS_ORIGIN?.split(",") || "*",
+    origin(origin, callback) {
+      if (isAllowedOrigin(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error(`Origin not allowed by CORS: ${origin}`));
+    },
   }),
 );
 app.use("/uploads", express.static(uploadsDirPath));
-app.use(express.json());
+app.use(express.json({ limit: "25mb" }));
+app.use(express.urlencoded({ extended: true, limit: "25mb" }));
 
 app.get("/api/health", (_req, res) => {
   res.json({
