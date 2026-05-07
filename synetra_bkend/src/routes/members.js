@@ -5,7 +5,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 
 const router = Router();
-const { ApprovalStatus, MemberStatus, PaymentStatus } = prismaPkg;
+const { ApprovalStatus, MemberStatus, PaymentStatus, Prisma } = prismaPkg;
 const PENDING_PASSWORD_PREFIX = "pending-password-setup";
 const optionalDateField = z.preprocess(
   (value) => (value === "" ? null : value),
@@ -45,6 +45,22 @@ const memberUpdateSchema = memberSchema.partial();
 
 function buildPendingPasswordHash() {
   return `${PENDING_PASSWORD_PREFIX}:${randomUUID()}`;
+}
+
+function isDuplicateMemberEmailError(error) {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) {
+    return false;
+  }
+
+  if (error.code !== "P2002") {
+    return false;
+  }
+
+  const target = Array.isArray(error.meta?.target)
+    ? error.meta.target
+    : [error.meta?.target].filter(Boolean);
+
+  return target.includes("associationId") && target.includes("email");
 }
 
 function buildMemberUserPayload(member) {
@@ -158,62 +174,72 @@ router.post("/", async (req, res) => {
 
   const associationId = await ensureAssociation(parsed.data.associationId);
 
-  const member = await prisma.$transaction(async (tx) => {
-    const createdMember = await tx.member.create({
-      data: {
-        ...parsed.data,
-        associationId,
-        membershipStatus: parsed.data.membershipStatus ?? MemberStatus.PENDING,
-      },
-      include: {
-        association: true,
-        user: true,
-      },
-    });
-
-    const existingUser = await tx.user.findUnique({
-      where: { email: createdMember.email },
-    });
-
-    if (existingUser) {
-      await tx.user.update({
-        where: { id: existingUser.id },
+  try {
+    const member = await prisma.$transaction(async (tx) => {
+      const createdMember = await tx.member.create({
         data: {
-          ...buildMemberUserPayload(createdMember),
-          approvalStatus:
-            existingUser.approvalStatus === ApprovalStatus.REJECTED
-              ? ApprovalStatus.PENDING
-              : undefined,
-          approvedAt:
-            existingUser.approvalStatus === ApprovalStatus.REJECTED
-              ? null
-              : undefined,
-          rejectedAt:
-            existingUser.approvalStatus === ApprovalStatus.REJECTED
-              ? null
-              : undefined,
+          ...parsed.data,
+          associationId,
+          membershipStatus: parsed.data.membershipStatus ?? MemberStatus.PENDING,
+        },
+        include: {
+          association: true,
+          user: true,
         },
       });
-    } else {
-      await tx.user.create({
-        data: {
-          ...buildMemberUserPayload(createdMember),
-          passwordHash: buildPendingPasswordHash(),
-          approvalStatus: ApprovalStatus.PENDING,
+
+      const existingUser = await tx.user.findUnique({
+        where: { email: createdMember.email },
+      });
+
+      if (existingUser) {
+        await tx.user.update({
+          where: { id: existingUser.id },
+          data: {
+            ...buildMemberUserPayload(createdMember),
+            approvalStatus:
+              existingUser.approvalStatus === ApprovalStatus.REJECTED
+                ? ApprovalStatus.PENDING
+                : undefined,
+            approvedAt:
+              existingUser.approvalStatus === ApprovalStatus.REJECTED
+                ? null
+                : undefined,
+            rejectedAt:
+              existingUser.approvalStatus === ApprovalStatus.REJECTED
+                ? null
+                : undefined,
+          },
+        });
+      } else {
+        await tx.user.create({
+          data: {
+            ...buildMemberUserPayload(createdMember),
+            passwordHash: buildPendingPasswordHash(),
+            approvalStatus: ApprovalStatus.PENDING,
+          },
+        });
+      }
+
+      return tx.member.findUnique({
+        where: { id: createdMember.id },
+        include: {
+          association: true,
+          user: true,
         },
+      });
+    });
+
+    return res.status(201).json({ member });
+  } catch (error) {
+    if (isDuplicateMemberEmailError(error)) {
+      return res.status(409).json({
+        error: "A member with this email already exists in the association",
       });
     }
 
-    return tx.member.findUnique({
-      where: { id: createdMember.id },
-      include: {
-        association: true,
-        user: true,
-      },
-    });
-  });
-
-  return res.status(201).json({ member });
+    throw error;
+  }
 });
 
 router.patch("/:id", async (req, res) => {
@@ -239,59 +265,69 @@ router.patch("/:id", async (req, res) => {
     return res.status(404).json({ error: "Member not found" });
   }
 
-  const member = await prisma.$transaction(async (tx) => {
-    const updatedMember = await tx.member.update({
-      where: { id: req.params.id },
-      data: {
-        ...parsed.data,
-        ...(associationId ? { associationId } : {}),
-      },
-      include: {
-        association: true,
-        user: true,
-      },
-    });
-
-    const linkedUser = await tx.user.findFirst({
-      where: { memberId: updatedMember.id },
-    });
-
-    if (linkedUser) {
-      await tx.user.update({
-        where: { id: linkedUser.id },
-        data: buildMemberUserPayload(updatedMember),
-      });
-    } else {
-      const userByEmail = await tx.user.findUnique({
-        where: { email: existingMember.email },
+  try {
+    const member = await prisma.$transaction(async (tx) => {
+      const updatedMember = await tx.member.update({
+        where: { id: req.params.id },
+        data: {
+          ...parsed.data,
+          ...(associationId ? { associationId } : {}),
+        },
+        include: {
+          association: true,
+          user: true,
+        },
       });
 
-      if (userByEmail) {
+      const linkedUser = await tx.user.findFirst({
+        where: { memberId: updatedMember.id },
+      });
+
+      if (linkedUser) {
         await tx.user.update({
-          where: { id: userByEmail.id },
+          where: { id: linkedUser.id },
           data: buildMemberUserPayload(updatedMember),
         });
       } else {
-        await tx.user.create({
-          data: {
-            ...buildMemberUserPayload(updatedMember),
-            passwordHash: buildPendingPasswordHash(),
-            approvalStatus: ApprovalStatus.PENDING,
-          },
+        const userByEmail = await tx.user.findUnique({
+          where: { email: existingMember.email },
         });
+
+        if (userByEmail) {
+          await tx.user.update({
+            where: { id: userByEmail.id },
+            data: buildMemberUserPayload(updatedMember),
+          });
+        } else {
+          await tx.user.create({
+            data: {
+              ...buildMemberUserPayload(updatedMember),
+              passwordHash: buildPendingPasswordHash(),
+              approvalStatus: ApprovalStatus.PENDING,
+            },
+          });
+        }
       }
+
+      return tx.member.findUnique({
+        where: { id: updatedMember.id },
+        include: {
+          association: true,
+          user: true,
+        },
+      });
+    });
+
+    return res.json({ member });
+  } catch (error) {
+    if (isDuplicateMemberEmailError(error)) {
+      return res.status(409).json({
+        error: "A member with this email already exists in the association",
+      });
     }
 
-    return tx.member.findUnique({
-      where: { id: updatedMember.id },
-      include: {
-        association: true,
-        user: true,
-      },
-    });
-  });
-
-  return res.json({ member });
+    throw error;
+  }
 });
 
 router.patch("/:id/access", async (req, res) => {
