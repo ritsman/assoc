@@ -4,6 +4,7 @@ import multer from "multer";
 import { Router } from "express";
 import { fileURLToPath } from "url";
 import { z } from "zod";
+import { buildPublicAssetUrl } from "../lib/public-url.js";
 import { prisma } from "../lib/prisma.js";
 
 const router = Router();
@@ -56,10 +57,6 @@ const eventUpload = multer({
     fileSize: 50 * 1024 * 1024,
   },
 });
-
-function buildPublicAssetUrl(req, storagePath) {
-  return `${req.protocol}://${req.get("host")}/${storagePath.replace(/^\/+/, "")}`;
-}
 
 async function ensureAssociation() {
   const existingAssociation = await prisma.association.findFirst({

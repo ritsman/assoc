@@ -19,6 +19,8 @@ const configuredOrigins =
     .map((origin) => origin.trim())
     .filter(Boolean) || ["*"];
 
+app.set("trust proxy", true);
+
 function isAllowedOrigin(origin) {
   if (!origin) {
     return true;

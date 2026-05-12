@@ -4,12 +4,24 @@ import multer from "multer";
 import { Router } from "express";
 import { fileURLToPath } from "url";
 import { z } from "zod";
+import { buildPublicAssetUrl } from "../lib/public-url.js";
 import { prisma } from "../lib/prisma.js";
 
 const router = Router();
 const currentFilePath = fileURLToPath(import.meta.url);
 const currentDirPath = path.dirname(currentFilePath);
 const circularUploadsDirPath = path.resolve(currentDirPath, "../../uploads/circulars");
+const galleryUploadsDirPath = path.resolve(currentDirPath, "../../uploads/gallery");
+
+function buildSafeUploadName(file, fallbackBaseName) {
+  const safeBaseName = path
+    .basename(file.originalname, path.extname(file.originalname))
+    .replace(/[^a-zA-Z0-9-_]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+  const extension = path.extname(file.originalname) || "";
+  return `${Date.now()}-${safeBaseName || fallbackBaseName}${extension}`;
+}
 
 const circularStorage = multer.diskStorage({
   destination: (_req, _file, callback) => {
@@ -17,18 +29,29 @@ const circularStorage = multer.diskStorage({
     callback(null, circularUploadsDirPath);
   },
   filename: (_req, file, callback) => {
-    const safeBaseName = path
-      .basename(file.originalname, path.extname(file.originalname))
-      .replace(/[^a-zA-Z0-9-_]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 60);
-    const extension = path.extname(file.originalname) || "";
-    callback(null, `${Date.now()}-${safeBaseName || "circular"}${extension}`);
+    callback(null, buildSafeUploadName(file, "circular"));
+  },
+});
+
+const galleryStorage = multer.diskStorage({
+  destination: (_req, _file, callback) => {
+    fs.mkdirSync(galleryUploadsDirPath, { recursive: true });
+    callback(null, galleryUploadsDirPath);
+  },
+  filename: (_req, file, callback) => {
+    callback(null, buildSafeUploadName(file, "gallery"));
   },
 });
 
 const circularUpload = multer({
   storage: circularStorage,
+  limits: {
+    fileSize: 20 * 1024 * 1024,
+  },
+});
+
+const galleryUpload = multer({
+  storage: galleryStorage,
   limits: {
     fileSize: 20 * 1024 * 1024,
   },
@@ -114,8 +137,27 @@ const appAccessSchema = z.object({
   disableAdminFunctionsFromApp: z.boolean(),
 });
 
-function buildPublicAssetUrl(req, storagePath) {
-  return `${req.protocol}://${req.get("host")}/${storagePath.replace(/^\/+/, "")}`;
+function buildGalleryHeadline(fileName) {
+  const baseName = path.basename(fileName, path.extname(fileName)).replace(/[-_]+/g, " ").trim();
+  return baseName || "Gallery Image";
+}
+
+function deleteLocalGalleryAssetIfPresent(imageUrl) {
+  if (!imageUrl || !imageUrl.includes("/uploads/gallery/")) {
+    return;
+  }
+
+  try {
+    const url = new URL(imageUrl);
+    const relativeStoragePath = url.pathname.replace(/^\/+/, "");
+    const filePath = path.resolve(currentDirPath, "../../", relativeStoragePath);
+
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+  } catch (_error) {
+    // Ignore cleanup errors so gallery deletes still succeed.
+  }
 }
 
 function serializeCircularDocument(req, circularDocument) {
@@ -509,6 +551,42 @@ router.post("/:id/gallery", async (req, res) => {
   return res.status(201).json({ galleryItem });
 });
 
+router.post("/:id/gallery/uploads", galleryUpload.array("files", 30), async (req, res) => {
+  const files = Array.isArray(req.files) ? req.files : [];
+
+  if (!files.length) {
+    return res.status(400).json({ error: "At least one gallery image is required" });
+  }
+
+  const association = await prisma.association.findUnique({
+    where: { id: req.params.id },
+    include: {
+      galleryItems: true,
+    },
+  });
+
+  if (!association) {
+    return res.status(404).json({ error: "Association not found" });
+  }
+
+  const createdGalleryItems = await prisma.$transaction(
+    files.map((file, index) =>
+      prisma.associationGalleryItem.create({
+        data: {
+          associationId: req.params.id,
+          imageUrl: buildPublicAssetUrl(req, `uploads/gallery/${file.filename}`),
+          headline: buildGalleryHeadline(file.originalname),
+          tagline: "",
+          description: "",
+          displayOrder: association.galleryItems.length + index,
+        },
+      }),
+    ),
+  );
+
+  return res.status(201).json({ galleryItems: createdGalleryItems });
+});
+
 router.patch("/:id/gallery/:galleryItemId", async (req, res) => {
   const parsed = galleryItemSchema.safeParse(req.body);
 
@@ -558,6 +636,8 @@ router.delete("/:id/gallery/:galleryItemId", async (req, res) => {
   await prisma.associationGalleryItem.delete({
     where: { id: req.params.galleryItemId },
   });
+
+  deleteLocalGalleryAssetIfPresent(galleryItem.imageUrl);
 
   return res.status(204).send();
 });

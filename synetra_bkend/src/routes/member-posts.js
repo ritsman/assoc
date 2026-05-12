@@ -4,6 +4,7 @@ import multer from "multer";
 import { Router } from "express";
 import { fileURLToPath } from "url";
 import { z } from "zod";
+import { buildPublicAssetUrl } from "../lib/public-url.js";
 import { prisma } from "../lib/prisma.js";
 
 const router = Router();
@@ -96,10 +97,6 @@ function serializeMemberPost(post) {
       photoUrl: post.member.photoUrl || "",
     },
   };
-}
-
-function buildPublicAssetUrl(req, storagePath) {
-  return `${req.protocol}://${req.get("host")}/${storagePath.replace(/^\/+/, "")}`;
 }
 
 router.get("/", async (req, res) => {
