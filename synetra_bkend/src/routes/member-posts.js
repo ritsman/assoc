@@ -4,7 +4,11 @@ import multer from "multer";
 import { Router } from "express";
 import { fileURLToPath } from "url";
 import { z } from "zod";
-import { buildPublicAssetUrl } from "../lib/public-url.js";
+import {
+  buildPublicAssetUrl,
+  buildPublicThumbnailUrl,
+  resolvePublicAssetUrl,
+} from "../lib/public-url.js";
 import { prisma } from "../lib/prisma.js";
 
 const router = Router();
@@ -72,7 +76,7 @@ const moderationSchema = z.object({
   displayEnd: optionalDateField,
 });
 
-function serializeMemberPost(post) {
+function serializeMemberPost(req, post) {
   const memberName =
     `${post.member.firstName ?? ""} ${post.member.lastName ?? ""}`.trim();
   return {
@@ -81,7 +85,8 @@ function serializeMemberPost(post) {
     title: post.title,
     summary: post.summary,
     body: post.body,
-    mediaUrl: post.mediaUrl,
+    mediaUrl: resolvePublicAssetUrl(req, post.mediaUrl),
+    thumbnailUrl: buildPublicThumbnailUrl(req, post.mediaUrl),
     mediaType: post.mediaType,
     postType: post.postType || "Post",
     reviewStatus: post.reviewStatus,
@@ -94,7 +99,8 @@ function serializeMemberPost(post) {
       id: post.member.id,
       name: memberName,
       company: post.member.companyName || "",
-      photoUrl: post.member.photoUrl || "",
+      photoUrl: resolvePublicAssetUrl(req, post.member.photoUrl),
+      thumbnailUrl: buildPublicThumbnailUrl(req, post.member.photoUrl),
     },
   };
 }
@@ -119,7 +125,7 @@ router.get("/", async (req, res) => {
     orderBy: { createdAt: "desc" },
   });
 
-  return res.json({ posts: posts.map(serializeMemberPost) });
+  return res.json({ posts: posts.map((post) => serializeMemberPost(req, post)) });
 });
 
 router.post("/", memberPostUpload.single("imageFile"), async (req, res) => {
@@ -160,7 +166,7 @@ router.post("/", memberPostUpload.single("imageFile"), async (req, res) => {
     },
   });
 
-  return res.status(201).json({ post: serializeMemberPost(post) });
+  return res.status(201).json({ post: serializeMemberPost(req, post) });
 });
 
 router.patch("/:id/moderation", async (req, res) => {
@@ -196,7 +202,7 @@ router.patch("/:id/moderation", async (req, res) => {
     },
   });
 
-  return res.json({ post: serializeMemberPost(post) });
+  return res.json({ post: serializeMemberPost(req, post) });
 });
 
 export default router;

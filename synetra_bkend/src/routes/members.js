@@ -2,6 +2,10 @@ import { Router } from "express";
 import { randomUUID } from "crypto";
 import prismaPkg from "@prisma/client";
 import { z } from "zod";
+import {
+  buildPublicThumbnailUrl,
+  resolvePublicAssetUrl,
+} from "../lib/public-url.js";
 import { prisma } from "../lib/prisma.js";
 
 const router = Router();
@@ -145,6 +149,14 @@ async function ensureAssociation(associationId) {
   return defaultAssociation.id;
 }
 
+function serializeMember(req, member) {
+  return {
+    ...member,
+    photoUrl: resolvePublicAssetUrl(req, member.photoUrl),
+    thumbnailUrl: buildPublicThumbnailUrl(req, member.photoUrl),
+  };
+}
+
 router.get("/", async (req, res) => {
   const { associationId } = req.query;
 
@@ -159,7 +171,7 @@ router.get("/", async (req, res) => {
     orderBy: { createdAt: "desc" },
   });
 
-  res.json({ members });
+  res.json({ members: members.map((member) => serializeMember(req, member)) });
 });
 
 router.post("/", async (req, res) => {
@@ -230,7 +242,7 @@ router.post("/", async (req, res) => {
       });
     });
 
-    return res.status(201).json({ member });
+    return res.status(201).json({ member: serializeMember(req, member) });
   } catch (error) {
     if (isDuplicateMemberEmailError(error)) {
       return res.status(409).json({
@@ -318,7 +330,7 @@ router.patch("/:id", async (req, res) => {
       });
     });
 
-    return res.json({ member });
+    return res.json({ member: serializeMember(req, member) });
   } catch (error) {
     if (isDuplicateMemberEmailError(error)) {
       return res.status(409).json({
@@ -393,7 +405,7 @@ router.patch("/:id/access", async (req, res) => {
     });
   });
 
-  return res.json({ member: updatedMember });
+  return res.json({ member: serializeMember(req, updatedMember) });
 });
 
 router.delete("/:id", async (req, res) => {

@@ -4,7 +4,11 @@ import multer from "multer";
 import { Router } from "express";
 import { fileURLToPath } from "url";
 import { z } from "zod";
-import { buildPublicAssetUrl } from "../lib/public-url.js";
+import {
+  buildPublicAssetUrl,
+  buildPublicThumbnailUrl,
+  resolvePublicAssetUrl,
+} from "../lib/public-url.js";
 import { prisma } from "../lib/prisma.js";
 
 const router = Router();
@@ -103,8 +107,9 @@ function serializeEvent(req, event) {
     summary: event.summary || "",
     imageName: event.bannerFileName || "",
     videoName: event.promoVideoFileName || "",
-    bannerUrl: event.bannerUrl ? buildPublicAssetUrl(req, event.bannerUrl) : "",
-    promoVideoUrl: event.promoVideoUrl ? buildPublicAssetUrl(req, event.promoVideoUrl) : "",
+    bannerUrl: resolvePublicAssetUrl(req, event.bannerUrl),
+    thumbnailUrl: buildPublicThumbnailUrl(req, event.bannerUrl),
+    promoVideoUrl: resolvePublicAssetUrl(req, event.promoVideoUrl),
     liveStatus: eventDate < new Date().toISOString().slice(0, 10) ? "Completed" : "Scheduled",
     scheduledGoLive: eventDate,
   };

@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express from "express";
+import compression from "compression";
 import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -43,6 +44,11 @@ app.use(
 
       callback(new Error(`Origin not allowed by CORS: ${origin}`));
     },
+  }),
+);
+app.use(
+  compression({
+    threshold: 1024,
   }),
 );
 app.use("/uploads", express.static(uploadsDirPath));

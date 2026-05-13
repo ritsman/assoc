@@ -4,7 +4,11 @@ import multer from "multer";
 import { Router } from "express";
 import { fileURLToPath } from "url";
 import { z } from "zod";
-import { buildPublicAssetUrl } from "../lib/public-url.js";
+import {
+  buildPublicAssetUrl,
+  buildPublicThumbnailUrl,
+  resolvePublicAssetUrl,
+} from "../lib/public-url.js";
 import { prisma } from "../lib/prisma.js";
 
 const router = Router();
@@ -180,9 +184,37 @@ function serializeCircularDocument(req, circularDocument) {
   };
 }
 
+function serializeGalleryItem(req, galleryItem) {
+  const imageUrl = resolvePublicAssetUrl(req, galleryItem.imageUrl);
+
+  return {
+    ...galleryItem,
+    imageUrl,
+    thumbnailUrl: buildPublicThumbnailUrl(req, galleryItem.imageUrl),
+  };
+}
+
+function serializeAboutContent(req, aboutContent) {
+  if (!aboutContent) {
+    return null;
+  }
+
+  return {
+    ...aboutContent,
+    headOfficeImage: resolvePublicAssetUrl(req, aboutContent.headOfficeImage),
+    galleryImageOne: resolvePublicAssetUrl(req, aboutContent.galleryImageOne),
+    galleryImageTwo: resolvePublicAssetUrl(req, aboutContent.galleryImageTwo),
+  };
+}
+
 function serializeAssociation(req, association) {
   return {
     ...association,
+    logoUrl: resolvePublicAssetUrl(req, association.logoUrl),
+    aboutContent: serializeAboutContent(req, association.aboutContent),
+    galleryItems: Array.isArray(association.galleryItems)
+      ? association.galleryItems.map((item) => serializeGalleryItem(req, item))
+      : [],
     circularDocuments: Array.isArray(association.circularDocuments)
       ? association.circularDocuments.map((item) => serializeCircularDocument(req, item))
       : [],
@@ -216,9 +248,30 @@ async function ensureAssociationAppAccess(associationId) {
   });
 }
 
-async function ensureCurrentAssociation() {
+async function ensureCurrentAssociationBase() {
   const existingAssociation = await prisma.association.findFirst({
     orderBy: { createdAt: "asc" },
+  });
+
+  if (existingAssociation) {
+    return existingAssociation;
+  }
+
+  return prisma.association.create({
+    data: {
+      name: "Association 1",
+      slug: "association-1",
+      appName: "Synetra",
+      isActive: true,
+    },
+  });
+}
+
+async function ensureCurrentAssociation() {
+  const baseAssociation = await ensureCurrentAssociationBase();
+
+  const existingAssociation = await prisma.association.findUnique({
+    where: { id: baseAssociation.id },
     include: {
       aboutContent: true,
       circularDocuments: {
@@ -238,27 +291,51 @@ async function ensureCurrentAssociation() {
     return existingAssociation;
   }
 
-  return prisma.association.create({
-    data: {
-      name: "Association 1",
-      slug: "association-1",
-      appName: "Synetra",
-      isActive: true,
-    },
-    include: {
-      aboutContent: true,
-      circularDocuments: {
-        orderBy: [{ displayOrder: "asc" }, { createdAt: "asc" }],
-      },
-      appAccess: true,
-      galleryItems: {
-        orderBy: [{ displayOrder: "asc" }, { createdAt: "asc" }],
-      },
-      regionalAddresses: {
-        orderBy: { createdAt: "asc" },
-      },
-    },
-  });
+  return baseAssociation;
+}
+
+function serializeDashboardEvent(req, event) {
+  const eventDate = event.date.toISOString().slice(0, 10);
+  return {
+    id: event.id,
+    name: event.name,
+    type: event.type,
+    audience: event.audience || "",
+    entryType: event.entryType || "",
+    entryCharges: event.entryCharges || "",
+    participationCharges: event.participationCharges || "",
+    date: eventDate,
+    venue: event.venue || "",
+    startTime: event.startTime || "",
+    endTime: event.endTime || "",
+    summary: event.summary || "",
+    imageName: event.bannerFileName || "",
+    videoName: event.promoVideoFileName || "",
+    bannerUrl: resolvePublicAssetUrl(req, event.bannerUrl),
+    thumbnailUrl: buildPublicThumbnailUrl(req, event.bannerUrl),
+    promoVideoUrl: resolvePublicAssetUrl(req, event.promoVideoUrl),
+    liveStatus: eventDate < new Date().toISOString().slice(0, 10) ? "Completed" : "Scheduled",
+    scheduledGoLive: eventDate,
+  };
+}
+
+function serializeDashboardCommitteeMember(req, member) {
+  return {
+    id: member.id,
+    firstName: member.firstName,
+    lastName: member.lastName,
+    companyName: member.companyName || "",
+    roleTitle: member.roleTitle || "",
+    committeePost: member.committeePost || "",
+    committeeTenureStart: member.committeeTenureStart?.toISOString() ?? null,
+    committeeTenureEnd: member.committeeTenureEnd?.toISOString() ?? null,
+    memberBio: member.memberBio || "",
+    membershipDetails: member.membershipDetails || "",
+    email: member.email,
+    phone: member.phone || "",
+    photoUrl: resolvePublicAssetUrl(req, member.photoUrl),
+    thumbnailUrl: buildPublicThumbnailUrl(req, member.photoUrl),
+  };
 }
 
 router.get("/", async (req, res) => {
@@ -289,7 +366,109 @@ router.get("/current", async (req, res) => {
   res.json({ association: serializeAssociation(req, association) });
 });
 
-router.get("/current/about", async (_req, res) => {
+router.get("/current/dashboard-summary", async (req, res) => {
+  const association = await ensureCurrentAssociationBase();
+  const today = new Date().toISOString().slice(0, 10);
+
+  const [
+    regionalAddresses,
+    latestGalleryItems,
+    upcomingEvents,
+    committeeMembers,
+    totalMembers,
+    totalGuests,
+    totalVendors,
+  ] = await Promise.all([
+    prisma.associationRegionalAddress.findMany({
+      where: { associationId: association.id },
+      select: { city: true },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.associationGalleryItem.findMany({
+      where: { associationId: association.id },
+      orderBy: [{ createdAt: "desc" }, { displayOrder: "asc" }],
+      take: 10,
+    }),
+    prisma.associationEvent.findMany({
+      where: {
+        associationId: association.id,
+        date: { gte: new Date(today) },
+      },
+      orderBy: [{ date: "asc" }, { createdAt: "asc" }],
+      take: 20,
+    }),
+    prisma.member.findMany({
+      where: {
+        associationId: association.id,
+        OR: [{ roleTitle: { equals: "committee", mode: "insensitive" } }, { committeePost: { not: null } }],
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        companyName: true,
+        roleTitle: true,
+        committeePost: true,
+        committeeTenureStart: true,
+        committeeTenureEnd: true,
+        memberBio: true,
+        membershipDetails: true,
+        email: true,
+        phone: true,
+        photoUrl: true,
+      },
+      orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
+      take: 12,
+    }),
+    prisma.member.count({
+      where: { associationId: association.id },
+    }),
+    prisma.member.count({
+      where: {
+        associationId: association.id,
+        OR: [
+          { roleTitle: { equals: "temporary visit", mode: "insensitive" } },
+          { roleTitle: { equals: "guest", mode: "insensitive" } },
+          { roleTitle: { equals: "visitor", mode: "insensitive" } },
+        ],
+      },
+    }),
+    prisma.user.count({
+      where: { associationId: association.id, isVendor: true },
+    }),
+  ]);
+
+  const citySet = new Set();
+  if (association.city?.trim()) {
+    citySet.add(association.city.trim().toLowerCase());
+  }
+  for (const address of regionalAddresses) {
+    if (address.city?.trim()) {
+      citySet.add(address.city.trim().toLowerCase());
+    }
+  }
+
+  res.json({
+    summary: {
+      associationName: association.name,
+      totalMembers,
+      totalCities: citySet.size,
+      totalGuests,
+      totalVendors,
+      galleryItems: latestGalleryItems
+        .map((item) => serializeGalleryItem(req, item))
+        .reverse(),
+      upcomingEvents: upcomingEvents.map((event) =>
+        serializeDashboardEvent(req, event),
+      ),
+      committeeMembers: committeeMembers.map((member) =>
+        serializeDashboardCommitteeMember(req, member),
+      ),
+    },
+  });
+});
+
+router.get("/current/about", async (req, res) => {
   const association = await ensureCurrentAssociation();
   const aboutContent =
     association.aboutContent ??
@@ -299,7 +478,10 @@ router.get("/current/about", async (_req, res) => {
       },
     }));
 
-  res.json({ aboutContent, associationId: association.id });
+  res.json({
+    aboutContent: serializeAboutContent(req, aboutContent),
+    associationId: association.id,
+  });
 });
 
 router.get("/current/app-access", async (_req, res) => {
