@@ -1,7 +1,15 @@
+import fs from "fs";
+import path from "path";
+import multer from "multer";
 import { Router } from "express";
-import { randomUUID } from "crypto";
 import prismaPkg from "@prisma/client";
+import xlsx from "xlsx";
 import { z } from "zod";
+import {
+  BULK_MEMBER_DEFAULT_PASSWORD,
+  buildDefaultMemberPasswordHash,
+  buildPendingPasswordHash,
+} from "../lib/auth.js";
 import {
   buildPublicThumbnailUrl,
   resolvePublicAssetUrl,
@@ -10,7 +18,8 @@ import { prisma } from "../lib/prisma.js";
 
 const router = Router();
 const { ApprovalStatus, MemberStatus, PaymentStatus, Prisma } = prismaPkg;
-const PENDING_PASSWORD_PREFIX = "pending-password-setup";
+const currentDirPath = path.dirname(new URL(import.meta.url).pathname);
+const bulkMemberUploadsDirPath = path.resolve(currentDirPath, "../../uploads/member-imports");
 const optionalDateField = z.preprocess(
   (value) => (value === "" ? null : value),
   z.coerce.date().nullable().optional(),
@@ -47,8 +56,111 @@ const memberSchema = z.object({
 
 const memberUpdateSchema = memberSchema.partial();
 
-function buildPendingPasswordHash() {
-  return `${PENDING_PASSWORD_PREFIX}:${randomUUID()}`;
+const bulkImportUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, callback) => {
+      fs.mkdirSync(bulkMemberUploadsDirPath, { recursive: true });
+      callback(null, bulkMemberUploadsDirPath);
+    },
+    filename: (_req, file, callback) => {
+      const safeName = path
+        .basename(file.originalname, path.extname(file.originalname))
+        .replace(/[^a-zA-Z0-9-_]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 60);
+      callback(null, `${Date.now()}-${safeName || "bulk-members"}${path.extname(file.originalname)}`);
+    },
+  }),
+  limits: {
+    fileSize: 5 * 1024 * 1024,
+  },
+  fileFilter: (_req, file, callback) => {
+    const isExcelMime =
+      file.mimetype ===
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+      file.mimetype === "application/vnd.ms-excel";
+    const ext = path.extname(file.originalname).toLowerCase();
+
+    if (!isExcelMime && ext !== ".xlsx" && ext !== ".xls") {
+      callback(new Error("Bulk member import only supports Excel files."));
+      return;
+    }
+
+    callback(null, true);
+  },
+});
+
+function normalizeExcelValue(value) {
+  if (value === null || value === undefined) {
+    return "";
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString().slice(0, 10);
+  }
+
+  if (typeof value === "number") {
+    return Number.isInteger(value) ? String(value) : String(value).trim();
+  }
+
+  return String(value).trim();
+}
+
+function splitRepresentativeName(name) {
+  const cleaned = normalizeExcelValue(name).replace(/\s+/g, " ").trim();
+  if (!cleaned) {
+    return {
+      firstName: "Member",
+      lastName: "Imported",
+    };
+  }
+
+  const parts = cleaned.split(" ").filter(Boolean);
+  return {
+    firstName: parts[0] || "Member",
+    lastName: parts.slice(1).join(" ") || "Imported",
+  };
+}
+
+function mapBulkImportRow(headers, rowValues) {
+  const row = Object.fromEntries(
+    headers.map((header, index) => [header, normalizeExcelValue(rowValues[index])]),
+  );
+
+  const email = row.email?.toLowerCase();
+  const representative = splitRepresentativeName(row.representative_name);
+
+  return {
+    membershipNumber: row.membership_no,
+    companyName: row.company_name,
+    midcArea: row.midc_area,
+    representativeName: `${representative.firstName} ${representative.lastName}`.trim(),
+    firstName: representative.firstName,
+    lastName: representative.lastName,
+    phone: row.cell_no,
+    email,
+    website: row.website,
+    dateOfBirth: row.date_of_birth,
+    gender: row.gender,
+    bloodGroup: row.blood_group,
+    businessType: row.business_type,
+    address: row.address,
+  };
+}
+
+function buildBulkCustomFieldValues(mappedRow) {
+  return Object.fromEntries(
+    Object.entries({
+      membershipNumber: mappedRow.membershipNumber,
+      midcArea: mappedRow.midcArea,
+      representativeName: mappedRow.representativeName,
+      website: mappedRow.website,
+      dateOfBirth: mappedRow.dateOfBirth,
+      gender: mappedRow.gender,
+      bloodGroup: mappedRow.bloodGroup,
+      businessType: mappedRow.businessType,
+    }).filter(([, value]) => value),
+  );
 }
 
 function isDuplicateMemberEmailError(error) {
@@ -254,6 +366,172 @@ router.post("/", async (req, res) => {
   }
 });
 
+router.post(
+  "/bulk-import",
+  bulkImportUpload.single("excelFile"),
+  async (req, res) => {
+    if (!req.file) {
+      return res.status(400).json({ error: "Attach an Excel file to import members." });
+    }
+
+    try {
+      const workbook = xlsx.readFile(req.file.path, {
+        cellDates: true,
+      });
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+
+      if (!sheet) {
+        return res.status(400).json({ error: "The Excel file does not contain a readable sheet." });
+      }
+
+      const rows = xlsx.utils.sheet_to_json(sheet, {
+        header: 1,
+        defval: "",
+        raw: false,
+      });
+
+      if (rows.length < 2) {
+        return res.status(400).json({ error: "The Excel file does not contain any member rows." });
+      }
+
+      const headers = rows[0].map((header) =>
+        normalizeExcelValue(header)
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "_")
+          .replace(/^_+|_+$/g, ""),
+      );
+      const associationId = await ensureAssociation();
+      const imported = [];
+      const skipped = [];
+
+      for (let rowIndex = 1; rowIndex < rows.length; rowIndex += 1) {
+        const values = rows[rowIndex];
+        if (!Array.isArray(values)) {
+          continue;
+        }
+
+        const mappedRow = mapBulkImportRow(headers, values);
+
+        if (
+          !mappedRow.companyName &&
+          !mappedRow.representativeName &&
+          !mappedRow.email
+        ) {
+          continue;
+        }
+
+        if (!mappedRow.email) {
+          skipped.push({
+            rowNumber: rowIndex + 1,
+            reason: "Missing email",
+            companyName: mappedRow.companyName,
+          });
+          continue;
+        }
+
+        try {
+          const passwordHash = await buildDefaultMemberPasswordHash(
+            BULK_MEMBER_DEFAULT_PASSWORD,
+          );
+
+          const member = await prisma.$transaction(async (tx) => {
+            const existingMember = await tx.member.findFirst({
+              where: {
+                associationId,
+                email: mappedRow.email,
+              },
+            });
+
+            if (existingMember) {
+              throw new Error("DUPLICATE_MEMBER");
+            }
+
+            const createdMember = await tx.member.create({
+              data: {
+                associationId,
+                firstName: mappedRow.firstName,
+                lastName: mappedRow.lastName,
+                email: mappedRow.email,
+                phone: mappedRow.phone || undefined,
+                address: mappedRow.address || undefined,
+                companyName: mappedRow.companyName || undefined,
+                roleTitle: mappedRow.businessType || undefined,
+                membershipDetails: mappedRow.membershipNumber
+                  ? `Membership No: ${mappedRow.membershipNumber}`
+                  : undefined,
+                membershipStatus: MemberStatus.ACTIVE,
+                paymentStatus: PaymentStatus.PENDING,
+                customFieldValues: buildBulkCustomFieldValues(mappedRow),
+              },
+            });
+
+            const existingUser = await tx.user.findUnique({
+              where: { email: mappedRow.email },
+            });
+
+            if (existingUser) {
+              await tx.user.update({
+                where: { id: existingUser.id },
+                data: {
+                  ...buildMemberUserPayload(createdMember),
+                  passwordHash,
+                  approvalStatus: ApprovalStatus.APPROVED,
+                  isActive: true,
+                  approvedAt: new Date(),
+                  rejectedAt: null,
+                },
+              });
+            } else {
+              await tx.user.create({
+                data: {
+                  ...buildMemberUserPayload(createdMember),
+                  passwordHash,
+                  approvalStatus: ApprovalStatus.APPROVED,
+                  isActive: true,
+                  approvedAt: new Date(),
+                },
+              });
+            }
+
+            return createdMember;
+          });
+
+          imported.push({
+            rowNumber: rowIndex + 1,
+            memberId: member.id,
+            email: mappedRow.email,
+            companyName: mappedRow.companyName,
+          });
+        } catch (error) {
+          skipped.push({
+            rowNumber: rowIndex + 1,
+            email: mappedRow.email,
+            companyName: mappedRow.companyName,
+            reason:
+              error instanceof Error && error.message === "DUPLICATE_MEMBER"
+                ? "Duplicate member email in this association"
+                : "Unable to import row",
+          });
+        }
+      }
+
+      return res.status(201).json({
+        summary: {
+          totalRows: rows.length - 1,
+          importedCount: imported.length,
+          skippedCount: skipped.length,
+          defaultLoginPassword: BULK_MEMBER_DEFAULT_PASSWORD,
+        },
+        imported,
+        skipped,
+      });
+    } finally {
+      fs.unlink(req.file.path, () => {});
+    }
+  },
+);
+
 router.patch("/:id", async (req, res) => {
   const parsed = memberUpdateSchema.safeParse(req.body);
 
@@ -361,6 +639,10 @@ router.patch("/:id/access", async (req, res) => {
   }
 
   const { user: userData, memberStatus } = buildAccessUpdate(parsed.data.accessStatus);
+  const passwordHash =
+    parsed.data.accessStatus === "APPROVED"
+      ? await buildDefaultMemberPasswordHash()
+      : undefined;
 
   const updatedMember = await prisma.$transaction(async (tx) => {
     const linkedUser =
@@ -377,6 +659,7 @@ router.patch("/:id/access", async (req, res) => {
         data: {
           ...buildMemberUserPayload(member),
           ...userData,
+          ...(passwordHash ? { passwordHash } : {}),
         },
       });
     } else {
@@ -384,7 +667,7 @@ router.patch("/:id/access", async (req, res) => {
         data: {
           ...buildMemberUserPayload(member),
           ...userData,
-          passwordHash: buildPendingPasswordHash(),
+          passwordHash: passwordHash ?? buildPendingPasswordHash(),
         },
       });
     }

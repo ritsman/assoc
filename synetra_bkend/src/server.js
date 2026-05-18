@@ -8,7 +8,11 @@ import associationsRouter from "./routes/associations.js";
 import eventsRouter from "./routes/events.js";
 import membersRouter from "./routes/members.js";
 import memberPostsRouter from "./routes/member-posts.js";
+import timelinePostsRouter from "./routes/timeline-posts.js";
+import appBannersRouter from "./routes/app-banners.js";
+import authRouter from "./routes/auth.js";
 import usersRouter from "./routes/users.js";
+import vendorsRouter from "./routes/vendors.js";
 
 const app = express();
 const port = Number(process.env.PORT || 8083);
@@ -64,10 +68,14 @@ app.get("/api/health", (_req, res) => {
 });
 
 app.use("/api/associations", associationsRouter);
+app.use("/api/auth", authRouter);
 app.use("/api/events", eventsRouter);
 app.use("/api/members", membersRouter);
 app.use("/api/member-posts", memberPostsRouter);
+app.use("/api/timeline-posts", timelinePostsRouter);
+app.use("/api/app-banners", appBannersRouter);
 app.use("/api/users", usersRouter);
+app.use("/api/vendors", vendorsRouter);
 
 app.listen(port, () => {
   console.log(`Synetra backend listening on port ${port}`);

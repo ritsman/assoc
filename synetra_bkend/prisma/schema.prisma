@@ -39,6 +39,9 @@ model Association {
   circularDocuments  AssociationCircularDocument[]
   appAccess         AssociationAppAccess?
   MemberPost         MemberPost[]
+  vendors            Vendor[]
+  timelinePosts      TimelinePost[]
+  appBanners         AppBanner[]
   eventTypes         AssociationEventType[]
   events             AssociationEvent[]
 }
@@ -199,6 +202,7 @@ model Member {
   association          Association   @relation(fields: [associationId], references: [id], onDelete: Cascade)
   user                 User?
   posts                MemberPost[]
+  timelinePosts        TimelinePost[]
 
   @@unique([associationId, email])
   @@index([associationId])
@@ -233,6 +237,7 @@ model User {
   id             String         @id @default(cuid())
   associationId  String?
   memberId       String?        @unique
+  vendorId       String?        @unique
   firstName      String
   lastName       String
   email          String         @unique
@@ -251,12 +256,111 @@ model User {
   updatedAt      DateTime       @updatedAt
   association    Association?   @relation(fields: [associationId], references: [id], onDelete: SetNull)
   member         Member?        @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  vendor         Vendor?        @relation(fields: [vendorId], references: [id], onDelete: SetNull)
   approvedBy     User?          @relation("UserApprovals", fields: [approvedById], references: [id], onDelete: SetNull)
   approvedUsers  User[]         @relation("UserApprovals")
 
   @@index([associationId])
   @@index([approvalStatus])
   @@index([isAdmin, isMember, isVendor])
+}
+
+model Vendor {
+  id                String        @id @default(cuid())
+  associationId     String
+  name              String
+  companyName       String
+  contactPerson     String?
+  email             String
+  phone             String?
+  whatsapp          String?
+  address           String?
+  city              String?
+  vendorType        String?
+  category          String?
+  facebookUrl       String?
+  instagramUrl      String?
+  youtubeUrl        String?
+  linkedinUrl       String?
+  xUrl              String?
+  onboardingStartAt DateTime?
+  onboardingEndAt   DateTime?
+  membershipPlan    String?
+  paymentStatus     PaymentStatus @default(PENDING)
+  paymentAmount     String?
+  paymentDueDate    DateTime?
+  badge             String?
+  notes             String?
+  status            VendorStatus  @default(PENDING)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  association       Association   @relation(fields: [associationId], references: [id], onDelete: Cascade)
+  user              User?
+  timelinePosts     TimelinePost[]
+  appBanners        AppBanner[]
+
+  @@unique([associationId, email])
+  @@index([associationId, createdAt])
+  @@index([associationId, status])
+}
+
+model TimelinePost {
+  id              String             @id @default(cuid())
+  associationId   String
+  sourceType      TimelineSourceType
+  memberId        String?
+  vendorId        String?
+  postedBy        String?
+  caption         String
+  contactNumber   String?
+  imageUrl        String?
+  imageType       String?
+  landingPageUrl  String?
+  youtubeUrl      String?
+  facebookUrl     String?
+  brochureUrl     String?
+  brochureMimeType String?
+  reviewStatus    PostReviewStatus   @default(PENDING)
+  displayStart    DateTime?
+  displayEnd      DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  association     Association        @relation(fields: [associationId], references: [id], onDelete: Cascade)
+  member          Member?            @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  vendor          Vendor?            @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+
+  @@index([associationId, createdAt])
+  @@index([sourceType, createdAt])
+  @@index([reviewStatus])
+}
+
+model AppBanner {
+  id               String           @id @default(cuid())
+  associationId    String
+  vendorId         String?
+  shortText        String
+  contactNumber    String?
+  mediaUrl         String?
+  mediaType        String?
+  brochureUrl      String?
+  brochureMimeType String?
+  socialMediaUrl   String?
+  reviewStatus     PostReviewStatus @default(PENDING)
+  paymentReceived  Boolean          @default(false)
+  paymentMode      String?
+  paymentRemarks   String?
+  displayStart     DateTime?
+  displayEnd       DateTime?
+  displayIndex     Int?
+  approvedAt       DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  association      Association      @relation(fields: [associationId], references: [id], onDelete: Cascade)
+  vendor           Vendor?          @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+
+  @@index([associationId, createdAt])
+  @@index([reviewStatus])
+  @@index([displayIndex])
 }
 
 enum MemberStatus {
@@ -280,6 +384,20 @@ enum PaymentStatus {
 
 enum PostReviewStatus {
   PENDING
+  ON_HOLD
   APPROVED
   REJECTED
+}
+
+enum VendorStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  LAPSED
+}
+
+enum TimelineSourceType {
+  ASSOCIATION
+  MEMBER
+  VENDOR
 }

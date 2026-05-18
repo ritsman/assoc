@@ -1,0 +1,124 @@
+import { Router } from "express";
+import { z } from "zod";
+import { prisma } from "../lib/prisma.js";
+import {
+  hashPassword,
+  isDefaultMemberPasswordHash,
+  verifyPassword,
+} from "../lib/auth.js";
+
+const router = Router();
+
+const loginSchema = z.object({
+  username: z.string().min(1),
+  password: z.string().min(1),
+});
+
+const changePasswordSchema = z.object({
+  username: z.string().min(1),
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8),
+});
+
+function resolveViewerRole(user) {
+  if (user.isAdmin) {
+    return "admin";
+  }
+
+  if (user.isMember) {
+    return "member";
+  }
+
+  return "viewOnly";
+}
+
+function serializeSession(user) {
+  return {
+    user: {
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      displayName: [user.firstName, user.lastName].filter(Boolean).join(" ").trim(),
+      associationId: user.associationId,
+      memberId: user.memberId,
+      viewerRole: resolveViewerRole(user),
+      mustChangePassword: isDefaultMemberPasswordHash(user.passwordHash),
+      approvalStatus: user.approvalStatus,
+      isActive: user.isActive,
+    },
+  };
+}
+
+router.post("/login", async (req, res) => {
+  const parsed = loginSchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    return res.status(400).json({
+      error: "Invalid login payload",
+      details: parsed.error.flatten(),
+    });
+  }
+
+  const username = parsed.data.username.trim().toLowerCase();
+  const user = await prisma.user.findFirst({
+    where: {
+      email: {
+        equals: username,
+        mode: "insensitive",
+      },
+    },
+  });
+
+  if (!user || !(await verifyPassword(parsed.data.password, user.passwordHash))) {
+    return res.status(401).json({ error: "Invalid username or password" });
+  }
+
+  if (!user.isActive) {
+    return res.status(403).json({ error: "This account is inactive" });
+  }
+
+  if (user.isMember && user.approvalStatus !== "APPROVED") {
+    return res.status(403).json({
+      error: "Your member profile is not approved yet",
+    });
+  }
+
+  return res.json(serializeSession(user));
+});
+
+router.post("/change-password", async (req, res) => {
+  const parsed = changePasswordSchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    return res.status(400).json({
+      error: "Invalid change password payload",
+      details: parsed.error.flatten(),
+    });
+  }
+
+  const username = parsed.data.username.trim().toLowerCase();
+  const user = await prisma.user.findFirst({
+    where: {
+      email: {
+        equals: username,
+        mode: "insensitive",
+      },
+    },
+  });
+
+  if (!user || !(await verifyPassword(parsed.data.currentPassword, user.passwordHash))) {
+    return res.status(401).json({ error: "Current password is incorrect" });
+  }
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      passwordHash: await hashPassword(parsed.data.newPassword),
+    },
+  });
+
+  return res.json({ ok: true });
+});
+
+export default router;

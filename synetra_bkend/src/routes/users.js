@@ -1,6 +1,7 @@
 import { Router } from "express";
 import prismaPkg from "@prisma/client";
 import { z } from "zod";
+import { buildDefaultMemberPasswordHash } from "../lib/auth.js";
 import { prisma } from "../lib/prisma.js";
 
 const router = Router();
@@ -61,9 +62,11 @@ router.get("/", async (req, res) => {
     where: {
       ...(associationId ? { associationId: String(associationId) } : {}),
       ...(role === "member" ? { isMember: true } : {}),
+      ...(role === "vendor" ? { isVendor: true } : {}),
     },
     include: {
       member: true,
+      vendor: true,
     },
     orderBy: { createdAt: "desc" },
   });
@@ -94,7 +97,12 @@ router.patch("/:id/access", async (req, res) => {
   const updatedUser = await prisma.$transaction(async (tx) => {
     const nextUser = await tx.user.update({
       where: { id: req.params.id },
-      data: userData,
+      data: {
+        ...userData,
+        ...(parsed.data.accessStatus === "APPROVED" && user.isMember
+          ? { passwordHash: await buildDefaultMemberPasswordHash() }
+          : {}),
+      },
       include: {
         member: true,
       },

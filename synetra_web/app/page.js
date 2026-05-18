@@ -60,6 +60,19 @@ const navSections = [
     ),
   },
   {
+    label: "Timeline",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path d="M7 5.5h13" />
+        <path d="M7 12h13" />
+        <path d="M7 18.5h13" />
+        <circle cx="4.5" cy="5.5" r="1.2" />
+        <circle cx="4.5" cy="12" r="1.2" />
+        <circle cx="4.5" cy="18.5" r="1.2" />
+      </svg>
+    ),
+  },
+  {
     label: "Events Arena",
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -74,7 +87,8 @@ const navSections = [
   },
 ];
 
-const adminAccessSections = ["App Access", "Member Access", "Vendor Access", "Event Access"];
+const adminAccessSections = ["App Access", "Member Access", "Vendor Access", "Timeline Access", "App Banner Access", "Add Bulk Member", "Event Access"];
+const vendorSubSections = ["Category", "Sub Category", "Vendor Registration", "Vendor Status", "App Banner"];
 const flutterAppPermissions = [
   {
     key: "approveMembersLogin",
@@ -113,7 +127,6 @@ const adminVendorAccessViews = [
   { key: "app", label: "Vendor App Access" },
   { key: "content", label: "Vendor Content Access" },
 ];
-
 const galleryItems = [
   {
     id: "gallery-1",
@@ -816,6 +829,8 @@ function mapApiMemberPostToUi(post) {
   const status =
     post.reviewStatus === "APPROVED"
       ? "Approved"
+      : post.reviewStatus === "ON_HOLD"
+        ? "Hold"
       : post.reviewStatus === "REJECTED"
         ? "Rejected"
         : "Pending Review";
@@ -844,6 +859,431 @@ function mapApiMemberPostToUi(post) {
     memberPhotoUrl: post.member?.photoUrl || "",
     memberCompany: post.member?.company || "",
   };
+}
+
+function mapApiTimelinePostToUi(post) {
+  const status =
+    post.reviewStatus === "APPROVED"
+      ? "Approved"
+      : post.reviewStatus === "ON_HOLD"
+        ? "Hold"
+      : post.reviewStatus === "REJECTED"
+        ? "Rejected"
+        : "Pending Review";
+
+  return {
+    id: post.id,
+    sourceType: post.sourceType || "VENDOR",
+    sourceId: post.sourceId || "",
+    sourceName: post.sourceName || "Timeline Source",
+    postedBy: post.postedBy || "",
+    caption: post.caption || "",
+    contactNumber: post.contactNumber || "",
+    imageUrl: post.imageUrl || "",
+    landingPageUrl: post.landingPageUrl || "",
+    youtubeUrl: post.youtubeUrl || "",
+    facebookUrl: post.facebookUrl || "",
+    brochureUrl: post.brochureUrl || "",
+    brochureMimeType: post.brochureMimeType || "",
+    postedOn: post.postedOn || "",
+    displayStart: post.displayStart || "",
+    displayEnd: post.displayEnd || "",
+    status,
+  };
+}
+
+function mapApiAppBannerToUi(banner) {
+  const status =
+    banner.reviewStatus === "APPROVED"
+      ? "Approved"
+      : banner.reviewStatus === "ON_HOLD"
+        ? "Hold"
+      : banner.reviewStatus === "REJECTED"
+        ? "Rejected"
+        : "Pending Review";
+
+  return {
+    id: banner.id,
+    vendorId: banner.vendorId || "",
+    vendorName: banner.vendorName || "Vendor",
+    shortText: banner.shortText || "",
+    contactNumber: banner.contactNumber || "",
+    socialMediaUrl: banner.socialMediaUrl || "",
+    mediaUrl: banner.mediaUrl || "",
+    mediaType: banner.mediaType || "",
+    brochureUrl: banner.brochureUrl || "",
+    brochureMimeType: banner.brochureMimeType || "",
+    paymentReceived: Boolean(banner.paymentReceived),
+    paymentMode: banner.paymentMode || "",
+    paymentRemarks: banner.paymentRemarks || "",
+    displayStart: banner.displayStart || "",
+    displayEnd: banner.displayEnd || "",
+    displayIndex: typeof banner.displayIndex === "number" ? banner.displayIndex : "",
+    postedOn: banner.postedOn || "",
+    createdAt: banner.createdAt || "",
+    status,
+  };
+}
+
+function isAppBannerVisibleOnDashboard(banner) {
+  if (banner.status !== "Approved") {
+    return false;
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const startsOnOrBeforeToday = !banner.displayStart || banner.displayStart <= today;
+  const endsOnOrAfterToday = !banner.displayEnd || banner.displayEnd >= today;
+
+  return startsOnOrBeforeToday && endsOnOrAfterToday && Number.isInteger(Number(banner.displayIndex));
+}
+
+function formatVendorRange(startDate, endDate) {
+  if (startDate && endDate) {
+    return `${startDate} - ${endDate}`;
+  }
+
+  if (startDate) {
+    return `${startDate} onwards`;
+  }
+
+  if (endDate) {
+    return `Until ${endDate}`;
+  }
+
+  return "Not scheduled";
+}
+
+function isTimelinePostVisibleOnDashboard(post) {
+  if (post.status !== "Approved") {
+    return false;
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const startsOnOrBeforeToday = !post.displayStart || post.displayStart <= today;
+  const endsOnOrAfterToday = !post.displayEnd || post.displayEnd >= today;
+
+  return startsOnOrBeforeToday && endsOnOrAfterToday;
+}
+
+function DashboardTimelineFeed({ posts }) {
+  return (
+    <section className="dashboard-timeline-layout">
+      <div className="dashboard-timeline-column">
+        <div className="panel-topline dashboard-timeline-topline">
+          <div>
+            <span className="mini-label">Timeline Feed</span>
+            <h2>Community Spotlight</h2>
+          </div>
+          <span className="mini-label">Social Style Stream</span>
+        </div>
+
+        <div className="dashboard-timeline-feed">
+          {posts.map((post) => (
+            <article key={post.id} className="dashboard-timeline-card">
+              <div className="dashboard-timeline-head">
+                <div className="dashboard-timeline-avatar">
+                  {(post.sourceName || "TL")
+                    .split(" ")
+                    .filter(Boolean)
+                    .slice(0, 2)
+                    .map((part) => part[0]?.toUpperCase() ?? "")
+                    .join("")}
+                </div>
+                <div className="dashboard-timeline-heading">
+                  <strong>{post.sourceName}</strong>
+                  <span>
+                    Posted by {post.postedBy || post.sourceName} on {post.postedOn}
+                  </span>
+                </div>
+              </div>
+
+              <p className="dashboard-timeline-copy">{post.caption}</p>
+
+              {post.imageUrl ? (
+                <div className="dashboard-timeline-visual">
+                  <img src={post.imageUrl} alt={post.caption.slice(0, 80) || "Timeline post"} />
+                </div>
+              ) : null}
+
+              <div className="dashboard-timeline-actions">
+                {post.landingPageUrl ? (
+                  <a className="dashboard-timeline-icon" href={post.landingPageUrl} target="_blank" rel="noreferrer" aria-label="Open landing page" title="Landing page">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                      <path d="M10 14 21 3" />
+                      <path d="M15 3h6v6" />
+                      <path d="M21 14v4a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3h4" />
+                    </svg>
+                  </a>
+                ) : null}
+                {post.youtubeUrl ? (
+                  <a className="dashboard-timeline-icon" href={post.youtubeUrl} target="_blank" rel="noreferrer" aria-label="Open YouTube" title="YouTube">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                      <rect x="3" y="6" width="18" height="12" rx="3" />
+                      <path d="m10 9 5 3-5 3V9Z" fill="currentColor" stroke="none" />
+                    </svg>
+                  </a>
+                ) : null}
+                {post.facebookUrl ? (
+                  <a className="dashboard-timeline-icon" href={post.facebookUrl} target="_blank" rel="noreferrer" aria-label="Open Facebook" title="Facebook">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                      <path d="M14 8h3V4h-3c-2.2 0-4 1.8-4 4v3H7v4h3v5h4v-5h3l1-4h-4v-3c0-.6.4-1 1-1Z" />
+                    </svg>
+                  </a>
+                ) : null}
+                {post.brochureUrl ? (
+                  <a className="dashboard-timeline-icon" href={post.brochureUrl} target="_blank" rel="noreferrer" aria-label="Open brochure" title="Brochure">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                      <path d="M7 3h7l5 5v13H7z" />
+                      <path d="M14 3v5h5" />
+                      <path d="M10 13h4" />
+                      <path d="M10 17h4" />
+                    </svg>
+                  </a>
+                ) : null}
+                {post.contactNumber ? (
+                  <a className="dashboard-timeline-icon" href={`tel:${post.contactNumber.replace(/\s+/g, "")}`} aria-label="Call contact number" title={post.contactNumber}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                      <path d="M5 4h4l2 5-2.5 1.5a16 16 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A15 15 0 0 1 3 6a2 2 0 0 1 2-2Z" />
+                    </svg>
+                  </a>
+                ) : null}
+              </div>
+            </article>
+          ))}
+
+          {posts.length === 0 ? (
+            <article className="association-empty-state">
+              <span className="mini-label">Timeline Feed</span>
+              <h2>No approved timeline posts are currently live.</h2>
+              <p>Approve a timeline post in Admin arena, then Timeline Access, to feature it here.</p>
+            </article>
+          ) : null}
+        </div>
+      </div>
+
+      <aside className="dashboard-timeline-sidecard">
+        <span className="mini-label">Feed Notes</span>
+        <h3>Stream Rules</h3>
+        <p>This feed is styled like a Facebook page stream, but without likes, comments, or reaction counts.</p>
+        <ul className="dashboard-timeline-rules">
+          <li>Only approved posts appear here.</li>
+          <li>Posts respect their saved visibility dates.</li>
+          <li>Icons route users directly to links, brochures, or contact actions.</li>
+        </ul>
+      </aside>
+    </section>
+  );
+}
+
+function DashboardAppBannerCarousel({ items }) {
+  if (items.length === 0) {
+    return (
+      <section className="welcome-panel welcome-panel-compact">
+        <div className="panel-topline">
+          <div>
+            <span className="mini-label">App Banner Carousel</span>
+            <h2>Paid Promotions</h2>
+          </div>
+          <span className="mini-label">Sequence Ready</span>
+        </div>
+        <article className="association-empty-state">
+          <span className="mini-label">No Active Banners</span>
+          <h2>No approved app banners are active right now.</h2>
+          <p>Approved banners with sequence numbers from 1 to 50 will appear here in order.</p>
+        </article>
+      </section>
+    );
+  }
+
+  return (
+    <section className="welcome-panel welcome-panel-compact">
+      <div className="panel-topline">
+        <div>
+          <span className="mini-label">App Banner Carousel</span>
+          <h2>Paid Promotions</h2>
+        </div>
+        <span className="mini-label">Starts From Sequence 1</span>
+      </div>
+
+      <div className="carousel-viewport">
+        <div className="carousel-row carousel-row-moving">
+          {[...items, ...items].map((item, index) => (
+            <article key={`${item.id}-${index}`} className="carousel-card tone-advertisement">
+              <div className="carousel-visual">
+                {item.mediaUrl ? (
+                  <img src={item.mediaUrl} alt={item.shortText.slice(0, 60) || "App banner"} />
+                ) : (
+                  <span>Ad</span>
+                )}
+              </div>
+              <div className="carousel-copy">
+                <em className="carousel-badge">Slot {item.displayIndex}</em>
+                <strong>{item.vendorName}</strong>
+                <p>{item.shortText}</p>
+              </div>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function getVendorAccessStatus(linkedUser, vendorStatus) {
+  if (linkedUser?.approvalStatus === "REJECTED") {
+    return "Removed";
+  }
+
+  if (linkedUser?.approvalStatus === "APPROVED" && linkedUser?.isActive === false) {
+    return "Suspended";
+  }
+
+  if (linkedUser?.approvalStatus === "APPROVED") {
+    return "Approved";
+  }
+
+  if (vendorStatus === "ACTIVE") {
+    return "Approved";
+  }
+
+  if (vendorStatus === "SUSPENDED") {
+    return "Suspended";
+  }
+
+  if (vendorStatus === "LAPSED") {
+    return "Removed";
+  }
+
+  return "Pending Approval";
+}
+
+function mapApiVendorToUi(vendor) {
+  const vendorStatus = vendor.status ?? "PENDING";
+  const linkedUser = vendor.user ?? null;
+  const name = vendor.name || vendor.companyName || "Vendor";
+
+  return {
+    id: vendor.id,
+    name,
+    company: vendor.companyName || name,
+    address: vendor.address || "",
+    city: vendor.city || "",
+    phone: vendor.phone || "",
+    whatsapp: (vendor.whatsapp || vendor.phone || "").replace(/\D/g, ""),
+    email: vendor.email || "",
+    vendorType: vendor.vendorType || "",
+    category: vendor.category || "General",
+    website: readVendorNoteValue(vendor.notes, "Website"),
+    facebookUrl: vendor.facebookUrl || "",
+    instagramUrl: vendor.instagramUrl || "",
+    youtubeUrl: vendor.youtubeUrl || "",
+    linkedinUrl: vendor.linkedinUrl || "",
+    xUrl: vendor.xUrl || "",
+    onboardingPeriod: formatVendorRange(vendor.onboardingStartAt, vendor.onboardingEndAt),
+    onboardingStartDate: vendor.onboardingStartAt || "",
+    onboardingEndDate: vendor.onboardingEndAt || "",
+    registrationStatus:
+      vendorStatus === "ACTIVE"
+        ? "Active"
+        : vendorStatus === "SUSPENDED"
+          ? "Suspended"
+          : vendorStatus === "LAPSED"
+            ? "Lapsed"
+            : "Pending",
+    membershipPlan: vendor.membershipPlan || "Standard Listing",
+    paymentStatus:
+      vendor.paymentStatus === "PAID"
+        ? "Paid"
+        : vendor.paymentStatus === "OVERDUE"
+          ? "Overdue"
+          : vendor.paymentStatus === "WAIVED"
+            ? "Waived"
+            : "Pending",
+    paymentAmount: vendor.paymentAmount || "--",
+    paymentDue: vendor.paymentDueDate || "--",
+    badge: vendor.badge || vendor.category || "Vendor",
+    initials: name
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase() ?? "")
+      .join(""),
+    appAccessStatus: getVendorAccessStatus(linkedUser, vendorStatus),
+    contactPerson: vendor.contactPerson || "",
+    notes: vendor.notes || "",
+    approvalStatus: linkedUser?.approvalStatus ?? "",
+    accessUserId: linkedUser?.id ?? "",
+  };
+}
+
+function readVendorNoteValue(notes, label) {
+  if (!notes) {
+    return "";
+  }
+
+  const match = notes.match(new RegExp(`${label}:\\s*(.*)`));
+  return match?.[1]?.trim() ?? "";
+}
+
+function buildVendorApprovalForm(vendor) {
+  return {
+    planName: readVendorNoteValue(vendor?.notes, "Plan Name"),
+    openingTime: readVendorNoteValue(vendor?.notes, "Opening Time"),
+    closingTime: readVendorNoteValue(vendor?.notes, "Closing Time"),
+    membershipPlan: vendor?.membershipPlan && vendor.membershipPlan !== "Standard Listing" ? vendor.membershipPlan : "",
+    paymentAmount: vendor?.paymentAmount && vendor.paymentAmount !== "--" ? vendor.paymentAmount : "",
+    onboardingStartAt: vendor?.onboardingStartDate || "",
+    onboardingEndAt: vendor?.onboardingEndDate || "",
+    idProof: null,
+    locationProof: null,
+    gstNumber: readVendorNoteValue(vendor?.notes, "GST Number"),
+    companyBrochure: null,
+    profilePhoto: null,
+    visitingCard: null,
+    isRestaurant: readVendorNoteValue(vendor?.notes, "Is Restaurant") === "Yes",
+    paymentMode: readVendorNoteValue(vendor?.notes, "Payment Mode") || "Online/NEFT/IMPS",
+    bankName: readVendorNoteValue(vendor?.notes, "Bank Name"),
+    transactionId: readVendorNoteValue(vendor?.notes, "Transaction ID"),
+    paymentDescription: readVendorNoteValue(vendor?.notes, "Payment Description"),
+    googleLocation: readVendorNoteValue(vendor?.notes, "Google Location"),
+    paymentDueDate: vendor?.paymentDue && vendor.paymentDue !== "--" ? vendor.paymentDue : "",
+  };
+}
+
+function getVendorApprovalValidationError(reviewForm) {
+  if (!reviewForm.planName.trim()) {
+    return "Plan name is required before approving a vendor registration.";
+  }
+
+  if (!reviewForm.membershipPlan.trim()) {
+    return "Membership plan is required before approving a vendor registration.";
+  }
+
+  if (!reviewForm.paymentAmount.trim()) {
+    return "Payment amount is required before approving a vendor registration.";
+  }
+
+  if (!reviewForm.onboardingStartAt) {
+    return "Start date is required before approving a vendor registration.";
+  }
+
+  if (!reviewForm.onboardingEndAt) {
+    return "End date is required before approving a vendor registration.";
+  }
+
+  if (!reviewForm.paymentMode.trim()) {
+    return "Payment mode is required before approving a vendor registration.";
+  }
+
+  if (!reviewForm.bankName.trim()) {
+    return "Bank name is required before approving a vendor registration.";
+  }
+
+  if (!reviewForm.transactionId.trim()) {
+    return "Transaction ID is required before approving a vendor registration.";
+  }
+
+  return "";
 }
 
 function MemberMediaPanel({
@@ -1044,13 +1484,7 @@ function buildEventTimelineGroups(events) {
     })),
   }));
 }
-const vendorSummaryStats = [
-  { value: "126", label: "Registered Vendors" },
-  { value: "84", label: "Active" },
-  { value: "21", label: "Suspended" },
-  { value: "21", label: "Lapsed" },
-];
-const vendorRecords = [
+const initialVendorRecords = [
   {
     id: "vendor-1",
     name: "Precision Tools Partner",
@@ -1120,6 +1554,30 @@ const initialVendorCategories = [
   "Digital Solutions",
   "Events & Promotion",
 ];
+const vendorSubCategoryMap = {
+  "Industrial Machinery": ["CNC Machines", "Tooling", "Automation", "Packaging"],
+  "Digital Solutions": ["ERP", "CRM", "IoT", "Cybersecurity"],
+  "Events & Promotion": ["Exhibitions", "Media", "Conference Support", "Brand Activation"],
+};
+const vendorCountryOptions = ["India", "United Arab Emirates", "Singapore"];
+const vendorStateOptionsByCountry = {
+  India: ["Gujarat", "Maharashtra", "Karnataka", "Delhi"],
+  "United Arab Emirates": ["Dubai", "Abu Dhabi", "Sharjah"],
+  Singapore: ["Central Region"],
+};
+const vendorCityOptionsByState = {
+  Gujarat: ["Ahmedabad", "Surat", "Vadodara", "Rajkot"],
+  Maharashtra: ["Mumbai", "Pune", "Nagpur"],
+  Karnataka: ["Bengaluru", "Mysuru"],
+  Delhi: ["New Delhi"],
+  Dubai: ["Dubai"],
+  "Abu Dhabi": ["Abu Dhabi"],
+  Sharjah: ["Sharjah"],
+  "Central Region": ["Singapore"],
+};
+const vendorPhoneCodeOptions = ["+91", "+971", "+65"];
+const vendorPlanOptions = ["Basic Plan", "Silver Plan", "Gold Plan", "Premium Plan"];
+const vendorPaymentModeOptions = ["Online/NEFT/IMPS", "Cheque", "Cash", "UPI"];
 const vendorContentPosts = [
   {
     id: "vendor-post-1",
@@ -1308,6 +1766,93 @@ const defaultCircularDocumentForm = {
   mimeType: "",
   fileExtension: "",
 };
+
+const defaultTimelinePostForm = {
+  vendorId: "",
+  caption: "",
+  contactNumber: "",
+  landingPageUrl: "",
+  youtubeUrl: "",
+  facebookUrl: "",
+  imageFile: null,
+  brochureFile: null,
+};
+
+const defaultAppBannerForm = {
+  vendorId: "",
+  shortText: "",
+  contactNumber: "",
+  socialMediaUrl: "",
+  mediaFile: null,
+  brochureFile: null,
+};
+
+const appBannerMediaRecommendation = "Recommended banner: 1080 x 360 px, JPG/PNG/WebP, max 1 MB.";
+const appBannerPdfRecommendation = "Optional brochure PDF: keep under 2 MB for smoother Flutter downloads.";
+
+function getGoogleMapsEmbedUrl(value) {
+  const trimmedValue = value?.trim();
+  if (!trimmedValue) {
+    return "";
+  }
+
+  try {
+    const parsedUrl = new URL(trimmedValue);
+
+    if (parsedUrl.hostname.includes("google.") && parsedUrl.pathname.includes("/maps/embed")) {
+      return parsedUrl.toString();
+    }
+
+    const mapQuery =
+      parsedUrl.searchParams.get("q") ||
+      parsedUrl.searchParams.get("query") ||
+      parsedUrl.searchParams.get("destination") ||
+      parsedUrl.searchParams.get("daddr") ||
+      parsedUrl.searchParams.get("ll");
+
+    if (mapQuery) {
+      return `https://www.google.com/maps?q=${encodeURIComponent(mapQuery)}&output=embed`;
+    }
+  } catch {
+    return `https://www.google.com/maps?q=${encodeURIComponent(trimmedValue)}&output=embed`;
+  }
+
+  return `https://www.google.com/maps?q=${encodeURIComponent(trimmedValue)}&output=embed`;
+}
+
+function AssociationMapPreview({ label, value }) {
+  const trimmedValue = value?.trim();
+
+  if (!trimmedValue) {
+    return (
+      <div className="association-profile-wide">
+        <span className="mini-label">{label}</span>
+        <p>Not added yet</p>
+      </div>
+    );
+  }
+
+  const embedUrl = getGoogleMapsEmbedUrl(trimmedValue);
+
+  return (
+    <div className="association-profile-wide">
+      <span className="mini-label">{label}</span>
+      <div className="association-map-card">
+        <iframe
+          className="association-map-frame"
+          src={embedUrl}
+          title={label}
+          loading="lazy"
+          referrerPolicy="no-referrer-when-downgrade"
+          allowFullScreen
+        />
+        <a className="association-map-link" href={trimmedValue} target="_blank" rel="noreferrer">
+          Open in Google Maps
+        </a>
+      </div>
+    </div>
+  );
+}
 
 function mapAssociationAboutToForm(aboutContent) {
   return {
@@ -2227,10 +2772,10 @@ function AssociationProfilePanel({
               <span className="mini-label">Contact Numbers</span>
               <p>{associationProfile.contactNumbers || "Not added yet"}</p>
             </div>
-            <div className="association-profile-wide">
-              <span className="mini-label">Google Map Access Location</span>
-              <p>{associationProfile.googleMapsLink || "Not added yet"}</p>
-            </div>
+            <AssociationMapPreview
+              label="Google Map Access Location"
+              value={associationProfile.googleMapsLink}
+            />
           </div>
         </article>
 
@@ -2272,10 +2817,10 @@ function AssociationProfilePanel({
                     <span className="mini-label">Contact Numbers</span>
                     <p>{address.contactNumbers || "Not added yet"}</p>
                   </div>
-                  <div className="association-profile-wide">
-                    <span className="mini-label">Google Map Access Location</span>
-                    <p>{address.googleMapsLink || "Not added yet"}</p>
-                  </div>
+                  <AssociationMapPreview
+                    label="Google Map Access Location"
+                    value={address.googleMapsLink}
+                  />
                 </div>
               </article>
             ))}
@@ -3691,12 +4236,26 @@ function VendorPaymentTable({ items }) {
   );
 }
 
-function VendorRegistrationForm({ formData, onChange, categories, newCategory, onNewCategoryChange, onAddCategory }) {
+function VendorRegistrationForm({
+  formData,
+  onChange,
+  onFileChange,
+  categories,
+  subCategories,
+  countryOptions,
+  stateOptions,
+  cityOptions,
+  phoneCodeOptions,
+  newCategory,
+  onNewCategoryChange,
+  onAddCategory,
+  onSubmit,
+}) {
   return (
     <section className="member-table-panel">
       <div className="panel-topline">
-        <h2>Vendor Registration Form</h2>
-        <span className="mini-label">Master</span>
+        <h2>Add / Update Vendor</h2>
+        <span className="mini-label">Admin Vendor Desk</span>
       </div>
 
       <div className="admin-member-toolbar">
@@ -3724,15 +4283,7 @@ function VendorRegistrationForm({ formData, onChange, categories, newCategory, o
 
       <div className="profile-form-grid">
         <label className="profile-field">
-          <span>Vendor Name</span>
-          <input
-            type="text"
-            value={formData.name}
-            onChange={(event) => onChange("name", event.target.value)}
-          />
-        </label>
-        <label className="profile-field">
-          <span>Company Name</span>
+          <span>Company Name *</span>
           <input
             type="text"
             value={formData.company}
@@ -3740,15 +4291,56 @@ function VendorRegistrationForm({ formData, onChange, categories, newCategory, o
           />
         </label>
         <label className="profile-field">
-          <span>Vendor Type</span>
+          <span>Contact Person Name *</span>
           <input
             type="text"
-            value={formData.vendorType}
-            onChange={(event) => onChange("vendorType", event.target.value)}
+            value={formData.contactPerson}
+            onChange={(event) => onChange("contactPerson", event.target.value)}
           />
         </label>
         <label className="profile-field">
-          <span>Category</span>
+          <span>Mobile *</span>
+          <div className="split-inline-fields">
+            <select value={formData.phoneCode} onChange={(event) => onChange("phoneCode", event.target.value)}>
+              {phoneCodeOptions.map((phoneCode) => (
+                <option key={phoneCode} value={phoneCode}>
+                  {phoneCode}
+                </option>
+              ))}
+            </select>
+            <input type="text" value={formData.phone} onChange={(event) => onChange("phone", event.target.value)} />
+          </div>
+        </label>
+        <label className="profile-field">
+          <span>WhatsApp Number</span>
+          <div className="split-inline-fields">
+            <select
+              value={formData.whatsappCode}
+              onChange={(event) => onChange("whatsappCode", event.target.value)}
+            >
+              {phoneCodeOptions.map((phoneCode) => (
+                <option key={phoneCode} value={phoneCode}>
+                  {phoneCode}
+                </option>
+              ))}
+            </select>
+            <input
+              type="text"
+              value={formData.whatsapp}
+              onChange={(event) => onChange("whatsapp", event.target.value)}
+            />
+          </div>
+        </label>
+        <label className="profile-field">
+          <span>Email *</span>
+          <input
+            type="email"
+            value={formData.email}
+            onChange={(event) => onChange("email", event.target.value)}
+          />
+        </label>
+        <label className="profile-field">
+          <span>Category *</span>
           <select value={formData.category} onChange={(event) => onChange("category", event.target.value)}>
             <option value="">Select category</option>
             {categories.map((category) => (
@@ -3759,53 +4351,582 @@ function VendorRegistrationForm({ formData, onChange, categories, newCategory, o
           </select>
         </label>
         <label className="profile-field">
-          <span>Contact Person</span>
-          <input
-            type="text"
-            value={formData.contactPerson}
-            onChange={(event) => onChange("contactPerson", event.target.value)}
-          />
+          <span>Sub Category *</span>
+          <select value={formData.subCategory} onChange={(event) => onChange("subCategory", event.target.value)}>
+            <option value="">Select sub category</option>
+            {subCategories.map((subCategory) => (
+              <option key={subCategory} value={subCategory}>
+                {subCategory}
+              </option>
+            ))}
+          </select>
         </label>
-        <label className="profile-field profile-field-wide">
-          <span>Address</span>
-          <textarea
-            rows="3"
-            value={formData.address}
-            onChange={(event) => onChange("address", event.target.value)}
-          />
+        <label className="profile-field">
+          <span>Country</span>
+          <select value={formData.country} onChange={(event) => onChange("country", event.target.value)}>
+            <option value="">Select country</option>
+            {countryOptions.map((country) => (
+              <option key={country} value={country}>
+                {country}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="profile-field">
+          <span>State</span>
+          <select value={formData.state} onChange={(event) => onChange("state", event.target.value)}>
+            <option value="">Select state</option>
+            {stateOptions.map((state) => (
+              <option key={state} value={state}>
+                {state}
+              </option>
+            ))}
+          </select>
         </label>
         <label className="profile-field">
           <span>City</span>
+          <select value={formData.city} onChange={(event) => onChange("city", event.target.value)}>
+            <option value="">Select city</option>
+            {cityOptions.map((city) => (
+              <option key={city} value={city}>
+                {city}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="profile-field">
+          <span>Website</span>
           <input
             type="text"
-            value={formData.city}
-            onChange={(event) => onChange("city", event.target.value)}
+            value={formData.website}
+            onChange={(event) => onChange("website", event.target.value)}
           />
         </label>
         <label className="profile-field">
-          <span>Phone</span>
+          <span>Facebook Page</span>
           <input
             type="text"
-            value={formData.phone}
-            onChange={(event) => onChange("phone", event.target.value)}
+            value={formData.facebookUrl}
+            onChange={(event) => onChange("facebookUrl", event.target.value)}
           />
         </label>
         <label className="profile-field">
-          <span>Email</span>
+          <span>Instagram Page</span>
           <input
-            type="email"
-            value={formData.email}
-            onChange={(event) => onChange("email", event.target.value)}
+            type="text"
+            value={formData.instagramUrl}
+            onChange={(event) => onChange("instagramUrl", event.target.value)}
           />
         </label>
+        <label className="profile-field">
+          <span>YouTube Channel</span>
+          <input
+            type="text"
+            value={formData.youtubeUrl}
+            onChange={(event) => onChange("youtubeUrl", event.target.value)}
+          />
+        </label>
+        <label className="profile-field">
+          <span>LinkedIn Page</span>
+          <input
+            type="text"
+            value={formData.linkedinUrl}
+            onChange={(event) => onChange("linkedinUrl", event.target.value)}
+          />
+        </label>
+        <label className="profile-field">
+          <span>X / Twitter Page</span>
+          <input
+            type="text"
+            value={formData.xUrl}
+            onChange={(event) => onChange("xUrl", event.target.value)}
+          />
+        </label>
+        <label className="profile-field profile-field-wide">
+          <span>Address *</span>
+          <textarea rows="3" value={formData.address} onChange={(event) => onChange("address", event.target.value)} />
+        </label>
+        <label className="profile-field profile-field-wide">
+          <span>Work Description</span>
+          <textarea
+            rows="3"
+            value={formData.workDescription}
+            onChange={(event) => onChange("workDescription", event.target.value)}
+          />
+        </label>
+        <label className="profile-field">
+          <span>Zipcode</span>
+          <input type="text" value={formData.zipcode} onChange={(event) => onChange("zipcode", event.target.value)} />
+        </label>
+        <label className="profile-field">
+          <span>Company Logo</span>
+          <input type="file" accept="image/*" onChange={(event) => onFileChange("companyLogo", event.target.files?.[0] ?? null)} />
+        </label>
+        <div className="profile-field profile-field-wide vendor-admin-note">
+          <span>Admin Review Fields</span>
+          <p>Plan, commercial, schedule, proof, and approval details are completed by the admin during vendor status review.</p>
+        </div>
       </div>
 
       <div className="profile-action-row">
-        <button className="primary-link admin-action-button" type="button">
-          Submit Vendor Registration
+        <button className="primary-link admin-action-button" type="button" onClick={onSubmit}>
+          Save Vendor
         </button>
       </div>
     </section>
+  );
+}
+
+function VendorCategoryPanel({
+  categories,
+  subCategoryMap,
+  draftValue,
+  editingValue,
+  onDraftChange,
+  onStartEdit,
+  onCancelEdit,
+  onSave,
+  onDelete,
+}) {
+  return (
+    <section className="association-tab-section">
+      <section className="association-profile-stack">
+        <article className="association-profile-card">
+          <div className="panel-topline">
+            <div>
+              <span className="mini-label">Vendor Category</span>
+              <h2>Category Master</h2>
+            </div>
+            <button className="primary-link admin-action-button" type="button" onClick={() => onStartEdit("")}>
+              Add Category
+            </button>
+          </div>
+          <p className="committee-hero-copy">
+            Create and maintain the main vendor categories used by registration and sub-category mapping.
+          </p>
+        </article>
+
+        {editingValue !== null ? (
+          <article className="association-profile-card">
+            <div className="panel-topline">
+              <h3>{editingValue ? "Edit Category" : "Add Category"}</h3>
+              <span className="mini-label">Vendor Master</span>
+            </div>
+
+            <div className="profile-form-grid">
+              <label className="profile-field profile-field-wide">
+                <span>Category Name</span>
+                <input type="text" value={draftValue} onChange={(event) => onDraftChange(event.target.value)} />
+              </label>
+            </div>
+
+            <div className="profile-action-row">
+              <button className="secondary-link secondary-button" type="button" onClick={onCancelEdit}>
+                Cancel
+              </button>
+              <button className="primary-link admin-action-button" type="button" onClick={onSave}>
+                Save Category
+              </button>
+            </div>
+          </article>
+        ) : null}
+
+        {categories.length > 0 ? (
+          <div className="association-gallery-grid">
+            {categories.map((category) => (
+              <article key={category} className="association-gallery-card">
+                <div className="association-gallery-copy">
+                  <span className="mini-label">Category</span>
+                  <h3>{category}</h3>
+                  <p>{(subCategoryMap[category] ?? []).length} sub categories mapped under this category.</p>
+                </div>
+                <div className="record-actions">
+                  <button className="secondary-link secondary-button" type="button" onClick={() => onStartEdit(category)}>
+                    Edit
+                  </button>
+                  <button className="secondary-link secondary-button danger-button" type="button" onClick={() => onDelete(category)}>
+                    Delete
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <article className="association-profile-card committee-empty-card">
+            <span className="mini-label">Category</span>
+            <h3>No vendor categories yet</h3>
+            <p>Add your first category to begin structuring vendor registration.</p>
+          </article>
+        )}
+      </section>
+    </section>
+  );
+}
+
+function VendorSubCategoryPanel({
+  categories,
+  subCategoryMap,
+  selectedCategory,
+  editingValue,
+  draftValue,
+  onSelectCategory,
+  onStartEdit,
+  onDraftChange,
+  onCancelEdit,
+  onSave,
+  onDelete,
+}) {
+  const items = selectedCategory ? subCategoryMap[selectedCategory] ?? [] : [];
+
+  return (
+    <section className="association-tab-section">
+      <section className="association-profile-stack">
+        <article className="association-profile-card">
+          <div className="panel-topline">
+            <div>
+              <span className="mini-label">Vendor Sub Category</span>
+              <h2>Sub Category Master</h2>
+            </div>
+            <button className="primary-link admin-action-button" type="button" onClick={() => onStartEdit("")}>
+              Add Sub Category
+            </button>
+          </div>
+          <div className="profile-form-grid">
+            <label className="profile-field profile-field-wide">
+              <span>Main Category</span>
+              <select value={selectedCategory} onChange={(event) => onSelectCategory(event.target.value)}>
+                <option value="">Select category</option>
+                {categories.map((category) => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </article>
+
+        {editingValue !== null ? (
+          <article className="association-profile-card">
+            <div className="panel-topline">
+              <h3>{editingValue ? "Edit Sub Category" : "Add Sub Category"}</h3>
+              <span className="mini-label">Mapped To Category</span>
+            </div>
+
+            <div className="profile-form-grid">
+              <label className="profile-field">
+                <span>Main Category</span>
+                <select value={selectedCategory} onChange={(event) => onSelectCategory(event.target.value)}>
+                  <option value="">Select category</option>
+                  {categories.map((category) => (
+                    <option key={category} value={category}>
+                      {category}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="profile-field">
+                <span>Sub Category Name</span>
+                <input type="text" value={draftValue} onChange={(event) => onDraftChange(event.target.value)} />
+              </label>
+            </div>
+
+            <div className="profile-action-row">
+              <button className="secondary-link secondary-button" type="button" onClick={onCancelEdit}>
+                Cancel
+              </button>
+              <button className="primary-link admin-action-button" type="button" onClick={onSave}>
+                Save Sub Category
+              </button>
+            </div>
+          </article>
+        ) : null}
+
+        {selectedCategory ? (
+          items.length > 0 ? (
+            <div className="association-gallery-grid">
+              {items.map((item) => (
+                <article key={`${selectedCategory}-${item}`} className="association-gallery-card">
+                  <div className="association-gallery-copy">
+                    <span className="mini-label">{selectedCategory}</span>
+                    <h3>{item}</h3>
+                    <p>Linked to the selected main category and available for vendor registration.</p>
+                  </div>
+                  <div className="record-actions">
+                    <button className="secondary-link secondary-button" type="button" onClick={() => onStartEdit(item)}>
+                      Edit
+                    </button>
+                    <button className="secondary-link secondary-button danger-button" type="button" onClick={() => onDelete(item)}>
+                      Delete
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <article className="association-profile-card committee-empty-card">
+              <span className="mini-label">{selectedCategory}</span>
+              <h3>No sub categories yet</h3>
+              <p>Add a sub category for the selected main category to continue configuring the vendor master.</p>
+            </article>
+          )
+        ) : (
+          <article className="association-profile-card committee-empty-card">
+            <span className="mini-label">Sub Category</span>
+            <h3>Select a main category first</h3>
+            <p>Choose a category above to fetch and manage its sub categories.</p>
+          </article>
+        )}
+      </section>
+    </section>
+  );
+}
+
+function VendorStatusPanel({
+  items,
+  selectedIds,
+  searchQuery,
+  selectedVendor,
+  reviewForm,
+  approvalError,
+  onSearchChange,
+  onToggleSelect,
+  onToggleSelectAll,
+  onSelectVendor,
+  onReviewFieldChange,
+  onReviewFileChange,
+  onApplyBulkDecision,
+  onApproveOne,
+  onRejectOne,
+  planOptions,
+  paymentModeOptions,
+}) {
+  const allSelected = items.length > 0 && selectedIds.length === items.length;
+
+  return (
+    <article className="admin-access-panel">
+      <div className="panel-topline">
+        <h2>Vendor Registration Requests</h2>
+        <span className="mini-label">Approve Or Reject</span>
+      </div>
+
+      <div className="admin-member-toolbar">
+        <div className="search-wrap admin-member-search">
+          <input
+            className="search-input"
+            type="search"
+            placeholder="Search vendor, company, category..."
+            value={searchQuery}
+            onChange={(event) => onSearchChange(event.target.value)}
+          />
+        </div>
+        <label className="selection-chip">
+          <input type="checkbox" checked={allSelected} onChange={onToggleSelectAll} />
+          <span>Select filtered</span>
+        </label>
+        <button className="secondary-link secondary-button" type="button" onClick={() => onApplyBulkDecision("APPROVED")}>
+          Approve Selected Individually
+        </button>
+        <button className="secondary-link secondary-button danger-button" type="button" onClick={() => onApplyBulkDecision("CANCELLED")}>
+          Reject Selected
+        </button>
+      </div>
+
+      {approvalError ? <p className="vendor-admin-note">{approvalError}</p> : null}
+
+      <div className="member-table-wrap">
+        <table className="member-table">
+          <thead>
+            <tr>
+              <th>Select</th>
+              <th>Vendor</th>
+              <th>Category</th>
+              <th>Mobile</th>
+              <th>Email</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((vendor) => (
+              <tr key={vendor.id}>
+                <td>
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.includes(vendor.id)}
+                    onChange={() => onToggleSelect(vendor.id)}
+                  />
+                </td>
+                <td>
+                  <div className="member-table-contact">
+                    <strong>{vendor.name}</strong>
+                    <span>{vendor.company}</span>
+                  </div>
+                </td>
+                <td>
+                  <div className="member-table-contact">
+                    <span>{vendor.category || "Uncategorized"}</span>
+                    <span>{vendor.vendorType || "No sub category"}</span>
+                  </div>
+                </td>
+                <td>{vendor.phone || "--"}</td>
+                <td>{vendor.email || "--"}</td>
+                <td>
+                  <span className="access-status-chip">{vendor.appAccessStatus}</span>
+                </td>
+                <td>
+                  <div className="record-actions">
+                    <button className="secondary-link secondary-button" type="button" onClick={() => onSelectVendor(vendor.id)}>
+                      Review
+                    </button>
+                    <button className="secondary-link secondary-button" type="button" onClick={() => onApproveOne(vendor.id)}>
+                      Approve With Details
+                    </button>
+                    <button className="secondary-link secondary-button danger-button" type="button" onClick={() => onRejectOne(vendor.id)}>
+                      Quick Reject
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {items.length === 0 ? (
+        <article className="association-empty-state">
+          <span className="mini-label">No Requests</span>
+          <h2>No vendor registration requests match the current filter.</h2>
+          <p>New pending vendor registrations will appear here for admin review.</p>
+        </article>
+      ) : null}
+
+      {selectedVendor ? (
+        <article className="association-profile-card">
+          <div className="panel-topline">
+            <div>
+              <span className="mini-label">Admin Decision Form</span>
+              <h3>{selectedVendor.company}</h3>
+            </div>
+            <span className="access-status-chip">{selectedVendor.appAccessStatus}</span>
+          </div>
+
+          <div className="profile-form-grid">
+            <label className="profile-field">
+              <span>Plan Name *</span>
+              <select value={reviewForm.planName} onChange={(event) => onReviewFieldChange("planName", event.target.value)}>
+                <option value="">Select Plan</option>
+                {planOptions.map((plan) => (
+                  <option key={plan} value={plan}>
+                    {plan}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="profile-field">
+              <span>Membership Plan</span>
+              <input type="text" value={reviewForm.membershipPlan} onChange={(event) => onReviewFieldChange("membershipPlan", event.target.value)} />
+            </label>
+            <label className="profile-field">
+              <span>Opening Time</span>
+              <input type="time" value={reviewForm.openingTime} onChange={(event) => onReviewFieldChange("openingTime", event.target.value)} />
+            </label>
+            <label className="profile-field">
+              <span>Closing Time</span>
+              <input type="time" value={reviewForm.closingTime} onChange={(event) => onReviewFieldChange("closingTime", event.target.value)} />
+            </label>
+            <label className="profile-field">
+              <span>Payment Amount</span>
+              <input type="text" value={reviewForm.paymentAmount} onChange={(event) => onReviewFieldChange("paymentAmount", event.target.value)} />
+            </label>
+            <label className="profile-field">
+              <span>GST Number</span>
+              <input type="text" value={reviewForm.gstNumber} onChange={(event) => onReviewFieldChange("gstNumber", event.target.value)} />
+            </label>
+            <label className="profile-field">
+              <span>Start Date *</span>
+              <input type="date" value={reviewForm.onboardingStartAt} onChange={(event) => onReviewFieldChange("onboardingStartAt", event.target.value)} />
+            </label>
+            <label className="profile-field">
+              <span>End Date *</span>
+              <input type="date" value={reviewForm.onboardingEndAt} onChange={(event) => onReviewFieldChange("onboardingEndAt", event.target.value)} />
+            </label>
+            <label className="profile-field">
+              <span>Payment Due</span>
+              <input type="date" value={reviewForm.paymentDueDate} onChange={(event) => onReviewFieldChange("paymentDueDate", event.target.value)} />
+            </label>
+            <label className="profile-field">
+              <span>Payment Mode *</span>
+              <select value={reviewForm.paymentMode} onChange={(event) => onReviewFieldChange("paymentMode", event.target.value)}>
+                {paymentModeOptions.map((mode) => (
+                  <option key={mode} value={mode}>
+                    {mode}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="profile-field">
+              <span>Bank Name *</span>
+              <input type="text" value={reviewForm.bankName} onChange={(event) => onReviewFieldChange("bankName", event.target.value)} />
+            </label>
+            <label className="profile-field">
+              <span>Transaction ID *</span>
+              <input type="text" value={reviewForm.transactionId} onChange={(event) => onReviewFieldChange("transactionId", event.target.value)} />
+            </label>
+            <label className="profile-field">
+              <span>ID Proof</span>
+              <input type="file" onChange={(event) => onReviewFileChange("idProof", event.target.files?.[0] ?? null)} />
+            </label>
+            <label className="profile-field">
+              <span>Location Proof</span>
+              <input type="file" onChange={(event) => onReviewFileChange("locationProof", event.target.files?.[0] ?? null)} />
+            </label>
+            <label className="profile-field">
+              <span>Company Profile / Brochure</span>
+              <input type="file" onChange={(event) => onReviewFileChange("companyBrochure", event.target.files?.[0] ?? null)} />
+            </label>
+            <label className="profile-field">
+              <span>Profile Photo</span>
+              <input type="file" accept="image/*" onChange={(event) => onReviewFileChange("profilePhoto", event.target.files?.[0] ?? null)} />
+            </label>
+            <label className="profile-field">
+              <span>Visiting Card</span>
+              <input type="file" accept="image/*,.pdf" onChange={(event) => onReviewFileChange("visitingCard", event.target.files?.[0] ?? null)} />
+            </label>
+            <label className="profile-field">
+              <span>Is Restaurant?</span>
+              <div className="inline-choice-row">
+                <label className="inline-choice-option">
+                  <input type="radio" name="status-isRestaurant" checked={reviewForm.isRestaurant === true} onChange={() => onReviewFieldChange("isRestaurant", true)} />
+                  <span>Yes</span>
+                </label>
+                <label className="inline-choice-option">
+                  <input type="radio" name="status-isRestaurant" checked={reviewForm.isRestaurant === false} onChange={() => onReviewFieldChange("isRestaurant", false)} />
+                  <span>No</span>
+                </label>
+              </div>
+            </label>
+            <label className="profile-field profile-field-wide">
+              <span>Payment Description</span>
+              <textarea rows="3" value={reviewForm.paymentDescription} onChange={(event) => onReviewFieldChange("paymentDescription", event.target.value)} />
+            </label>
+            <label className="profile-field profile-field-wide">
+              <span>Google Location</span>
+              <input type="text" value={reviewForm.googleLocation} onChange={(event) => onReviewFieldChange("googleLocation", event.target.value)} />
+            </label>
+          </div>
+
+          <div className="profile-action-row">
+            <button className="secondary-link secondary-button" type="button" onClick={() => onApproveOne(selectedVendor.id)}>
+              Save And Approve
+            </button>
+            <button className="secondary-link secondary-button danger-button" type="button" onClick={() => onRejectOne(selectedVendor.id)}>
+              Save And Reject
+            </button>
+          </div>
+        </article>
+      ) : null}
+    </article>
   );
 }
 
@@ -3814,12 +4935,21 @@ function VendorArenaContent({
   items,
   formData,
   categories,
+  subCategories,
+  countryOptions,
+  stateOptions,
+  cityOptions,
+  phoneCodeOptions,
+  planOptions,
+  paymentModeOptions,
   newCategory,
   filterState,
   onFormChange,
+  onFileChange,
   onFilterChange,
   onNewCategoryChange,
   onAddCategory,
+  onSubmit,
 }) {
   const filteredItems = items.filter((vendor) => {
     const matchesName =
@@ -3897,10 +5027,236 @@ function VendorArenaContent({
         formData={formData}
         onChange={onFormChange}
         categories={categories}
+        subCategories={subCategories}
+        countryOptions={countryOptions}
+        stateOptions={stateOptions}
+        cityOptions={cityOptions}
+        phoneCodeOptions={phoneCodeOptions}
+        planOptions={planOptions}
+        paymentModeOptions={paymentModeOptions}
         newCategory={newCategory}
+        onFileChange={onFileChange}
         onNewCategoryChange={onNewCategoryChange}
         onAddCategory={onAddCategory}
+        onSubmit={onSubmit}
       />
+    </section>
+  );
+}
+
+function TimelinePanel({
+  formData,
+  posts,
+  vendorOptions,
+  postedByLabel,
+  isSaving,
+  onChange,
+  onFileChange,
+  onSubmit,
+}) {
+  return (
+    <section className="association-tab-section member-media-layout">
+      <article className="member-media-composer">
+        <div className="panel-topline">
+          <h2>Create Timeline Post</h2>
+          <span className="mini-label">Independent Ad Timeline</span>
+        </div>
+
+        <div className="profile-form-grid">
+          <label className="profile-field">
+            <span>Posted By</span>
+            <input type="text" value={postedByLabel} readOnly />
+          </label>
+          <label className="profile-field">
+            <span>Select Vendor</span>
+            <select value={formData.vendorId} onChange={(event) => onChange("vendorId", event.target.value)}>
+              <option value="">Select vendor</option>
+              {vendorOptions.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="profile-field profile-field-wide">
+            <span>Post Copy *</span>
+            <textarea rows="4" value={formData.caption} onChange={(event) => onChange("caption", event.target.value)} />
+          </label>
+          <label className="profile-field">
+            <span>Contact Number</span>
+            <input type="text" value={formData.contactNumber} onChange={(event) => onChange("contactNumber", event.target.value)} />
+          </label>
+          <label className="profile-field">
+            <span>Landing Page Website</span>
+            <input type="text" value={formData.landingPageUrl} onChange={(event) => onChange("landingPageUrl", event.target.value)} />
+          </label>
+          <label className="profile-field">
+            <span>YouTube Link</span>
+            <input type="text" value={formData.youtubeUrl} onChange={(event) => onChange("youtubeUrl", event.target.value)} />
+          </label>
+          <label className="profile-field">
+            <span>Facebook Page</span>
+            <input type="text" value={formData.facebookUrl} onChange={(event) => onChange("facebookUrl", event.target.value)} />
+          </label>
+          <label className="profile-field">
+            <span>Post Picture</span>
+            <input type="file" accept="image/*" onChange={(event) => onFileChange("imageFile", event.target.files?.[0] ?? null)} />
+          </label>
+          <label className="profile-field">
+            <span>PDF Brochure</span>
+            <input type="file" accept="application/pdf" onChange={(event) => onFileChange("brochureFile", event.target.files?.[0] ?? null)} />
+          </label>
+        </div>
+
+        <div className="profile-action-row">
+          <button className="primary-link admin-action-button" type="button" onClick={onSubmit} disabled={isSaving}>
+            {isSaving ? "Saving Timeline..." : "Save Timeline Post"}
+          </button>
+        </div>
+      </article>
+
+      <section className="member-content-grid">
+        {posts.map((post) => (
+          <article key={post.id} className="member-content-card">
+            <div className="member-content-banner">
+              <span>{post.sourceType}</span>
+            </div>
+            <div className="member-content-copy">
+              <strong>{post.sourceName}</strong>
+              <p>{post.caption}</p>
+              <div className="member-content-meta">
+                <span>Posted By: {post.postedBy || post.sourceName}</span>
+                <span>Date: {post.postedOn}</span>
+                <span>Status: {post.status}</span>
+              </div>
+              {post.contactNumber ? <p>Contact: {post.contactNumber}</p> : null}
+              {post.imageUrl ? (
+                <div className="association-gallery-visual">
+                  <img src={post.imageUrl} alt={post.caption.slice(0, 60) || "Timeline post"} />
+                </div>
+              ) : null}
+              <div className="member-record-details">
+                {post.landingPageUrl ? <p>Landing Page: <a href={post.landingPageUrl} target="_blank" rel="noreferrer">{post.landingPageUrl}</a></p> : null}
+                {post.youtubeUrl ? <p>YouTube: <a href={post.youtubeUrl} target="_blank" rel="noreferrer">{post.youtubeUrl}</a></p> : null}
+                {post.facebookUrl ? <p>Facebook: <a href={post.facebookUrl} target="_blank" rel="noreferrer">{post.facebookUrl}</a></p> : null}
+                {post.brochureUrl ? <p>Brochure: <a href={post.brochureUrl} target="_blank" rel="noreferrer">Open PDF</a></p> : null}
+              </div>
+            </div>
+          </article>
+        ))}
+        {posts.length === 0 ? (
+          <article className="association-empty-state">
+            <span className="mini-label">Timeline</span>
+            <h2>No timeline posts yet.</h2>
+            <p>Create the first vendor, member, or association campaign post here.</p>
+          </article>
+        ) : null}
+      </section>
+    </section>
+  );
+}
+
+function AppBannerPanel({
+  formData,
+  items,
+  vendorOptions,
+  isSaving,
+  errorMessage,
+  onChange,
+  onFileChange,
+  onSubmit,
+}) {
+  return (
+    <section className="association-tab-section member-media-layout">
+      <article className="member-media-composer">
+        <div className="panel-topline">
+          <h2>Create App Banner</h2>
+          <span className="mini-label">Paid Advertisement</span>
+        </div>
+
+        <div className="profile-form-grid">
+          <label className="profile-field">
+            <span>Select Vendor</span>
+            <select value={formData.vendorId} onChange={(event) => onChange("vendorId", event.target.value)}>
+              <option value="">Select vendor</option>
+              {vendorOptions.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="profile-field">
+            <span>Contact Number</span>
+            <input type="text" value={formData.contactNumber} onChange={(event) => onChange("contactNumber", event.target.value)} />
+          </label>
+          <label className="profile-field profile-field-wide">
+            <span>Small Text *</span>
+            <textarea rows="3" value={formData.shortText} onChange={(event) => onChange("shortText", event.target.value)} />
+          </label>
+          <label className="profile-field">
+            <span>Media Link</span>
+            <input type="text" value={formData.socialMediaUrl} onChange={(event) => onChange("socialMediaUrl", event.target.value)} placeholder="Facebook, Instagram, or other media page" />
+          </label>
+          <label className="profile-field">
+            <span>Banner Media</span>
+            <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => onFileChange("mediaFile", event.target.files?.[0] ?? null)} />
+            <small>{appBannerMediaRecommendation}</small>
+          </label>
+          <label className="profile-field">
+            <span>PDF Attachment</span>
+            <input type="file" accept="application/pdf" onChange={(event) => onFileChange("brochureFile", event.target.files?.[0] ?? null)} />
+            <small>{appBannerPdfRecommendation}</small>
+          </label>
+        </div>
+
+        {errorMessage ? <p className="form-helper-error">{errorMessage}</p> : null}
+
+        <div className="profile-action-row">
+          <button className="primary-link admin-action-button" type="button" onClick={onSubmit} disabled={isSaving}>
+            {isSaving ? "Saving Banner..." : "Submit Paid Advertisement"}
+          </button>
+        </div>
+      </article>
+
+      <section className="member-content-grid">
+        {items.map((item) => (
+          <article key={item.id} className="member-content-card">
+            <div className="member-content-banner">
+              <span>Ad</span>
+            </div>
+            <div className="member-content-copy">
+              <strong>{item.vendorName}</strong>
+              <p>{item.shortText}</p>
+              <div className="member-content-meta">
+                <span>Date: {item.postedOn}</span>
+                <span>Status: {item.status}</span>
+                <span>Contact: {item.contactNumber || "--"}</span>
+              </div>
+              {item.mediaUrl ? (
+                <div className="association-gallery-visual">
+                  {item.mediaType.startsWith("video/") ? (
+                    <video src={item.mediaUrl} controls playsInline />
+                  ) : (
+                    <img src={item.mediaUrl} alt={item.shortText.slice(0, 60) || "App banner"} />
+                  )}
+                </div>
+              ) : null}
+              <div className="member-record-details">
+                {item.socialMediaUrl ? <p>Media Link: <a href={item.socialMediaUrl} target="_blank" rel="noreferrer">{item.socialMediaUrl}</a></p> : null}
+                {item.brochureUrl ? <p>PDF: <a href={item.brochureUrl} target="_blank" rel="noreferrer">Open attachment</a></p> : null}
+              </div>
+            </div>
+          </article>
+        ))}
+        {items.length === 0 ? (
+          <article className="association-empty-state">
+            <span className="mini-label">App Banner</span>
+            <h2>No app banner ads yet.</h2>
+            <p>Submit the first paid advertisement here for admin review.</p>
+          </article>
+        ) : null}
+      </section>
     </section>
   );
 }
@@ -4309,6 +5665,350 @@ function AdminEventAccessPanel({
   );
 }
 
+function AdminTimelineAccessPanel({
+  items,
+  searchQuery,
+  edits,
+  onSearchChange,
+  onUpdatePost,
+  onSaveTimelineAccessChanges,
+}) {
+  return (
+    <article className="admin-access-panel">
+      <div className="panel-topline">
+        <h2>Timeline Access Controls</h2>
+        <span className="mini-label">Approve, Reject, Hold</span>
+      </div>
+
+      <div className="admin-member-toolbar">
+        <div className="search-wrap admin-member-search">
+          <input
+            className="search-input"
+            type="search"
+            placeholder="Search caption, vendor, posted by..."
+            value={searchQuery}
+            onChange={(event) => onSearchChange(event.target.value)}
+          />
+        </div>
+      </div>
+
+      <div className="member-content-grid">
+        {items.map((post) => (
+          <article key={post.id} className="member-content-card">
+            <div className="member-content-banner">
+              <span>{post.sourceType}</span>
+            </div>
+            <div className="member-content-copy">
+              <strong>{post.sourceName}</strong>
+              <p>{post.caption}</p>
+              <div className="member-content-meta">
+                <span>Posted By: {post.postedBy || post.sourceName}</span>
+                <span>Date: {post.postedOn}</span>
+                <span>Status: {edits[post.id]?.status ?? post.status}</span>
+                <span>Contact: {post.contactNumber || "--"}</span>
+              </div>
+              {post.imageUrl ? (
+                <div className="association-gallery-visual">
+                  <img src={post.imageUrl} alt={post.caption.slice(0, 60) || "Timeline post"} />
+                </div>
+              ) : null}
+              <div className="member-content-controls">
+                <label className="content-control-field">
+                  <span>Status</span>
+                  <select
+                    value={edits[post.id]?.status ?? post.status}
+                    onChange={(event) => onUpdatePost(post.id, "status", event.target.value)}
+                  >
+                    <option value="Approved">Approved</option>
+                    <option value="Rejected">Rejected</option>
+                    <option value="Hold">Hold</option>
+                    <option value="Pending Review">Pending Review</option>
+                  </select>
+                </label>
+                <label className="content-control-field">
+                  <span>Display Start</span>
+                  <input
+                    type="date"
+                    value={edits[post.id]?.displayStart ?? post.displayStart}
+                    onChange={(event) => onUpdatePost(post.id, "displayStart", event.target.value)}
+                  />
+                </label>
+                <label className="content-control-field">
+                  <span>Display End</span>
+                  <input
+                    type="date"
+                    value={edits[post.id]?.displayEnd ?? post.displayEnd}
+                    onChange={(event) => onUpdatePost(post.id, "displayEnd", event.target.value)}
+                  />
+                </label>
+              </div>
+            </div>
+          </article>
+        ))}
+        {items.length === 0 ? (
+          <article className="association-empty-state">
+            <span className="mini-label">No Timeline Posts</span>
+            <h2>No timeline posts match the current search.</h2>
+            <p>Create timeline posts first, then manage approval here.</p>
+          </article>
+        ) : null}
+      </div>
+
+      <div className="profile-action-row">
+        <button className="primary-link admin-action-button" type="button" onClick={onSaveTimelineAccessChanges}>
+          Save Timeline Access Changes
+        </button>
+      </div>
+    </article>
+  );
+}
+
+function AdminAppBannerAccessPanel({
+  items,
+  searchQuery,
+  edits,
+  onSearchChange,
+  onUpdateBanner,
+  onSaveAppBannerAccessChanges,
+}) {
+  return (
+    <article className="admin-access-panel">
+      <div className="panel-topline">
+        <h2>App Banner Submissions</h2>
+        <span className="mini-label">Approve, Payment, Sequence</span>
+      </div>
+
+      <div className="admin-member-toolbar">
+        <div className="search-wrap admin-member-search">
+          <input
+            className="search-input"
+            type="search"
+            placeholder="Search vendor, text, contact..."
+            value={searchQuery}
+            onChange={(event) => onSearchChange(event.target.value)}
+          />
+        </div>
+      </div>
+
+      <div className="member-content-grid">
+        {items.map((item) => (
+          <article key={item.id} className="member-content-card">
+            <div className="member-content-banner">
+              <span>Banner</span>
+            </div>
+            <div className="member-content-copy">
+              <strong>{item.vendorName}</strong>
+              <p>{item.shortText}</p>
+              <div className="member-content-meta">
+                <span>Date: {item.postedOn}</span>
+                <span>Status: {edits[item.id]?.status ?? item.status}</span>
+                <span>Contact: {item.contactNumber || "--"}</span>
+                <span>Sequence: {(edits[item.id]?.displayIndex ?? item.displayIndex) || "--"}</span>
+              </div>
+              {item.mediaUrl ? (
+                <div className="association-gallery-visual">
+                  <img src={item.mediaUrl} alt={item.shortText.slice(0, 60) || "App banner"} />
+                </div>
+              ) : null}
+              <div className="member-record-details">
+                {item.socialMediaUrl ? <p>Media Link: <a href={item.socialMediaUrl} target="_blank" rel="noreferrer">{item.socialMediaUrl}</a></p> : null}
+                {item.brochureUrl ? <p>PDF: <a href={item.brochureUrl} target="_blank" rel="noreferrer">Open attachment</a></p> : null}
+              </div>
+              <div className="member-content-controls">
+                <label className="content-control-field">
+                  <span>Status</span>
+                  <select
+                    value={edits[item.id]?.status ?? item.status}
+                    onChange={(event) => onUpdateBanner(item.id, "status", event.target.value)}
+                  >
+                    <option value="Approved">Approved</option>
+                    <option value="Rejected">Rejected</option>
+                    <option value="Hold">Hold</option>
+                    <option value="Pending Review">Pending Review</option>
+                  </select>
+                </label>
+                <label className="content-control-field">
+                  <span>Payment Received</span>
+                  <select
+                    value={(edits[item.id]?.paymentReceived ?? item.paymentReceived) ? "Yes" : "No"}
+                    onChange={(event) =>
+                      onUpdateBanner(item.id, "paymentReceived", event.target.value === "Yes")
+                    }
+                  >
+                    <option value="No">No</option>
+                    <option value="Yes">Yes</option>
+                  </select>
+                </label>
+                <label className="content-control-field">
+                  <span>Payment Mode</span>
+                  <select
+                    value={edits[item.id]?.paymentMode ?? item.paymentMode}
+                    onChange={(event) => onUpdateBanner(item.id, "paymentMode", event.target.value)}
+                  >
+                    <option value="">Select mode</option>
+                    <option value="Bank">Bank</option>
+                    <option value="Cash">Cash</option>
+                    <option value="UPI">UPI</option>
+                  </select>
+                </label>
+                <label className="content-control-field">
+                  <span>Display Start</span>
+                  <input
+                    type="date"
+                    value={edits[item.id]?.displayStart ?? item.displayStart}
+                    onChange={(event) => onUpdateBanner(item.id, "displayStart", event.target.value)}
+                  />
+                </label>
+                <label className="content-control-field">
+                  <span>Display End</span>
+                  <input
+                    type="date"
+                    value={edits[item.id]?.displayEnd ?? item.displayEnd}
+                    onChange={(event) => onUpdateBanner(item.id, "displayEnd", event.target.value)}
+                  />
+                </label>
+                <label className="content-control-field">
+                  <span>Carousel Sequence</span>
+                  <select
+                    value={edits[item.id]?.displayIndex ?? item.displayIndex ?? ""}
+                    onChange={(event) => onUpdateBanner(item.id, "displayIndex", event.target.value)}
+                  >
+                    <option value="">Select slot</option>
+                    {Array.from({ length: 50 }, (_, index) => index + 1).map((slot) => (
+                      <option key={slot} value={slot}>
+                        {slot}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="content-control-field content-control-field-wide">
+                  <span>Remarks</span>
+                  <textarea
+                    rows="2"
+                    value={edits[item.id]?.paymentRemarks ?? item.paymentRemarks}
+                    onChange={(event) => onUpdateBanner(item.id, "paymentRemarks", event.target.value)}
+                  />
+                </label>
+              </div>
+            </div>
+          </article>
+        ))}
+        {items.length === 0 ? (
+          <article className="association-empty-state">
+            <span className="mini-label">No App Banners</span>
+            <h2>No paid advertisements have been submitted yet.</h2>
+            <p>New app banner requests from Vendor Arena will appear here.</p>
+          </article>
+        ) : null}
+      </div>
+
+      <div className="profile-action-row">
+        <button className="primary-link admin-action-button" type="button" onClick={onSaveAppBannerAccessChanges}>
+          Save App Banner Access Changes
+        </button>
+      </div>
+    </article>
+  );
+}
+
+function AdminBulkMemberPanel({
+  selectedFile,
+  isUploading,
+  errorMessage,
+  result,
+  onFileChange,
+  onUpload,
+}) {
+  return (
+    <article className="admin-access-panel">
+      <div className="panel-topline">
+        <h2>Add Bulk Member</h2>
+        <span className="mini-label">Excel Import + App Login</span>
+      </div>
+
+      <div className="profile-form-grid">
+        <label className="profile-field profile-field-wide">
+          <span>Upload Excel File</span>
+          <input
+            type="file"
+            accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+            onChange={(event) => onFileChange(event.target.files?.[0] ?? null)}
+          />
+          <small>Imported members will use their email as login and default password `Nima@123`.</small>
+        </label>
+      </div>
+
+      {selectedFile ? <p>Selected file: {selectedFile.name}</p> : null}
+      {errorMessage ? <p className="form-helper-error">{errorMessage}</p> : null}
+
+      <div className="profile-action-row">
+        <button className="primary-link admin-action-button" type="button" onClick={onUpload} disabled={isUploading}>
+          {isUploading ? "Importing Members..." : "Import Members"}
+        </button>
+      </div>
+
+      {result ? (
+        <section className="member-content-grid">
+          <article className="member-content-card">
+            <div className="member-content-banner">
+              <span>Summary</span>
+            </div>
+            <div className="member-content-copy">
+              <strong>Import Result</strong>
+              <div className="member-content-meta">
+                <span>Total Rows: {result.summary?.totalRows ?? 0}</span>
+                <span>Imported: {result.summary?.importedCount ?? 0}</span>
+                <span>Skipped: {result.summary?.skippedCount ?? 0}</span>
+                <span>Default Password: {result.summary?.defaultLoginPassword ?? "Nima@123"}</span>
+              </div>
+            </div>
+          </article>
+
+          <article className="member-content-card">
+            <div className="member-content-banner">
+              <span>Imported</span>
+            </div>
+            <div className="member-content-copy">
+              <strong>Imported Members</strong>
+              {(result.imported ?? []).length > 0 ? (
+                <div className="member-record-details">
+                  {(result.imported ?? []).map((item) => (
+                    <p key={`${item.rowNumber}-${item.email}`}>
+                      Row {item.rowNumber}: {item.companyName || "--"} ({item.email})
+                    </p>
+                  ))}
+                </div>
+              ) : (
+                <p>No rows were imported.</p>
+              )}
+            </div>
+          </article>
+
+          <article className="member-content-card">
+            <div className="member-content-banner">
+              <span>Skipped</span>
+            </div>
+            <div className="member-content-copy">
+              <strong>Skipped Rows</strong>
+              {(result.skipped ?? []).length > 0 ? (
+                <div className="member-record-details">
+                  {(result.skipped ?? []).map((item) => (
+                    <p key={`${item.rowNumber}-${item.email || item.companyName || item.reason}`}>
+                      Row {item.rowNumber}: {item.reason}
+                    </p>
+                  ))}
+                </div>
+              ) : (
+                <p>No rows were skipped.</p>
+              )}
+            </div>
+          </article>
+        </section>
+      ) : null}
+    </article>
+  );
+}
+
 function AdminMemberAccessPanel({
   items,
   searchQuery,
@@ -4599,6 +6299,8 @@ function AdminVendorAccessPanel({
   onToggleSelectAll,
   onToggleVendor,
   onUpdateContentPost,
+  onApplyAccessStatus,
+  onSaveVendorAccessChanges,
 }) {
   const allSelected = items.length > 0 && selectedIds.length === items.length;
 
@@ -4638,13 +6340,13 @@ function AdminVendorAccessPanel({
               <input type="checkbox" checked={allSelected} onChange={onToggleSelectAll} />
               <span>Select filtered</span>
             </label>
-            <button className="secondary-link secondary-button" type="button">
+            <button className="secondary-link secondary-button" type="button" onClick={() => onApplyAccessStatus("PENDING")}>
               Restrict App Usage
             </button>
-            <button className="secondary-link secondary-button" type="button">
+            <button className="secondary-link secondary-button" type="button" onClick={() => onApplyAccessStatus("SUSPENDED")}>
               Suspend Access
             </button>
-            <button className="secondary-link secondary-button danger-button" type="button">
+            <button className="secondary-link secondary-button danger-button" type="button" onClick={() => onApplyAccessStatus("CANCELLED")}>
               Remove App Usage
             </button>
           </div>
@@ -4789,7 +6491,7 @@ function AdminVendorAccessPanel({
       )}
 
       <div className="profile-action-row">
-        <button className="primary-link admin-action-button" type="button">
+        <button className="primary-link admin-action-button" type="button" onClick={onSaveVendorAccessChanges}>
           {activeView === "app" ? "Save Vendor Access Changes" : "Save Vendor Content Changes"}
         </button>
       </div>
@@ -4810,6 +6512,7 @@ export default function HomePage() {
   const [activeMemberTab, setActiveMemberTab] = useState("Media");
   const [activeVendorTab, setActiveVendorTab] = useState("Registration");
   const [isAdminAccessOpen, setIsAdminAccessOpen] = useState(false);
+  const [isVendorNavOpen, setIsVendorNavOpen] = useState(false);
   const [activeAdminAccessSection, setActiveAdminAccessSection] = useState("App Access");
   const [appPermissions, setAppPermissions] = useState({
     approveMembersLogin: true,
@@ -4860,10 +6563,32 @@ export default function HomePage() {
   const [memberContentPosts, setMemberContentPosts] = useState([]);
   const [memberMediaPostForm, setMemberMediaPostForm] = useState(defaultMemberMediaPostForm);
   const [isSavingMemberMediaPost, setIsSavingMemberMediaPost] = useState(false);
+  const [timelinePosts, setTimelinePosts] = useState([]);
+  const [timelinePostForm, setTimelinePostForm] = useState(defaultTimelinePostForm);
+  const [isSavingTimelinePost, setIsSavingTimelinePost] = useState(false);
+  const [appBanners, setAppBanners] = useState([]);
+  const [appBannerForm, setAppBannerForm] = useState(defaultAppBannerForm);
+  const [isSavingAppBanner, setIsSavingAppBanner] = useState(false);
+  const [appBannerError, setAppBannerError] = useState("");
+  const [adminAppBannerSearch, setAdminAppBannerSearch] = useState("");
+  const [appBannerAccessEdits, setAppBannerAccessEdits] = useState({});
+  const [bulkMemberFile, setBulkMemberFile] = useState(null);
+  const [isBulkMemberUploading, setIsBulkMemberUploading] = useState(false);
+  const [bulkMemberError, setBulkMemberError] = useState("");
+  const [bulkMemberResult, setBulkMemberResult] = useState(null);
+  const [adminTimelineSearch, setAdminTimelineSearch] = useState("");
+  const [timelineAccessEdits, setTimelineAccessEdits] = useState({});
   const [adminVendorSearch, setAdminVendorSearch] = useState("");
   const [adminVendorAccessView, setAdminVendorAccessView] = useState("app");
   const [selectedAdminVendors, setSelectedAdminVendors] = useState([]);
   const [selectedContentVendorIds, setSelectedContentVendorIds] = useState([]);
+  const [vendorStatusSearch, setVendorStatusSearch] = useState("");
+  const [selectedVendorRequests, setSelectedVendorRequests] = useState([]);
+  const [selectedVendorReviewId, setSelectedVendorReviewId] = useState("");
+  const [vendorApprovalForm, setVendorApprovalForm] = useState(buildVendorApprovalForm(null));
+  const [vendorApprovalError, setVendorApprovalError] = useState("");
+  const [vendorRecords, setVendorRecords] = useState(initialVendorRecords);
+  const [vendorAccessEdits, setVendorAccessEdits] = useState({});
   const [adminEventSearch, setAdminEventSearch] = useState("");
   const [contentPostEdits, setContentPostEdits] = useState({});
   const [vendorContentPostEdits, setVendorContentPostEdits] = useState(
@@ -4879,23 +6604,65 @@ export default function HomePage() {
     ),
   );
   const [vendorRegistrationForm, setVendorRegistrationForm] = useState({
-    name: "",
     company: "",
-    vendorType: "",
     category: "",
+    subCategory: "",
     contactPerson: "",
+    phoneCode: "+91",
+    whatsappCode: "+91",
+    whatsapp: "",
+    country: "India",
+    state: "",
+    membershipPlan: "",
+    paymentAmount: "",
     address: "",
     city: "",
     phone: "",
     email: "",
+    website: "",
+    facebookUrl: "",
+    instagramUrl: "",
+    youtubeUrl: "",
+    linkedinUrl: "",
+    xUrl: "",
+    workDescription: "",
+    zipcode: "",
+    planName: "",
+    openingTime: "",
+    closingTime: "",
+    gstNumber: "",
+    isRestaurant: false,
+    paymentMode: "Online/NEFT/IMPS",
+    bankName: "",
+    transactionId: "",
+    paymentDescription: "",
+    googleLocation: "",
+    companyLogo: null,
+    idProof: null,
+    locationProof: null,
+    companyBrochure: null,
+    profilePhoto: null,
+    visitingCard: null,
+    onboardingStartAt: "",
+    onboardingEndAt: "",
+    paymentDueDate: "",
   });
   const [vendorCategories, setVendorCategories] = useState(initialVendorCategories);
+  const [vendorSubCategoryRecords, setVendorSubCategoryRecords] = useState(vendorSubCategoryMap);
   const [newVendorCategory, setNewVendorCategory] = useState("");
+  const [vendorCategoryDraft, setVendorCategoryDraft] = useState("");
+  const [editingVendorCategory, setEditingVendorCategory] = useState(null);
+  const [selectedVendorParentCategory, setSelectedVendorParentCategory] = useState("");
+  const [vendorSubCategoryDraft, setVendorSubCategoryDraft] = useState("");
+  const [editingVendorSubCategory, setEditingVendorSubCategory] = useState(null);
   const [vendorFilters, setVendorFilters] = useState({
     name: "",
     category: "",
     city: "",
   });
+  const vendorSubCategoryOptions = vendorSubCategoryRecords[vendorRegistrationForm.category] ?? [];
+  const vendorStateOptions = vendorStateOptionsByCountry[vendorRegistrationForm.country] ?? [];
+  const vendorCityOptions = vendorCityOptionsByState[vendorRegistrationForm.state] ?? [];
   const [eventForm, setEventForm] = useState({
     ...defaultEventForm,
     id: "",
@@ -4961,6 +6728,56 @@ export default function HomePage() {
     );
   };
 
+  const loadTimelinePosts = async () => {
+    const response = await fetch(`${apiBaseUrl}/timeline-posts`);
+    if (!response.ok) {
+      return;
+    }
+
+    const payload = await response.json();
+    const posts = Array.isArray(payload.posts) ? payload.posts.map(mapApiTimelinePostToUi) : [];
+    setTimelinePosts(posts);
+    setTimelineAccessEdits(
+      Object.fromEntries(
+        posts.map((post) => [
+          post.id,
+          {
+            status: post.status,
+            displayStart: post.displayStart || "",
+            displayEnd: post.displayEnd || "",
+          },
+        ]),
+      ),
+    );
+  };
+
+  const loadAppBanners = async () => {
+    const response = await fetch(`${apiBaseUrl}/app-banners`);
+    if (!response.ok) {
+      return;
+    }
+
+    const payload = await response.json();
+    const banners = Array.isArray(payload.banners) ? payload.banners.map(mapApiAppBannerToUi) : [];
+    setAppBanners(banners);
+    setAppBannerAccessEdits(
+      Object.fromEntries(
+        banners.map((banner) => [
+          banner.id,
+          {
+            status: banner.status,
+            paymentReceived: banner.paymentReceived,
+            paymentMode: banner.paymentMode,
+            paymentRemarks: banner.paymentRemarks,
+            displayStart: banner.displayStart || "",
+            displayEnd: banner.displayEnd || "",
+            displayIndex: banner.displayIndex || "",
+          },
+        ]),
+      ),
+    );
+  };
+
   const loadAssociationProfile = async () => {
     const response = await fetch(`${apiBaseUrl}/associations/current`);
     if (!response.ok) {
@@ -4993,6 +6810,31 @@ export default function HomePage() {
       const payload = await eventsResponse.json();
       setCreatedEvents(Array.isArray(payload.events) ? payload.events : []);
     }
+  };
+
+  const loadVendors = async () => {
+    const response = await fetch(`${apiBaseUrl}/vendors`);
+    if (!response.ok) {
+      return;
+    }
+
+    const payload = await response.json();
+    const vendors = Array.isArray(payload.vendors) ? payload.vendors.map(mapApiVendorToUi) : [];
+    if (vendors.length === 0) {
+      setVendorRecords([]);
+      setVendorAccessEdits({});
+      return;
+    }
+
+    setVendorRecords(vendors);
+    setVendorCategories([
+      ...new Set(
+        [...vendors.map((vendor) => vendor.category).filter(Boolean), ...initialVendorCategories].sort((left, right) =>
+          left.localeCompare(right),
+        ),
+      ),
+    ]);
+    setVendorAccessEdits({});
   };
 
   useEffect(() => {
@@ -5081,11 +6923,50 @@ export default function HomePage() {
 
     loadMembersData();
     void loadEventsArena();
+    void loadVendors();
+    void loadTimelinePosts();
+    void loadAppBanners();
 
     return () => {
       isActive = false;
     };
   }, []);
+
+  useEffect(() => {
+    setTimelinePostForm((current) => {
+      if (current.vendorId) {
+        return current;
+      }
+
+      const firstVendorId = vendorRecords[0]?.id ?? "";
+      const firstVendor = vendorRecords.find((vendor) => vendor.id === firstVendorId);
+      return firstVendorId
+        ? {
+            ...current,
+            vendorId: firstVendorId,
+            contactNumber: firstVendor?.phone || current.contactNumber,
+          }
+        : current;
+    });
+  }, [vendorRecords]);
+
+  useEffect(() => {
+    setAppBannerForm((current) => {
+      if (current.vendorId) {
+        return current;
+      }
+
+      const firstVendorId = vendorRecords[0]?.id ?? "";
+      const firstVendor = vendorRecords.find((vendor) => vendor.id === firstVendorId);
+      return firstVendorId
+        ? {
+            ...current,
+            vendorId: firstVendorId,
+            contactNumber: firstVendor?.phone || current.contactNumber,
+          }
+        : current;
+    });
+  }, [vendorRecords]);
 
   useEffect(() => {
     let isActive = true;
@@ -5139,6 +7020,39 @@ export default function HomePage() {
   const committeeMembers = getCommitteeMembers(memberTabData["All Members"] ?? []);
   const eventTimelineData = buildEventTimelineGroups(createdEvents);
   const activeMemberSelectedIds = selectedMemberRecords[activeMemberTab] ?? [];
+  const timelineVendorOptions = vendorRecords.map((vendor) => ({
+    id: vendor.id,
+    label: `${vendor.company}${vendor.category ? ` - ${vendor.category}` : ""}`,
+  }));
+  const timelinePostedByLabel = "Association 1 Admin";
+  const appBannerVendorOptions = vendorRecords.map((vendor) => ({
+    id: vendor.id,
+    label: `${vendor.company}${vendor.category ? ` - ${vendor.category}` : ""}`,
+  }));
+  const dashboardTimelinePosts = timelinePosts
+    .filter(isTimelinePostVisibleOnDashboard)
+    .sort((left, right) => String(right.createdAt || "").localeCompare(String(left.createdAt || "")));
+  const filteredAdminTimelinePosts = timelinePosts.filter((post) => {
+    const query = adminTimelineSearch.trim().toLowerCase();
+    if (!query) {
+      return true;
+    }
+
+    return `${post.caption} ${post.sourceName} ${post.postedBy} ${post.status}`.toLowerCase().includes(query);
+  });
+  const adminAppBannerItems = appBanners.filter((banner) => {
+    const query = adminAppBannerSearch.trim().toLowerCase();
+    if (!query) {
+      return true;
+    }
+
+    return `${banner.vendorName} ${banner.shortText} ${banner.contactNumber} ${banner.status}`
+      .toLowerCase()
+      .includes(query);
+  });
+  const dashboardAppBanners = appBanners
+    .filter(isAppBannerVisibleOnDashboard)
+    .sort((left, right) => Number(left.displayIndex) - Number(right.displayIndex));
   const expiringMembersCount = (memberTabData["All Members"] ?? []).filter(
     (member) => member.expiryStatus === "expiring-soon",
   ).length;
@@ -5193,14 +7107,50 @@ export default function HomePage() {
 
     return selectedContentMemberIds.includes(post.memberId);
   });
-  const filteredAdminVendors = vendorRecords.filter((vendor) => {
-    const query = adminVendorSearch.trim().toLowerCase();
-    if (!query) {
-      return true;
-    }
+  const vendorSummaryStats = [
+    { value: vendorRecords.length.toString(), label: "Registered Vendors" },
+    {
+      value: vendorRecords.filter((vendor) => vendor.registrationStatus === "Active").length.toString(),
+      label: "Active",
+    },
+    {
+      value: vendorRecords.filter((vendor) => vendor.registrationStatus === "Suspended").length.toString(),
+      label: "Suspended",
+    },
+    {
+      value: vendorRecords.filter((vendor) => vendor.registrationStatus === "Lapsed").length.toString(),
+      label: "Lapsed",
+    },
+  ];
+  const filteredAdminVendors = vendorRecords
+    .filter((vendor) => {
+      const query = adminVendorSearch.trim().toLowerCase();
+      if (!query) {
+        return true;
+      }
 
-    return `${vendor.name} ${vendor.company} ${vendor.vendorType}`.toLowerCase().includes(query);
-  });
+      return `${vendor.name} ${vendor.company} ${vendor.vendorType}`.toLowerCase().includes(query);
+    })
+    .map((vendor) => ({
+      ...vendor,
+      appAccessStatus: vendorAccessEdits[vendor.id] ?? vendor.appAccessStatus,
+    }));
+  const vendorStatusRequests = vendorRecords
+    .filter((vendor) => vendor.appAccessStatus === "Pending Approval")
+    .filter((vendor) => {
+      const query = vendorStatusSearch.trim().toLowerCase();
+      if (!query) {
+        return true;
+      }
+
+      return `${vendor.name} ${vendor.company} ${vendor.category} ${vendor.vendorType} ${vendor.email}`
+        .toLowerCase()
+        .includes(query);
+    });
+  const selectedVendorReview =
+    vendorStatusRequests.find((vendor) => vendor.id === selectedVendorReviewId) ??
+    vendorRecords.find((vendor) => vendor.id === selectedVendorReviewId) ??
+    null;
   const filteredVendorContentPosts = vendorContentPosts.filter((post) => {
     const query = adminVendorSearch.trim().toLowerCase();
     const postStatus = (vendorContentPostEdits[post.id]?.status ?? post.status).toLowerCase();
@@ -5864,10 +7814,89 @@ export default function HomePage() {
     }));
   };
   const updateVendorRegistrationForm = (field, value) => {
+    setVendorRegistrationForm((current) => {
+      if (field === "category") {
+        return {
+          ...current,
+          category: value,
+          subCategory: "",
+        };
+      }
+
+      if (field === "country") {
+        return {
+          ...current,
+          country: value,
+          state: "",
+          city: "",
+        };
+      }
+
+      if (field === "state") {
+        return {
+          ...current,
+          state: value,
+          city: "",
+        };
+      }
+
+      return {
+        ...current,
+        [field]: value,
+      };
+    });
+  };
+  const updateVendorRegistrationFile = (field, file) => {
     setVendorRegistrationForm((current) => ({
       ...current,
-      [field]: value,
+      [field]: file,
     }));
+  };
+  const resetVendorRegistrationForm = () => {
+    setVendorRegistrationForm({
+      company: "",
+      category: "",
+      subCategory: "",
+      contactPerson: "",
+      phoneCode: "+91",
+      whatsappCode: "+91",
+      whatsapp: "",
+      country: "India",
+      state: "",
+      membershipPlan: "",
+      paymentAmount: "",
+      address: "",
+      city: "",
+      phone: "",
+      email: "",
+      website: "",
+      facebookUrl: "",
+      instagramUrl: "",
+      youtubeUrl: "",
+      linkedinUrl: "",
+      xUrl: "",
+      workDescription: "",
+      zipcode: "",
+      planName: "",
+      openingTime: "",
+      closingTime: "",
+      gstNumber: "",
+      isRestaurant: false,
+      paymentMode: "Online/NEFT/IMPS",
+      bankName: "",
+      transactionId: "",
+      paymentDescription: "",
+      googleLocation: "",
+      companyLogo: null,
+      idProof: null,
+      locationProof: null,
+      companyBrochure: null,
+      profilePhoto: null,
+      visitingCard: null,
+      onboardingStartAt: "",
+      onboardingEndAt: "",
+      paymentDueDate: "",
+    });
   };
   const updateVendorFilter = (field, value) => {
     setVendorFilters((current) => ({
@@ -5882,7 +7911,713 @@ export default function HomePage() {
     }
 
     setVendorCategories((current) => [...current, nextCategory]);
+    setVendorSubCategoryRecords((current) => ({
+      ...current,
+      [nextCategory]: current[nextCategory] ?? [],
+    }));
     setNewVendorCategory("");
+  };
+  const openVendorCategoryEditor = (categoryName) => {
+    setEditingVendorCategory(categoryName);
+    setVendorCategoryDraft(categoryName || "");
+  };
+  const cancelVendorCategoryEdit = () => {
+    setEditingVendorCategory(null);
+    setVendorCategoryDraft("");
+  };
+  const saveVendorCategory = () => {
+    const nextName = vendorCategoryDraft.trim();
+    if (!nextName) {
+      return;
+    }
+
+    if (editingVendorCategory) {
+      if (nextName !== editingVendorCategory && vendorCategories.includes(nextName)) {
+        return;
+      }
+
+      setVendorCategories((current) =>
+        current.map((category) => (category === editingVendorCategory ? nextName : category)),
+      );
+      setVendorSubCategoryRecords((current) => {
+        const nextRecord = { ...current };
+        const existingSubCategories = nextRecord[editingVendorCategory] ?? [];
+        delete nextRecord[editingVendorCategory];
+        nextRecord[nextName] = existingSubCategories;
+        return nextRecord;
+      });
+      if (selectedVendorParentCategory === editingVendorCategory) {
+        setSelectedVendorParentCategory(nextName);
+      }
+      if (vendorRegistrationForm.category === editingVendorCategory) {
+        setVendorRegistrationForm((current) => ({
+          ...current,
+          category: nextName,
+        }));
+      }
+    } else {
+      if (vendorCategories.includes(nextName)) {
+        return;
+      }
+      setVendorCategories((current) => [...current, nextName]);
+      setVendorSubCategoryRecords((current) => ({
+        ...current,
+        [nextName]: current[nextName] ?? [],
+      }));
+    }
+
+    cancelVendorCategoryEdit();
+  };
+  const deleteVendorCategory = (categoryName) => {
+    setVendorCategories((current) => current.filter((category) => category !== categoryName));
+    setVendorSubCategoryRecords((current) => {
+      const nextRecord = { ...current };
+      delete nextRecord[categoryName];
+      return nextRecord;
+    });
+    if (selectedVendorParentCategory === categoryName) {
+      setSelectedVendorParentCategory("");
+    }
+    if (vendorRegistrationForm.category === categoryName) {
+      setVendorRegistrationForm((current) => ({
+        ...current,
+        category: "",
+        subCategory: "",
+      }));
+    }
+    if (vendorFilters.category === categoryName) {
+      setVendorFilters((current) => ({
+        ...current,
+        category: "",
+      }));
+    }
+  };
+  const openVendorSubCategoryEditor = (subCategoryName) => {
+    setEditingVendorSubCategory(subCategoryName);
+    setVendorSubCategoryDraft(subCategoryName || "");
+  };
+  const cancelVendorSubCategoryEdit = () => {
+    setEditingVendorSubCategory(null);
+    setVendorSubCategoryDraft("");
+  };
+  const saveVendorSubCategory = () => {
+    const nextName = vendorSubCategoryDraft.trim();
+    if (!selectedVendorParentCategory || !nextName) {
+      return;
+    }
+
+    const currentItems = vendorSubCategoryRecords[selectedVendorParentCategory] ?? [];
+    if (editingVendorSubCategory) {
+      if (nextName !== editingVendorSubCategory && currentItems.includes(nextName)) {
+        return;
+      }
+
+      setVendorSubCategoryRecords((current) => ({
+        ...current,
+        [selectedVendorParentCategory]: (current[selectedVendorParentCategory] ?? []).map((item) =>
+          item === editingVendorSubCategory ? nextName : item,
+        ),
+      }));
+      if (
+        vendorRegistrationForm.category === selectedVendorParentCategory &&
+        vendorRegistrationForm.subCategory === editingVendorSubCategory
+      ) {
+        setVendorRegistrationForm((current) => ({
+          ...current,
+          subCategory: nextName,
+        }));
+      }
+    } else {
+      if (currentItems.includes(nextName)) {
+        return;
+      }
+      setVendorSubCategoryRecords((current) => ({
+        ...current,
+        [selectedVendorParentCategory]: [...(current[selectedVendorParentCategory] ?? []), nextName],
+      }));
+    }
+
+    cancelVendorSubCategoryEdit();
+  };
+  const deleteVendorSubCategory = (subCategoryName) => {
+    if (!selectedVendorParentCategory) {
+      return;
+    }
+
+    setVendorSubCategoryRecords((current) => ({
+      ...current,
+      [selectedVendorParentCategory]: (current[selectedVendorParentCategory] ?? []).filter(
+        (item) => item !== subCategoryName,
+      ),
+    }));
+    if (
+      vendorRegistrationForm.category === selectedVendorParentCategory &&
+      vendorRegistrationForm.subCategory === subCategoryName
+    ) {
+      setVendorRegistrationForm((current) => ({
+        ...current,
+        subCategory: "",
+      }));
+    }
+  };
+  const saveVendorRecord = () => {
+    void (async () => {
+      if (
+        !vendorRegistrationForm.company.trim() ||
+        !vendorRegistrationForm.contactPerson.trim() ||
+        !vendorRegistrationForm.phone.trim() ||
+        !vendorRegistrationForm.email.trim() ||
+        !vendorRegistrationForm.category.trim() ||
+        !vendorRegistrationForm.subCategory.trim() ||
+        !vendorRegistrationForm.address.trim()
+      ) {
+        return;
+      }
+
+      const response = await fetch(`${apiBaseUrl}/vendors`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: vendorRegistrationForm.company.trim(),
+          companyName: vendorRegistrationForm.company.trim(),
+          vendorType: vendorRegistrationForm.subCategory.trim(),
+          category: vendorRegistrationForm.category.trim(),
+          contactPerson: vendorRegistrationForm.contactPerson.trim(),
+          membershipPlan: vendorRegistrationForm.membershipPlan.trim(),
+          paymentAmount: vendorRegistrationForm.paymentAmount.trim(),
+          address: vendorRegistrationForm.address.trim(),
+          city: vendorRegistrationForm.city.trim(),
+          phone: `${vendorRegistrationForm.phoneCode} ${vendorRegistrationForm.phone.trim()}`.trim(),
+          email: vendorRegistrationForm.email.trim(),
+          whatsapp: `${vendorRegistrationForm.whatsappCode} ${vendorRegistrationForm.whatsapp.trim()}`.trim(),
+          facebookUrl: vendorRegistrationForm.facebookUrl.trim(),
+          instagramUrl: vendorRegistrationForm.instagramUrl.trim(),
+          youtubeUrl: vendorRegistrationForm.youtubeUrl.trim(),
+          linkedinUrl: vendorRegistrationForm.linkedinUrl.trim(),
+          xUrl: vendorRegistrationForm.xUrl.trim(),
+          onboardingStartAt: vendorRegistrationForm.onboardingStartAt || undefined,
+          onboardingEndAt: vendorRegistrationForm.onboardingEndAt || undefined,
+          paymentDueDate: vendorRegistrationForm.paymentDueDate || undefined,
+          paymentStatus: "PENDING",
+          status: "PENDING",
+          badge: vendorRegistrationForm.subCategory.trim() || vendorRegistrationForm.category.trim() || "Vendor",
+          notes: [
+            vendorRegistrationForm.country ? `Country: ${vendorRegistrationForm.country}` : "",
+            vendorRegistrationForm.state ? `State: ${vendorRegistrationForm.state}` : "",
+            vendorRegistrationForm.zipcode ? `Zipcode: ${vendorRegistrationForm.zipcode}` : "",
+            vendorRegistrationForm.website ? `Website: ${vendorRegistrationForm.website.trim()}` : "",
+            vendorRegistrationForm.workDescription
+              ? `Work Description: ${vendorRegistrationForm.workDescription.trim()}`
+              : "",
+            vendorRegistrationForm.companyLogo?.name ? `Company Logo: ${vendorRegistrationForm.companyLogo.name}` : "",
+          ]
+            .filter(Boolean)
+            .join("\n"),
+        }),
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      await loadVendors();
+      resetVendorRegistrationForm();
+    })();
+  };
+  const applyVendorAccessStatusLocally = (vendorIds, nextStatusLabel) => {
+    setVendorRecords((current) =>
+      current.map((vendor) => {
+        if (!vendorIds.includes(vendor.id)) {
+          return vendor;
+        }
+
+        return {
+          ...vendor,
+          appAccessStatus: nextStatusLabel,
+          registrationStatus:
+            nextStatusLabel === "Approved"
+              ? "Active"
+              : nextStatusLabel === "Suspended"
+                ? "Suspended"
+                : nextStatusLabel === "Removed"
+                  ? "Lapsed"
+                  : "Pending",
+        };
+      }),
+    );
+  };
+  const applyBulkVendorAccessStatus = (accessStatus) => {
+    const nextStatusLabel =
+      accessStatus === "APPROVED"
+        ? "Approved"
+        : accessStatus === "SUSPENDED"
+          ? "Suspended"
+          : accessStatus === "CANCELLED"
+            ? "Removed"
+            : "Pending Approval";
+
+    setVendorAccessEdits((current) => ({
+      ...current,
+      ...Object.fromEntries(selectedAdminVendors.map((vendorId) => [vendorId, nextStatusLabel])),
+    }));
+  };
+  const saveVendorAccessChanges = () => {
+    void (async () => {
+      const updates = Object.entries(vendorAccessEdits);
+
+      if (updates.length === 0) {
+        return;
+      }
+
+      await Promise.all(
+        updates.map(async ([vendorId, nextStatusLabel]) => {
+          const accessStatus =
+            nextStatusLabel === "Approved"
+              ? "APPROVED"
+              : nextStatusLabel === "Suspended"
+                ? "SUSPENDED"
+                : nextStatusLabel === "Removed"
+                  ? "CANCELLED"
+                  : "PENDING";
+
+          const response = await fetch(`${apiBaseUrl}/vendors/${vendorId}/access`, {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ accessStatus }),
+          });
+
+          if (!response.ok) {
+            return;
+          }
+
+          applyVendorAccessStatusLocally([vendorId], nextStatusLabel);
+        }),
+      );
+
+      setVendorAccessEdits({});
+      setSelectedAdminVendors([]);
+      await loadVendors();
+    })();
+  };
+  const toggleVendorRequestSelect = (vendorId) => {
+    setSelectedVendorRequests((current) =>
+      current.includes(vendorId) ? current.filter((id) => id !== vendorId) : [...current, vendorId],
+    );
+  };
+  const toggleSelectAllVendorRequests = () => {
+    const filteredIds = vendorStatusRequests.map((vendor) => vendor.id);
+    setSelectedVendorRequests((current) => (current.length === filteredIds.length ? [] : filteredIds));
+  };
+  const openVendorStatusReview = (vendorId) => {
+    const vendor = vendorRecords.find((item) => item.id === vendorId);
+    if (!vendor) {
+      return;
+    }
+
+    setSelectedVendorReviewId(vendorId);
+    setVendorApprovalForm(buildVendorApprovalForm(vendor));
+    setVendorApprovalError("");
+  };
+  const updateVendorApprovalForm = (field, value) => {
+    setVendorApprovalForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+    setVendorApprovalError("");
+  };
+  const updateVendorApprovalFile = (field, file) => {
+    setVendorApprovalForm((current) => ({
+      ...current,
+      [field]: file,
+    }));
+    setVendorApprovalError("");
+  };
+  const applySingleVendorDecision = (vendorId, accessStatus) => {
+    void (async () => {
+      const reviewTarget = selectedVendorReviewId === vendorId ? vendorApprovalForm : buildVendorApprovalForm(
+        vendorRecords.find((item) => item.id === vendorId) ?? null,
+      );
+
+      if (accessStatus === "APPROVED") {
+        const validationError = getVendorApprovalValidationError(reviewTarget);
+
+        if (validationError) {
+          if (selectedVendorReviewId !== vendorId) {
+            openVendorStatusReview(vendorId);
+          }
+          setVendorApprovalError(validationError);
+          return;
+        }
+      }
+
+      const notes = [
+        reviewTarget.planName ? `Plan Name: ${reviewTarget.planName}` : "",
+        reviewTarget.openingTime ? `Opening Time: ${reviewTarget.openingTime}` : "",
+        reviewTarget.closingTime ? `Closing Time: ${reviewTarget.closingTime}` : "",
+        reviewTarget.gstNumber ? `GST Number: ${reviewTarget.gstNumber}` : "",
+        `Is Restaurant: ${reviewTarget.isRestaurant ? "Yes" : "No"}`,
+        reviewTarget.paymentMode ? `Payment Mode: ${reviewTarget.paymentMode}` : "",
+        reviewTarget.bankName ? `Bank Name: ${reviewTarget.bankName}` : "",
+        reviewTarget.transactionId ? `Transaction ID: ${reviewTarget.transactionId}` : "",
+        reviewTarget.paymentDescription ? `Payment Description: ${reviewTarget.paymentDescription}` : "",
+        reviewTarget.googleLocation ? `Google Location: ${reviewTarget.googleLocation}` : "",
+        reviewTarget.idProof?.name ? `ID Proof: ${reviewTarget.idProof.name}` : "",
+        reviewTarget.locationProof?.name ? `Location Proof: ${reviewTarget.locationProof.name}` : "",
+        reviewTarget.companyBrochure?.name
+          ? `Company Profile/Brochure: ${reviewTarget.companyBrochure.name}`
+          : "",
+        reviewTarget.profilePhoto?.name ? `Profile Photo: ${reviewTarget.profilePhoto.name}` : "",
+        reviewTarget.visitingCard?.name ? `Visiting Card: ${reviewTarget.visitingCard.name}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n");
+
+      await fetch(`${apiBaseUrl}/vendors/${vendorId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          membershipPlan: reviewTarget.membershipPlan.trim(),
+          paymentAmount: reviewTarget.paymentAmount.trim(),
+          onboardingStartAt: reviewTarget.onboardingStartAt || undefined,
+          onboardingEndAt: reviewTarget.onboardingEndAt || undefined,
+          paymentDueDate: reviewTarget.paymentDueDate || undefined,
+          notes,
+        }),
+      });
+
+      const response = await fetch(`${apiBaseUrl}/vendors/${vendorId}/access`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ accessStatus }),
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      setVendorApprovalError("");
+      setSelectedVendorRequests((current) => current.filter((id) => id !== vendorId));
+      if (selectedVendorReviewId === vendorId) {
+        setSelectedVendorReviewId("");
+        setVendorApprovalForm(buildVendorApprovalForm(null));
+      }
+      await loadVendors();
+    })();
+  };
+  const applyBulkVendorRequestDecision = (accessStatus) => {
+    void (async () => {
+      if (selectedVendorRequests.length === 0) {
+        return;
+      }
+
+      if (accessStatus === "APPROVED") {
+        const firstVendorId = selectedVendorRequests[0];
+        if (firstVendorId) {
+          openVendorStatusReview(firstVendorId);
+        }
+        setVendorApprovalError("Bulk approval is disabled because each vendor needs plan and billing details before approval.");
+        return;
+      }
+
+      await Promise.all(
+        selectedVendorRequests.map((vendorId) =>
+          fetch(`${apiBaseUrl}/vendors/${vendorId}/access`, {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ accessStatus }),
+          }),
+        ),
+      );
+
+      setSelectedVendorRequests([]);
+      await loadVendors();
+    })();
+  };
+  const updateTimelinePostForm = (field, value) => {
+    setTimelinePostForm((current) => {
+      if (field === "vendorId") {
+        const selectedVendor = vendorRecords.find((vendor) => vendor.id === value);
+        return {
+          ...current,
+          vendorId: value,
+          contactNumber: selectedVendor?.phone || current.contactNumber,
+        };
+      }
+
+      return {
+        ...current,
+        [field]: value,
+      };
+    });
+  };
+  const updateTimelinePostFile = (field, value) => {
+    setTimelinePostForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  };
+  const submitTimelinePost = () => {
+    void (async () => {
+      if (!timelinePostForm.caption.trim() || !timelinePostForm.vendorId) {
+        return;
+      }
+
+      const payload = new FormData();
+      payload.append("sourceType", "VENDOR");
+      payload.append("vendorId", timelinePostForm.vendorId);
+      payload.append("postedBy", timelinePostedByLabel);
+      payload.append("caption", timelinePostForm.caption.trim());
+      payload.append("contactNumber", timelinePostForm.contactNumber.trim());
+      payload.append("landingPageUrl", timelinePostForm.landingPageUrl.trim());
+      payload.append("youtubeUrl", timelinePostForm.youtubeUrl.trim());
+      payload.append("facebookUrl", timelinePostForm.facebookUrl.trim());
+
+      if (timelinePostForm.imageFile) {
+        payload.append("imageFile", timelinePostForm.imageFile);
+      }
+
+      if (timelinePostForm.brochureFile) {
+        payload.append("brochureFile", timelinePostForm.brochureFile);
+      }
+
+      setIsSavingTimelinePost(true);
+      const response = await fetch(`${apiBaseUrl}/timeline-posts`, {
+        method: "POST",
+        body: payload,
+      });
+      setIsSavingTimelinePost(false);
+
+      if (!response.ok) {
+        return;
+      }
+
+      await loadTimelinePosts();
+      setTimelinePostForm({
+        ...defaultTimelinePostForm,
+        vendorId: timelinePostForm.vendorId,
+        contactNumber: timelinePostForm.contactNumber,
+      });
+    })();
+  };
+  const updateAppBannerForm = (field, value) => {
+    setAppBannerError("");
+    setAppBannerForm((current) => {
+      if (field === "vendorId") {
+        const selectedVendor = vendorRecords.find((vendor) => vendor.id === value);
+        return {
+          ...current,
+          vendorId: value,
+          contactNumber: selectedVendor?.phone || current.contactNumber,
+        };
+      }
+
+      return {
+        ...current,
+        [field]: value,
+      };
+    });
+  };
+  const updateAppBannerFile = (field, value) => {
+    setAppBannerError("");
+    setAppBannerForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  };
+  const submitAppBanner = () => {
+    void (async () => {
+      if (!appBannerForm.shortText.trim() || !appBannerForm.vendorId) {
+        setAppBannerError("Select a vendor and add the banner message before submitting.");
+        return;
+      }
+
+      if (!appBannerForm.mediaFile) {
+        setAppBannerError("Attach a lightweight banner image for the Flutter app.");
+        return;
+      }
+
+      if (!["image/jpeg", "image/png", "image/webp"].includes(appBannerForm.mediaFile.type)) {
+        setAppBannerError("Banner media must be JPG, PNG, or WebP.");
+        return;
+      }
+
+      if (appBannerForm.mediaFile.size > 1024 * 1024) {
+        setAppBannerError("Banner image is too large. Keep it at or below 1 MB.");
+        return;
+      }
+
+      if (appBannerForm.brochureFile && appBannerForm.brochureFile.size > 2 * 1024 * 1024) {
+        setAppBannerError("Brochure PDF is too large. Keep it at or below 2 MB.");
+        return;
+      }
+
+      const payload = new FormData();
+      payload.append("vendorId", appBannerForm.vendorId);
+      payload.append("shortText", appBannerForm.shortText.trim());
+      payload.append("contactNumber", appBannerForm.contactNumber.trim());
+      payload.append("socialMediaUrl", appBannerForm.socialMediaUrl.trim());
+
+      if (appBannerForm.mediaFile) {
+        payload.append("mediaFile", appBannerForm.mediaFile);
+      }
+
+      if (appBannerForm.brochureFile) {
+        payload.append("brochureFile", appBannerForm.brochureFile);
+      }
+
+      setIsSavingAppBanner(true);
+      const response = await fetch(`${apiBaseUrl}/app-banners`, {
+        method: "POST",
+        body: payload,
+      });
+      setIsSavingAppBanner(false);
+
+      if (!response.ok) {
+        setAppBannerError("Unable to save the app banner right now.");
+        return;
+      }
+
+      await loadAppBanners();
+      setAppBannerError("");
+      setAppBannerForm({
+        ...defaultAppBannerForm,
+        vendorId: appBannerForm.vendorId,
+        contactNumber: appBannerForm.contactNumber,
+      });
+    })();
+  };
+  const updateAppBannerAccessItem = (bannerId, field, value) => {
+    setAppBannerAccessEdits((current) => ({
+      ...current,
+      [bannerId]: {
+        ...(current[bannerId] ?? {}),
+        [field]: value,
+      },
+    }));
+  };
+  const saveAppBannerAccessChanges = () => {
+    void (async () => {
+      const updates = Object.entries(appBannerAccessEdits);
+      if (updates.length === 0) {
+        return;
+      }
+
+      await Promise.all(
+        updates.map(async ([bannerId, edit]) => {
+          const reviewStatus =
+            edit.status === "Approved"
+              ? "APPROVED"
+              : edit.status === "Rejected"
+                ? "REJECTED"
+                : edit.status === "Hold"
+                  ? "ON_HOLD"
+                  : "PENDING";
+
+          await fetch(`${apiBaseUrl}/app-banners/${bannerId}/moderation`, {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              reviewStatus,
+              paymentReceived: Boolean(edit.paymentReceived),
+              paymentMode: edit.paymentMode || undefined,
+              paymentRemarks: edit.paymentRemarks || undefined,
+              displayStart: edit.displayStart || undefined,
+              displayEnd: edit.displayEnd || undefined,
+              displayIndex: edit.displayIndex ? Number(edit.displayIndex) : undefined,
+            }),
+          });
+        }),
+      );
+
+      await loadAppBanners();
+    })();
+  };
+  const uploadBulkMembers = () => {
+    void (async () => {
+      if (!bulkMemberFile) {
+        setBulkMemberError("Choose an Excel file before importing.");
+        return;
+      }
+
+      const payload = new FormData();
+      payload.append("excelFile", bulkMemberFile);
+
+      setIsBulkMemberUploading(true);
+      setBulkMemberError("");
+      const response = await fetch(`${apiBaseUrl}/members/bulk-import`, {
+        method: "POST",
+        body: payload,
+      });
+      setIsBulkMemberUploading(false);
+
+      const result = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        setBulkMemberResult(null);
+        setBulkMemberError(result?.error || "Unable to import members from this file.");
+        return;
+      }
+
+      setBulkMemberResult(result);
+      setBulkMemberFile(null);
+      await loadMembers();
+    })();
+  };
+  const updateTimelineAccessPost = (postId, field, value) => {
+    setTimelineAccessEdits((current) => ({
+      ...current,
+      [postId]: {
+        ...(current[postId] ?? {}),
+        [field]: value,
+      },
+    }));
+  };
+  const saveTimelineAccessChanges = () => {
+    void (async () => {
+      const updates = Object.entries(timelineAccessEdits);
+      if (updates.length === 0) {
+        return;
+      }
+
+      await Promise.all(
+        updates.map(async ([postId, edit]) => {
+          const reviewStatus =
+            edit.status === "Approved"
+              ? "APPROVED"
+              : edit.status === "Rejected"
+                ? "REJECTED"
+                : edit.status === "Hold"
+                  ? "ON_HOLD"
+                  : "PENDING";
+
+          await fetch(`${apiBaseUrl}/timeline-posts/${postId}/moderation`, {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              reviewStatus,
+              displayStart: edit.displayStart || undefined,
+              displayEnd: edit.displayEnd || undefined,
+            }),
+          });
+        }),
+      );
+
+      await loadTimelinePosts();
+    })();
   };
   const updateEventForm = (field, value) => {
     setEventForm((current) => ({
@@ -6589,13 +9324,21 @@ export default function HomePage() {
             <div key={item.label} className="sidebar-nav-group">
               <button
                 type="button"
-                className={`nav-item ${item.label === activeSection ? "active" : ""} ${
+                className={`nav-item ${
+                  item.label === activeSection ||
+                  (item.label === "Vendor Arena" && vendorSubSections.includes(activeSection))
+                    ? "active"
+                    : ""
+                } ${
                   isSidebarOpen ? "" : "is-icon-mode"
                 }`}
                 onClick={() => {
                   setActiveSection(item.label);
                   if (item.label === "Admin arena") {
                     setIsAdminAccessOpen((current) => !current);
+                  }
+                  if (item.label === "Vendor Arena") {
+                    setIsVendorNavOpen((current) => !current);
                   }
                 }}
               >
@@ -6608,6 +9351,10 @@ export default function HomePage() {
                 {item.label === "Admin arena" && isSidebarOpen ? (
                   <span className="nav-accordion-indicator" aria-hidden="true">
                     {isAdminAccessOpen ? "−" : "+"}
+                  </span>
+                ) : item.label === "Vendor Arena" && isSidebarOpen ? (
+                  <span className="nav-accordion-indicator" aria-hidden="true">
+                    {isVendorNavOpen ? "−" : "+"}
                   </span>
                 ) : null}
               </button>
@@ -6632,6 +9379,26 @@ export default function HomePage() {
                     </div>
                   ))}
                 </div>
+              ) : item.label === "Vendor Arena" && isSidebarOpen && isVendorNavOpen ? (
+                <div className="sidebar-subnav" aria-label="Vendor menu">
+                  {vendorSubSections.map((section) => (
+                    <div key={section} className="sidebar-subnav-group">
+                      <button
+                        type="button"
+                        className="sidebar-subnav-item"
+                        onClick={() => {
+                          setActiveSection(section);
+                          setIsVendorNavOpen(true);
+                        }}
+                      >
+                        <span>{section}</span>
+                        {section === activeSection ? (
+                          <span className="sidebar-subnav-active-dot" aria-hidden="true" />
+                        ) : null}
+                      </button>
+                    </div>
+                  ))}
+                </div>
               ) : null}
             </div>
           ))}
@@ -6639,15 +9406,15 @@ export default function HomePage() {
 
         <div className={`sidebar-note ${isSidebarOpen ? "" : "is-hidden"}`}>
           <span className="mini-label">Current Scope</span>
-          <p>One logged-in admin inside one association only.</p>
+          <p>Logged in as Association 1 Admin for one tenant-aware workspace.</p>
         </div>
 
         <div className={`sidebar-mobile-account ${isSidebarOpen ? "" : "is-hidden"}`}>
           <Link className="sidebar-profile-link" href="/profile" aria-label="Open profile settings">
             <span className="avatar-circle">AU</span>
             <span className="sidebar-profile-copy">
-              <strong>My Profile</strong>
-              <span>Edit personal details</span>
+              <strong>Admin Profile</strong>
+              <span>Association 1 administrator</span>
             </span>
           </Link>
 
@@ -6855,6 +9622,9 @@ export default function HomePage() {
                 </div>
               </article>
             </section>
+
+            <DashboardAppBannerCarousel items={dashboardAppBanners} />
+            <DashboardTimelineFeed posts={dashboardTimelinePosts} />
           </section>
         ) : activeSection === "Member Arena" ? (
           <section className="association-workspace">
@@ -6958,6 +9728,42 @@ export default function HomePage() {
               </div>
             </section>
           </section>
+        ) : activeSection === "Timeline" ? (
+          <section className="association-workspace">
+            <section className="association-header">
+              <div>
+                <span className="eyebrow">Timeline</span>
+                <h1>Timeline Campaign Desk</h1>
+                <p>Create ad-style timeline posts for vendors, members, or the association with media and landing links.</p>
+              </div>
+
+              <div className="association-header-meta">
+                <div className="association-dashboard-grid">
+                  <article className="association-dashboard-card">
+                    <strong>{timelinePosts.length}</strong>
+                    <span>Total Timeline Posts</span>
+                  </article>
+                  <article className="association-dashboard-card">
+                    <strong>{timelinePosts.filter((post) => post.status === "Pending Review").length}</strong>
+                    <span>Pending Review</span>
+                  </article>
+                </div>
+              </div>
+            </section>
+
+            <section className="association-content">
+              <TimelinePanel
+                formData={timelinePostForm}
+                posts={timelinePosts}
+                vendorOptions={timelineVendorOptions}
+                postedByLabel={timelinePostedByLabel}
+                isSaving={isSavingTimelinePost}
+                onChange={updateTimelinePostForm}
+                onFileChange={updateTimelinePostFile}
+                onSubmit={submitTimelinePost}
+              />
+            </section>
+          </section>
         ) : activeSection === "Vendor Arena" ? (
           <section className="association-workspace">
             <div className="association-featured-stack member-featured-stack">
@@ -6997,12 +9803,21 @@ export default function HomePage() {
                 items={vendorRecords}
                 formData={vendorRegistrationForm}
                 categories={vendorCategories}
+                subCategories={vendorSubCategoryOptions}
+                countryOptions={vendorCountryOptions}
+                stateOptions={vendorStateOptions}
+                cityOptions={vendorCityOptions}
+                phoneCodeOptions={vendorPhoneCodeOptions}
+                planOptions={vendorPlanOptions}
+                paymentModeOptions={vendorPaymentModeOptions}
                 newCategory={newVendorCategory}
                 filterState={vendorFilters}
                 onFormChange={updateVendorRegistrationForm}
+                onFileChange={updateVendorRegistrationFile}
                 onFilterChange={updateVendorFilter}
                 onNewCategoryChange={setNewVendorCategory}
                 onAddCategory={addVendorCategory}
+                onSubmit={saveVendorRecord}
               />
             </div>
 
@@ -7025,6 +9840,224 @@ export default function HomePage() {
               </div>
             </section>
             </section>
+        ) : activeSection === "Vendor Registration" ? (
+          <section className="association-workspace">
+            <section className="association-header">
+              <div>
+                <span className="eyebrow">Vendor Registration</span>
+                <h1>Register a New Vendor</h1>
+                <p>Use this admin-only screen to onboard a new vendor and create their base commercial record.</p>
+              </div>
+
+              <div className="association-header-meta">
+                <div className="association-dashboard-grid">
+                  <article className="association-dashboard-card">
+                    <strong>Admin</strong>
+                    <span>Current Role</span>
+                  </article>
+                  <article className="association-dashboard-card">
+                    <strong>{vendorRecords.length}</strong>
+                    <span>Total Vendors</span>
+                  </article>
+                  <article className="association-dashboard-card">
+                    <strong>{vendorCategories.length}</strong>
+                    <span>Categories</span>
+                  </article>
+                  <article className="association-dashboard-card">
+                    <strong>Live</strong>
+                    <span>Registration Desk</span>
+                  </article>
+                </div>
+              </div>
+            </section>
+
+            <section className="association-content">
+              {isAssociationAdmin ? (
+                <VendorRegistrationForm
+                  formData={vendorRegistrationForm}
+                  onChange={updateVendorRegistrationForm}
+                  categories={vendorCategories}
+                  subCategories={vendorSubCategoryOptions}
+                  countryOptions={vendorCountryOptions}
+                  stateOptions={vendorStateOptions}
+                  cityOptions={vendorCityOptions}
+                  phoneCodeOptions={vendorPhoneCodeOptions}
+                  planOptions={vendorPlanOptions}
+                  paymentModeOptions={vendorPaymentModeOptions}
+                  newCategory={newVendorCategory}
+                  onFileChange={updateVendorRegistrationFile}
+                  onNewCategoryChange={setNewVendorCategory}
+                  onAddCategory={addVendorCategory}
+                  onSubmit={saveVendorRecord}
+                />
+              ) : (
+                <article className="association-empty-state">
+                  <span className="mini-label">Admin Access Required</span>
+                  <h2>Only admins can register vendors.</h2>
+                  <p>Switch to an admin login to create vendor accounts and manage onboarding details.</p>
+                </article>
+              )}
+            </section>
+          </section>
+        ) : activeSection === "Category" ? (
+          <section className="association-workspace">
+            <section className="association-header">
+              <div>
+                <span className="eyebrow">Vendor Arena</span>
+                <h1>Category</h1>
+                <p>Manage the main vendor categories used throughout registration and vendor discovery.</p>
+              </div>
+
+              <div className="association-header-meta">
+                <div className="association-dashboard-grid">
+                  <article className="association-dashboard-card">
+                    <strong>{vendorCategories.length}</strong>
+                    <span>Total Categories</span>
+                  </article>
+                  <article className="association-dashboard-card">
+                    <strong>
+                      {Object.values(vendorSubCategoryRecords).reduce((sum, items) => sum + items.length, 0)}
+                    </strong>
+                    <span>Mapped Sub Categories</span>
+                  </article>
+                </div>
+              </div>
+            </section>
+
+            <section className="association-content">
+              <VendorCategoryPanel
+                categories={vendorCategories}
+                subCategoryMap={vendorSubCategoryRecords}
+                draftValue={vendorCategoryDraft}
+                editingValue={editingVendorCategory}
+                onDraftChange={setVendorCategoryDraft}
+                onStartEdit={openVendorCategoryEditor}
+                onCancelEdit={cancelVendorCategoryEdit}
+                onSave={saveVendorCategory}
+                onDelete={deleteVendorCategory}
+              />
+            </section>
+          </section>
+        ) : activeSection === "Sub Category" ? (
+          <section className="association-workspace">
+            <section className="association-header">
+              <div>
+                <span className="eyebrow">Vendor Arena</span>
+                <h1>Sub Category</h1>
+                <p>Select a main category, fetch its sub categories, and maintain the list with full CRUD actions.</p>
+              </div>
+
+              <div className="association-header-meta">
+                <div className="association-dashboard-grid">
+                  <article className="association-dashboard-card">
+                    <strong>{selectedVendorParentCategory || "--"}</strong>
+                    <span>Selected Category</span>
+                  </article>
+                  <article className="association-dashboard-card">
+                    <strong>{selectedVendorParentCategory ? (vendorSubCategoryRecords[selectedVendorParentCategory] ?? []).length : 0}</strong>
+                    <span>Visible Sub Categories</span>
+                  </article>
+                </div>
+              </div>
+            </section>
+
+            <section className="association-content">
+              <VendorSubCategoryPanel
+                categories={vendorCategories}
+                subCategoryMap={vendorSubCategoryRecords}
+                selectedCategory={selectedVendorParentCategory}
+                editingValue={editingVendorSubCategory}
+                draftValue={vendorSubCategoryDraft}
+                onSelectCategory={setSelectedVendorParentCategory}
+                onStartEdit={openVendorSubCategoryEditor}
+                onDraftChange={setVendorSubCategoryDraft}
+                onCancelEdit={cancelVendorSubCategoryEdit}
+                onSave={saveVendorSubCategory}
+                onDelete={deleteVendorSubCategory}
+              />
+            </section>
+          </section>
+        ) : activeSection === "Vendor Status" ? (
+          <section className="association-workspace">
+            <section className="association-header">
+              <div>
+                <span className="eyebrow">Vendor Arena</span>
+                <h1>Vendor Status</h1>
+                <p>Review all vendor registration requests together and approve or reject them from one admin desk.</p>
+              </div>
+
+              <div className="association-header-meta">
+                <div className="association-dashboard-grid">
+                  <article className="association-dashboard-card">
+                    <strong>{vendorStatusRequests.length}</strong>
+                    <span>Pending Requests</span>
+                  </article>
+                  <article className="association-dashboard-card">
+                    <strong>{selectedVendorRequests.length}</strong>
+                    <span>Selected</span>
+                  </article>
+                </div>
+              </div>
+            </section>
+
+            <section className="association-content">
+              <VendorStatusPanel
+                items={vendorStatusRequests}
+                selectedIds={selectedVendorRequests}
+                searchQuery={vendorStatusSearch}
+                selectedVendor={selectedVendorReview}
+                reviewForm={vendorApprovalForm}
+                onSearchChange={setVendorStatusSearch}
+                onToggleSelect={toggleVendorRequestSelect}
+                onToggleSelectAll={toggleSelectAllVendorRequests}
+                onSelectVendor={openVendorStatusReview}
+                onReviewFieldChange={updateVendorApprovalForm}
+                onReviewFileChange={updateVendorApprovalFile}
+                onApplyBulkDecision={applyBulkVendorRequestDecision}
+                onApproveOne={(vendorId) => applySingleVendorDecision(vendorId, "APPROVED")}
+                onRejectOne={(vendorId) => applySingleVendorDecision(vendorId, "CANCELLED")}
+                planOptions={vendorPlanOptions}
+                paymentModeOptions={vendorPaymentModeOptions}
+                approvalError={vendorApprovalError}
+              />
+            </section>
+          </section>
+        ) : activeSection === "App Banner" ? (
+          <section className="association-workspace">
+            <section className="association-header">
+              <div>
+                <span className="eyebrow">Vendor Arena</span>
+                <h1>App Banner</h1>
+                <p>Create paid advertisement banners with media, contact details, social media links, and brochure support.</p>
+              </div>
+
+              <div className="association-header-meta">
+                <div className="association-dashboard-grid">
+                  <article className="association-dashboard-card">
+                    <strong>{appBanners.length}</strong>
+                    <span>Total Banner Requests</span>
+                  </article>
+                  <article className="association-dashboard-card">
+                    <strong>{appBanners.filter((item) => item.status === "Pending Review").length}</strong>
+                    <span>Pending Review</span>
+                  </article>
+                </div>
+              </div>
+            </section>
+
+            <section className="association-content">
+              <AppBannerPanel
+                formData={appBannerForm}
+                items={appBanners}
+                vendorOptions={appBannerVendorOptions}
+                isSaving={isSavingAppBanner}
+                errorMessage={appBannerError}
+                onChange={updateAppBannerForm}
+                onFileChange={updateAppBannerFile}
+                onSubmit={submitAppBanner}
+              />
+            </section>
+          </section>
         ) : activeSection === "Events Arena" ? (
           <section className="association-workspace">
             <nav className="association-tabbar" aria-label="Event sections">
@@ -7192,6 +10225,38 @@ export default function HomePage() {
                   onToggleSelectAll={toggleSelectAllAdminVendors}
                   onToggleVendor={toggleContentVendor}
                   onUpdateContentPost={updateVendorContentPost}
+                  onApplyAccessStatus={applyBulkVendorAccessStatus}
+                  onSaveVendorAccessChanges={saveVendorAccessChanges}
+                />
+              ) : activeAdminAccessSection === "Timeline Access" ? (
+                <AdminTimelineAccessPanel
+                  items={filteredAdminTimelinePosts}
+                  searchQuery={adminTimelineSearch}
+                  edits={timelineAccessEdits}
+                  onSearchChange={setAdminTimelineSearch}
+                  onUpdatePost={updateTimelineAccessPost}
+                  onSaveTimelineAccessChanges={saveTimelineAccessChanges}
+                />
+              ) : activeAdminAccessSection === "App Banner Access" ? (
+                <AdminAppBannerAccessPanel
+                  items={adminAppBannerItems}
+                  searchQuery={adminAppBannerSearch}
+                  edits={appBannerAccessEdits}
+                  onSearchChange={setAdminAppBannerSearch}
+                  onUpdateBanner={updateAppBannerAccessItem}
+                  onSaveAppBannerAccessChanges={saveAppBannerAccessChanges}
+                />
+              ) : activeAdminAccessSection === "Add Bulk Member" ? (
+                <AdminBulkMemberPanel
+                  selectedFile={bulkMemberFile}
+                  isUploading={isBulkMemberUploading}
+                  errorMessage={bulkMemberError}
+                  result={bulkMemberResult}
+                  onFileChange={(file) => {
+                    setBulkMemberFile(file);
+                    setBulkMemberError("");
+                  }}
+                  onUpload={uploadBulkMembers}
                 />
               ) : activeAdminAccessSection === "Event Access" ? (
                 <AdminEventAccessPanel

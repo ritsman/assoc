@@ -1,0 +1,1 @@
+ALTER TYPE "PostReviewStatus" ADD VALUE IF NOT EXISTS 'ON_HOLD';

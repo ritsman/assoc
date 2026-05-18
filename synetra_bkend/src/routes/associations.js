@@ -433,8 +433,8 @@ router.get("/current/dashboard-summary", async (req, res) => {
         ],
       },
     }),
-    prisma.user.count({
-      where: { associationId: association.id, isVendor: true },
+    prisma.vendor.count({
+      where: { associationId: association.id },
     }),
   ]);
 
