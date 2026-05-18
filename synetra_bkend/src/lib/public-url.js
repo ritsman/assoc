@@ -19,12 +19,33 @@ function resolveRequestBaseUrl(req) {
     return configuredBaseUrl;
   }
 
-  const forwardedProtoHeader = req.get("x-forwarded-proto") || "";
-  const forwardedProto = forwardedProtoHeader.split(",")[0]?.trim();
+  const forwardedProtoHeader =
+    req.get("x-forwarded-proto") ||
+    req.get("x-forwarded-scheme") ||
+    req.get("x-forwarded-ssl") ||
+    "";
+  const forwardedProto = forwardedProtoHeader.split(",")[0]?.trim().toLowerCase();
+  const forwardedHostHeader = req.get("x-forwarded-host") || "";
+  const forwardedHost = forwardedHostHeader.split(",")[0]?.trim();
+  const forwardedPortHeader = req.get("x-forwarded-port") || "";
+  const forwardedPort = forwardedPortHeader.split(",")[0]?.trim();
+  const requestHost = forwardedHost || req.get("host");
+  const hostname = String(requestHost || "")
+    .replace(/:\d+$/, "")
+    .trim()
+    .toLowerCase();
+  const isLocalHost =
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname.endsWith(".local");
   const protocol =
-    forwardedProto || req.protocol || (req.secure ? "https" : "http");
+    forwardedProto === "https" ||
+    forwardedProto === "on" ||
+    forwardedPort === "443"
+      ? "https"
+      : forwardedProto || req.protocol || (req.secure ? "https" : isLocalHost ? "http" : "https");
 
-  return `${protocol}://${req.get("host")}`;
+  return `${protocol}://${requestHost}`;
 }
 
 export function buildPublicAssetUrl(req, storagePath) {
