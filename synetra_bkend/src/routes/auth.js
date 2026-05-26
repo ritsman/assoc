@@ -8,6 +8,7 @@ import {
 } from "../lib/auth.js";
 import {
   createUserSession,
+  refreshUserSession,
   requireAuthenticatedSession,
   revokeSessionById,
 } from "../lib/session-auth.js";
@@ -23,6 +24,10 @@ const changePasswordSchema = z.object({
   username: z.string().min(1),
   currentPassword: z.string().min(1),
   newPassword: z.string().min(8),
+});
+
+const refreshSchema = z.object({
+  refreshToken: z.string().min(1),
 });
 
 function resolveViewerRole(user) {
@@ -43,8 +48,12 @@ function serializeSession(user, session = null) {
       ? {
           auth: {
             ...(session.token ? { token: session.token } : {}),
+            ...(session.refreshToken
+              ? { refreshToken: session.refreshToken }
+              : {}),
             sessionId: session.session.id,
             expiresAt: session.session.expiresAt,
+            refreshExpiresAt: session.session.refreshExpiresAt,
             lastSeenAt: session.session.lastSeenAt,
           },
         }
@@ -116,6 +125,30 @@ router.get("/me", requireAuthenticatedSession, async (req, res) => {
 router.post("/logout", requireAuthenticatedSession, async (req, res) => {
   await revokeSessionById(req.auth.session.id);
   return res.json({ ok: true });
+});
+
+router.post("/refresh", async (req, res) => {
+  const parsed = refreshSchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    return res.status(400).json({
+      error: "Invalid refresh payload",
+      details: parsed.error.flatten(),
+    });
+  }
+
+  const refreshedSession = await refreshUserSession({
+    refreshToken: parsed.data.refreshToken,
+    req,
+  });
+
+  if (!refreshedSession) {
+    return res.status(401).json({
+      error: "Refresh token expired or invalid. Please sign in again.",
+    });
+  }
+
+  return res.json(serializeSession(refreshedSession.user, refreshedSession));
 });
 
 router.post("/change-password", async (req, res) => {

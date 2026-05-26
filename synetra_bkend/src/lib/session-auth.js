@@ -1,5 +1,6 @@
 import { prisma } from "./prisma.js";
 import {
+  buildRefreshTokenExpiryDate,
   buildSessionExpiryDate,
   createSessionToken,
   extractBearerToken,
@@ -18,6 +19,7 @@ function buildSessionPayload(session) {
   return {
     id: session.id,
     expiresAt: session.expiresAt,
+    refreshExpiresAt: session.refreshExpiresAt,
     lastSeenAt: session.lastSeenAt,
   };
 }
@@ -29,19 +31,23 @@ export function getRequestDeviceInfo(req) {
 
 export async function createUserSession({ userId, req }) {
   const token = createSessionToken();
+  const refreshToken = createSessionToken();
   const session = await prisma.userSession.create({
     data: {
       userId,
       tokenHash: hashSessionToken(token),
+      refreshTokenHash: hashSessionToken(refreshToken),
       deviceInfo: getRequestDeviceInfo(req),
       ipAddress: normalizeIpAddress(req.ip),
       userAgent: req.get("user-agent") || null,
       expiresAt: buildSessionExpiryDate(),
+      refreshExpiresAt: buildRefreshTokenExpiryDate(),
     },
   });
 
   return {
     token,
+    refreshToken,
     session: buildSessionPayload(session),
   };
 }
@@ -116,6 +122,68 @@ export function requireAuthenticatedSession(req, res, next) {
   }
 
   return next();
+}
+
+export async function resolveRefreshableSession(refreshToken) {
+  if (!refreshToken) {
+    return null;
+  }
+
+  const now = new Date();
+  const session = await prisma.userSession.findUnique({
+    where: {
+      refreshTokenHash: hashSessionToken(refreshToken),
+    },
+    include: {
+      user: true,
+    },
+  });
+
+  if (!session) {
+    return null;
+  }
+
+  if (
+    session.revokedAt ||
+    session.refreshExpiresAt <= now ||
+    !session.user.isActive
+  ) {
+    return null;
+  }
+
+  return session;
+}
+
+export async function refreshUserSession({ refreshToken, req }) {
+  const session = await resolveRefreshableSession(refreshToken);
+  if (!session) {
+    return null;
+  }
+
+  const nextToken = createSessionToken();
+  const nextRefreshToken = createSessionToken();
+  const now = new Date();
+
+  const updatedSession = await prisma.userSession.update({
+    where: { id: session.id },
+    data: {
+      tokenHash: hashSessionToken(nextToken),
+      refreshTokenHash: hashSessionToken(nextRefreshToken),
+      expiresAt: buildSessionExpiryDate(),
+      refreshExpiresAt: buildRefreshTokenExpiryDate(),
+      lastSeenAt: now,
+      deviceInfo: getRequestDeviceInfo(req),
+      ipAddress: normalizeIpAddress(req.ip),
+      userAgent: req.get("user-agent") || null,
+    },
+  });
+
+  return {
+    token: nextToken,
+    refreshToken: nextRefreshToken,
+    session: buildSessionPayload(updatedSession),
+    user: session.user,
+  };
 }
 
 export async function revokeSessionById(sessionId) {

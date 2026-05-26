@@ -267,20 +267,23 @@ model User {
 }
 
 model UserSession {
-  id         String   @id @default(cuid())
-  userId      String
-  tokenHash   String   @unique
-  deviceInfo  String?
-  ipAddress   String?
-  userAgent   String?
-  createdAt   DateTime @default(now())
-  lastSeenAt  DateTime @default(now())
-  expiresAt   DateTime
-  revokedAt   DateTime?
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id               String   @id @default(cuid())
+  userId           String
+  tokenHash        String   @unique
+  refreshTokenHash String   @unique
+  deviceInfo       String?
+  ipAddress        String?
+  userAgent        String?
+  createdAt        DateTime @default(now())
+  lastSeenAt       DateTime @default(now())
+  expiresAt        DateTime
+  refreshExpiresAt DateTime
+  revokedAt        DateTime?
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
   @@index([expiresAt, revokedAt])
+  @@index([refreshExpiresAt, revokedAt])
 }
 
 model Vendor {

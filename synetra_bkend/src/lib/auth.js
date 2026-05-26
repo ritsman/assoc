@@ -15,8 +15,11 @@ export const DEFAULT_MEMBER_PASSWORD =
   process.env.DEFAULT_MEMBER_PASSWORD || "Member@123";
 export const BULK_MEMBER_DEFAULT_PASSWORD =
   process.env.BULK_MEMBER_DEFAULT_PASSWORD || "Nima@123";
-const DEFAULT_SESSION_TTL_HOURS = Number(
-  process.env.AUTH_SESSION_TTL_HOURS || 24 * 30,
+const DEFAULT_ACCESS_TOKEN_TTL_MINUTES = Number(
+  process.env.AUTH_ACCESS_TOKEN_TTL_MINUTES || 15,
+);
+const DEFAULT_REFRESH_TOKEN_TTL_HOURS = Number(
+  process.env.AUTH_REFRESH_TOKEN_TTL_HOURS || 24 * 30,
 );
 
 export function buildPendingPasswordHash() {
@@ -71,7 +74,11 @@ export function hashSessionToken(token) {
 }
 
 export function buildSessionExpiryDate() {
-  return new Date(Date.now() + DEFAULT_SESSION_TTL_HOURS * 60 * 60 * 1000);
+  return new Date(Date.now() + DEFAULT_ACCESS_TOKEN_TTL_MINUTES * 60 * 1000);
+}
+
+export function buildRefreshTokenExpiryDate() {
+  return new Date(Date.now() + DEFAULT_REFRESH_TOKEN_TTL_HOURS * 60 * 60 * 1000);
 }
 
 export function extractBearerToken(headerValue) {
