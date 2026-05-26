@@ -7587,7 +7587,258 @@ class _AdminAppAccessSectionState extends State<_AdminAppAccessSection> {
             child: Text(_isSaving ? 'Saving...' : 'Save App Access'),
           ),
         ),
+        const SizedBox(height: 20),
+        const _AdminSessionReportPanel(),
       ],
+    );
+  }
+}
+
+class _AdminSessionReportPanel extends ConsumerWidget {
+  const _AdminSessionReportPanel();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final reportAsync = ref.watch(sessionReportProvider);
+
+    return reportAsync.when(
+      loading:
+          () => const _EntityCardFrame(
+            padding: EdgeInsets.all(20),
+            radius: 28,
+            child: _LoadingState(),
+          ),
+      error:
+          (error, _) => _EntityCardFrame(
+            padding: const EdgeInsets.all(20),
+            radius: 28,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Active Sessions',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF171717),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  error.toString(),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Color(0xFFDC2626),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                OutlinedButton.icon(
+                  onPressed: () => ref.invalidate(sessionReportProvider),
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Retry'),
+                ),
+              ],
+            ),
+          ),
+      data: (report) {
+        final summary = report.summary;
+        return _EntityCardFrame(
+          padding: const EdgeInsets.all(20),
+          radius: 28,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Active Sessions',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF171717),
+                          ),
+                        ),
+                        SizedBox(height: 6),
+                        Text(
+                          'Live visibility into logged-in and recently active app users.',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Color(0xFF6B7280),
+                            height: 1.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => ref.invalidate(sessionReportProvider),
+                    icon: const Icon(Icons.refresh_rounded),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  _SessionMetricChip(
+                    label: 'Logged in users',
+                    value: '${summary.loggedInUsers}',
+                  ),
+                  _SessionMetricChip(
+                    label: 'Active users',
+                    value: '${summary.activeUsers}',
+                  ),
+                  _SessionMetricChip(
+                    label: 'Total sessions',
+                    value: '${summary.totalSessions}',
+                  ),
+                  _SessionMetricChip(
+                    label: 'Sessions today',
+                    value: '${summary.sessionsToday}',
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Active means seen within the last ${summary.activeWindowMinutes} minutes.',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Color(0xFF6B7280),
+                ),
+              ),
+              const SizedBox(height: 16),
+              ...report.sessions.take(8).map(
+                (session) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: const Color(0xFFE5E7EB)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                session.displayLabel,
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF171717),
+                                ),
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color:
+                                    session.isActiveNow
+                                        ? const Color(0xFFE7F8EE)
+                                        : const Color(0xFFF3F4F6),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                session.isActiveNow ? 'Active now' : 'Idle',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color:
+                                      session.isActiveNow
+                                          ? const Color(0xFF0F9F58)
+                                          : const Color(0xFF6B7280),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '${session.email} • ${session.viewerRole.label}',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Color(0xFF6B7280),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Last seen: ${session.lastSeenAt.length >= 16 ? session.lastSeenAt.substring(0, 16).replaceFirst('T', ' ') : session.lastSeenAt}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF4B5563),
+                          ),
+                        ),
+                        if (session.deviceInfo.trim().isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            'Device: ${session.deviceInfo}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF4B5563),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _SessionMetricChip extends StatelessWidget {
+  const _SessionMetricChip({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 150,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F5FF),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE9D5FF)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w900,
+              color: Color(0xFF171717),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12,
+              color: Color(0xFF6B7280),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

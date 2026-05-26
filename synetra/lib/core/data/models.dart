@@ -978,6 +978,116 @@ class AuthSession {
   }
 }
 
+class SessionReportSummary {
+  const SessionReportSummary({
+    required this.activeWindowMinutes,
+    required this.loggedInUsers,
+    required this.activeUsers,
+    required this.totalSessions,
+    required this.activeSessions,
+    required this.sessionsToday,
+  });
+
+  final int activeWindowMinutes;
+  final int loggedInUsers;
+  final int activeUsers;
+  final int totalSessions;
+  final int activeSessions;
+  final int sessionsToday;
+
+  factory SessionReportSummary.fromJson(Map<String, dynamic> json) {
+    return SessionReportSummary(
+      activeWindowMinutes: (json['activeWindowMinutes'] as num?)?.toInt() ?? 5,
+      loggedInUsers: (json['loggedInUsers'] as num?)?.toInt() ?? 0,
+      activeUsers: (json['activeUsers'] as num?)?.toInt() ?? 0,
+      totalSessions: (json['totalSessions'] as num?)?.toInt() ?? 0,
+      activeSessions: (json['activeSessions'] as num?)?.toInt() ?? 0,
+      sessionsToday: (json['sessionsToday'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+class SessionReportItem {
+  const SessionReportItem({
+    required this.sessionId,
+    required this.userId,
+    required this.displayName,
+    required this.email,
+    required this.viewerRole,
+    required this.isActiveNow,
+    required this.createdAt,
+    required this.lastSeenAt,
+    required this.expiresAt,
+    required this.refreshExpiresAt,
+    required this.deviceInfo,
+    required this.userAgent,
+    required this.ipAddress,
+  });
+
+  final String sessionId;
+  final String userId;
+  final String displayName;
+  final String email;
+  final AppViewerRole viewerRole;
+  final bool isActiveNow;
+  final String createdAt;
+  final String lastSeenAt;
+  final String expiresAt;
+  final String refreshExpiresAt;
+  final String deviceInfo;
+  final String userAgent;
+  final String ipAddress;
+
+  String get displayLabel => displayName.trim().isEmpty ? email : displayName;
+
+  factory SessionReportItem.fromJson(Map<String, dynamic> json) {
+    final viewerRole = switch (json['viewerRole']?.toString()) {
+      'admin' => AppViewerRole.admin,
+      'member' => AppViewerRole.member,
+      _ => AppViewerRole.viewOnly,
+    };
+
+    return SessionReportItem(
+      sessionId: json['sessionId']?.toString() ?? '',
+      userId: json['userId']?.toString() ?? '',
+      displayName: json['displayName']?.toString() ?? '',
+      email: json['email']?.toString() ?? '',
+      viewerRole: viewerRole,
+      isActiveNow: json['isActiveNow'] == true,
+      createdAt: json['createdAt']?.toString() ?? '',
+      lastSeenAt: json['lastSeenAt']?.toString() ?? '',
+      expiresAt: json['expiresAt']?.toString() ?? '',
+      refreshExpiresAt: json['refreshExpiresAt']?.toString() ?? '',
+      deviceInfo: json['deviceInfo']?.toString() ?? '',
+      userAgent: json['userAgent']?.toString() ?? '',
+      ipAddress: json['ipAddress']?.toString() ?? '',
+    );
+  }
+}
+
+class SessionReportData {
+  const SessionReportData({
+    required this.summary,
+    required this.sessions,
+  });
+
+  final SessionReportSummary summary;
+  final List<SessionReportItem> sessions;
+
+  factory SessionReportData.fromJson(Map<String, dynamic> json) {
+    return SessionReportData(
+      summary: SessionReportSummary.fromJson(
+        json['summary'] as Map<String, dynamic>? ?? const {},
+      ),
+      sessions:
+          (json['sessions'] as List<dynamic>? ?? const [])
+              .whereType<Map<String, dynamic>>()
+              .map(SessionReportItem.fromJson)
+              .toList(),
+    );
+  }
+}
+
 extension MemberAccessStatusMeta on MemberAccessStatus {
   String get apiValue => switch (this) {
     MemberAccessStatus.approved => 'APPROVED',

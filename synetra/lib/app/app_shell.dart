@@ -207,6 +207,7 @@ class _SynetraLaunchScreenState extends ConsumerState<SynetraLaunchScreen> {
     final session = ref.watch(sessionProvider);
     final isAuthenticated = session.isAuthenticated;
     final sessionRestoreAsync = ref.watch(sessionRestoreProvider);
+    final appLock = ref.watch(appLockProvider);
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 420),
       switchInCurve: Curves.easeOutCubic,
@@ -214,6 +215,13 @@ class _SynetraLaunchScreenState extends ConsumerState<SynetraLaunchScreen> {
       child:
           !_showLogin || sessionRestoreAsync.isLoading
               ? const _SynetraSplashExperience()
+              : isAuthenticated &&
+                  appLock.requiresUnlock &&
+                  !appLock.isUnlocked
+              ? _SessionUnlockScreen(
+                username: session.username,
+                viewerRole: session.viewerRole,
+              )
               : isAuthenticated
               ? const SynetraAdminShell()
               : const _SynetraLoginScreen(),
@@ -293,6 +301,215 @@ class _SynetraSplashExperience extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SessionUnlockScreen extends ConsumerStatefulWidget {
+  const _SessionUnlockScreen({
+    required this.username,
+    required this.viewerRole,
+  });
+
+  final String username;
+  final AppViewerRole viewerRole;
+
+  @override
+  ConsumerState<_SessionUnlockScreen> createState() =>
+      _SessionUnlockScreenState();
+}
+
+class _SessionUnlockScreenState extends ConsumerState<_SessionUnlockScreen> {
+  final TextEditingController _pinController = TextEditingController();
+  String? _errorText;
+  bool _isUnlocking = false;
+  bool _didAttemptBiometric = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final appLock = ref.read(appLockProvider);
+    if (appLock.biometricEnabled && !_didAttemptBiometric) {
+      _didAttemptBiometric = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _unlockWithBiometrics();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _pinController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _unlockWithBiometrics() async {
+    setState(() {
+      _isUnlocking = true;
+      _errorText = null;
+    });
+    try {
+      final unlocked =
+          await ref.read(appLockProvider.notifier).unlockWithBiometrics();
+      if (!unlocked && mounted) {
+        setState(() {
+          _errorText = 'Biometric verification was cancelled or unavailable.';
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _errorText = 'Biometric unlock is not available on this device.';
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUnlocking = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _unlockWithPin() async {
+    final pin = _pinController.text.trim();
+    if (pin.isEmpty) {
+      setState(() {
+        _errorText = 'Enter your app PIN to continue.';
+      });
+      return;
+    }
+
+    setState(() {
+      _isUnlocking = true;
+      _errorText = null;
+    });
+    final isValid = await ref.read(appLockProvider.notifier).verifyPin(pin);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _isUnlocking = false;
+      _errorText = isValid ? null : 'That PIN is incorrect. Please try again.';
+    });
+    if (isValid) {
+      _pinController.clear();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final appLock = ref.watch(appLockProvider);
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFF),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(32),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x140F172A),
+                      blurRadius: 34,
+                      offset: Offset(0, 18),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Column(
+                        children: [
+                          const _SynetraLogoBadge(size: 92),
+                          const SizedBox(height: 18),
+                          Text(
+                            'Unlock Synetra',
+                            style: Theme.of(context).textTheme.headlineSmall,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            widget.username.trim().isEmpty
+                                ? 'Resume your ${widget.viewerRole.label.toLowerCase()} session.'
+                                : 'Resume ${widget.username.trim()}',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (appLock.biometricEnabled) ...[
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          onPressed: _isUnlocking ? null : _unlockWithBiometrics,
+                          icon: const Icon(Icons.fingerprint_rounded),
+                          label: const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 14),
+                            child: Text('Unlock with biometrics'),
+                          ),
+                        ),
+                      ),
+                    ],
+                    if (appLock.hasPin) ...[
+                      const SizedBox(height: 20),
+                      TextField(
+                        controller: _pinController,
+                        keyboardType: TextInputType.number,
+                        obscureText: true,
+                        maxLength: 6,
+                        onSubmitted: (_) => _unlockWithPin(),
+                        decoration: const InputDecoration(
+                          labelText: 'App PIN',
+                          prefixIcon: Icon(Icons.pin_outlined),
+                          counterText: '',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: _isUnlocking ? null : _unlockWithPin,
+                          icon: const Icon(Icons.lock_open_rounded),
+                          label: const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 14),
+                            child: Text('Unlock with PIN'),
+                          ),
+                        ),
+                      ),
+                    ],
+                    if (_errorText != null) ...[
+                      const SizedBox(height: 16),
+                      Text(
+                        _errorText!,
+                        style: const TextStyle(
+                          color: Color(0xFFDC2626),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 22),
+                    TextButton(
+                      onPressed: () {
+                        ref.read(sessionProvider.notifier).signOut();
+                      },
+                      child: const Text('Use another account'),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
@@ -1746,7 +1963,7 @@ class _ProfileAvatar extends StatelessWidget {
   }
 }
 
-class _ProfileArenaView extends StatefulWidget {
+class _ProfileArenaView extends ConsumerStatefulWidget {
   const _ProfileArenaView({
     required this.viewerRole,
     required this.profileDraft,
@@ -1758,10 +1975,10 @@ class _ProfileArenaView extends StatefulWidget {
   final ValueChanged<_LocalProfileDraft> onSaved;
 
   @override
-  State<_ProfileArenaView> createState() => _ProfileArenaViewState();
+  ConsumerState<_ProfileArenaView> createState() => _ProfileArenaViewState();
 }
 
-class _ProfileArenaViewState extends State<_ProfileArenaView> {
+class _ProfileArenaViewState extends ConsumerState<_ProfileArenaView> {
   late final TextEditingController _displayNameController;
   late final TextEditingController _emailController;
   late final TextEditingController _aboutMeController;
@@ -1772,6 +1989,8 @@ class _ProfileArenaViewState extends State<_ProfileArenaView> {
       TextEditingController();
   Uint8List? _avatarBytes;
   String _avatarFileName = '';
+  final TextEditingController _pinController = TextEditingController();
+  final TextEditingController _confirmPinController = TextEditingController();
 
   @override
   void initState() {
@@ -1795,6 +2014,8 @@ class _ProfileArenaViewState extends State<_ProfileArenaView> {
     _currentPasswordController.dispose();
     _newPasswordController.dispose();
     _confirmPasswordController.dispose();
+    _pinController.dispose();
+    _confirmPinController.dispose();
     super.dispose();
   }
 
@@ -1851,8 +2072,63 @@ class _ProfileArenaViewState extends State<_ProfileArenaView> {
     _confirmPasswordController.clear();
   }
 
+  Future<void> _saveAppPin() async {
+    final pin = _pinController.text.trim();
+    final confirmPin = _confirmPinController.text.trim();
+    if (pin.length < 4 || pin.length > 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Use a 4 to 6 digit PIN.')),
+      );
+      return;
+    }
+    if (pin != confirmPin) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('PIN and confirm PIN must match.')),
+      );
+      return;
+    }
+    await ref.read(appLockProvider.notifier).setPin(pin);
+    _pinController.clear();
+    _confirmPinController.clear();
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('App PIN saved for local unlock.')),
+    );
+  }
+
+  Future<void> _toggleBiometrics(bool enabled) async {
+    if (!enabled) {
+      await ref.read(appLockProvider.notifier).disableBiometrics();
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Biometric unlock turned off.')),
+      );
+      return;
+    }
+
+    final enabledSuccessfully =
+        await ref.read(appLockProvider.notifier).enableBiometrics();
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          enabledSuccessfully
+              ? 'Biometric unlock is ready for your next app entry.'
+              : 'Biometric unlock is not available on this device.',
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final appLock = ref.watch(appLockProvider);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2070,6 +2346,108 @@ class _ProfileArenaViewState extends State<_ProfileArenaView> {
                     child: Text('Save profile'),
                   ),
                 ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        _EntityCardFrame(
+          padding: const EdgeInsets.all(20),
+          radius: 28,
+          shadowColor: const Color(0x0D0F172A),
+          shadowBlur: 24,
+          shadowOffset: const Offset(0, 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'App Unlock',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF171717),
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Keep backend auth as the source of truth, then use biometrics or a local PIN to re-enter the app quickly on this device.',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Color(0xFF6B7280),
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 16),
+              SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                value: appLock.biometricEnabled,
+                onChanged: _toggleBiometrics,
+                title: const Text('Enable biometric unlock'),
+                subtitle: const Text(
+                  'Use fingerprint or Face ID the next time the app reopens.',
+                ),
+                activeColor: const Color(0xFF7C3AED),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _pinController,
+                keyboardType: TextInputType.number,
+                obscureText: true,
+                maxLength: 6,
+                decoration: InputDecoration(
+                  labelText: appLock.hasPin ? 'Change app PIN' : 'Create app PIN',
+                  prefixIcon: const Icon(Icons.pin_outlined),
+                  counterText: '',
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _confirmPinController,
+                keyboardType: TextInputType.number,
+                obscureText: true,
+                maxLength: 6,
+                decoration: const InputDecoration(
+                  labelText: 'Confirm app PIN',
+                  prefixIcon: Icon(Icons.verified_user_outlined),
+                  counterText: '',
+                ),
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  FilledButton.icon(
+                    onPressed: _saveAppPin,
+                    icon: const Icon(Icons.pin_rounded),
+                    label: Text(appLock.hasPin ? 'Update PIN' : 'Save PIN'),
+                  ),
+                  if (appLock.hasPin)
+                    OutlinedButton.icon(
+                      onPressed: () async {
+                        final messenger = ScaffoldMessenger.of(context);
+                        await ref.read(appLockProvider.notifier).clearPin();
+                        if (!mounted) {
+                          return;
+                        }
+                        messenger.showSnackBar(
+                          const SnackBar(
+                            content: Text('App PIN removed from this device.'),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.delete_outline_rounded),
+                      label: const Text('Remove PIN'),
+                    ),
+                  if (appLock.requiresUnlock)
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        ref.read(appLockProvider.notifier).lockForCurrentSession();
+                      },
+                      icon: const Icon(Icons.lock_rounded),
+                      label: const Text('Lock now'),
+                    ),
+                ],
               ),
             ],
           ),

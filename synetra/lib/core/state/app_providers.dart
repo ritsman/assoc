@@ -112,11 +112,68 @@ class TenantContext {
       [city, state].where((part) => part.trim().isNotEmpty).join(', ');
 }
 
+class AppLockState {
+  const AppLockState({
+    required this.biometricEnabled,
+    required this.hasPin,
+    required this.isUnlocked,
+  });
+
+  const AppLockState.unconfigured()
+    : biometricEnabled = false,
+      hasPin = false,
+      isUnlocked = true;
+
+  final bool biometricEnabled;
+  final bool hasPin;
+  final bool isUnlocked;
+
+  bool get requiresUnlock => biometricEnabled || hasPin;
+
+  AppLockState copyWith({
+    bool? biometricEnabled,
+    bool? hasPin,
+    bool? isUnlocked,
+  }) {
+    return AppLockState(
+      biometricEnabled: biometricEnabled ?? this.biometricEnabled,
+      hasPin: hasPin ?? this.hasPin,
+      isUnlocked: isUnlocked ?? this.isUnlocked,
+    );
+  }
+
+  static Future<AppLockState> loadFromStorage(
+    SharedPreferences preferences,
+    FlutterSecureStorage secureStorage, {
+    required bool hasActiveSession,
+  }) async {
+    final biometricEnabled =
+        preferences.getBool(_AppLockStorageKeys.biometricEnabled) ?? false;
+    final storedPin = await secureStorage.read(key: _AppLockStorageKeys.pin);
+    final hasPin = (storedPin ?? '').trim().isNotEmpty;
+    final requiresUnlock = biometricEnabled || hasPin;
+
+    return AppLockState(
+      biometricEnabled: biometricEnabled,
+      hasPin: hasPin,
+      isUnlocked: !hasActiveSession || !requiresUnlock,
+    );
+  }
+}
+
 class SessionController extends Notifier<AppSessionState> {
   @override
   AppSessionState build() => ref.watch(initialSessionStateProvider);
 
   void signIn(AuthSession authSession) {
+    _applySession(authSession, unlockSession: true);
+  }
+
+  void syncSession(AuthSession authSession) {
+    _applySession(authSession, unlockSession: false);
+  }
+
+  void _applySession(AuthSession authSession, {required bool unlockSession}) {
     state = AppSessionState(
       isAuthenticated: true,
       username: authSession.email,
@@ -128,6 +185,9 @@ class SessionController extends Notifier<AppSessionState> {
               : state.refreshToken,
       sessionId: authSession.sessionId,
     );
+    if (unlockSession) {
+      ref.read(appLockProvider.notifier).unlockForActiveSession();
+    }
     unawaited(_persistState());
   }
 
@@ -138,6 +198,7 @@ class SessionController extends Notifier<AppSessionState> {
 
   void signOut() {
     state = const AppSessionState.signedOut();
+    ref.read(appLockProvider.notifier).resetForSignedOutState();
     unawaited(_persistState());
   }
 
@@ -154,7 +215,7 @@ class SessionController extends Notifier<AppSessionState> {
       }
 
       final authSession = await ref.read(apiClientProvider).fetchCurrentSession();
-      signIn(authSession);
+      syncSession(authSession);
       return true;
     } catch (_) {
       final refreshedToken = await refreshAccessToken();
@@ -172,7 +233,7 @@ class SessionController extends Notifier<AppSessionState> {
       final authSession = await SynetraApiClient().refreshSession(
         refreshToken: state.refreshToken,
       );
-      signIn(authSession);
+      syncSession(authSession);
       return authSession.authToken;
     } catch (_) {
       signOut();
@@ -233,8 +294,16 @@ final secureStorageProvider = Provider<FlutterSecureStorage>((ref) {
   throw UnimplementedError('FlutterSecureStorage has not been initialized.');
 });
 
+final localAuthenticationProvider = Provider<LocalAuthentication>((ref) {
+  throw UnimplementedError('LocalAuthentication has not been initialized.');
+});
+
 final initialSessionStateProvider = Provider<AppSessionState>((ref) {
   return const AppSessionState.signedOut();
+});
+
+final initialAppLockStateProvider = Provider<AppLockState>((ref) {
+  return const AppLockState.unconfigured();
 });
 
 final apiClientProvider = Provider<SynetraApiClient>((ref) {
@@ -247,6 +316,100 @@ final apiClientProvider = Provider<SynetraApiClient>((ref) {
 
 final sessionProvider = NotifierProvider<SessionController, AppSessionState>(
   SessionController.new,
+);
+
+class AppLockController extends Notifier<AppLockState> {
+  @override
+  AppLockState build() => ref.watch(initialAppLockStateProvider);
+
+  Future<bool> enableBiometrics() async {
+    final localAuth = ref.read(localAuthenticationProvider);
+    final canUseBiometrics =
+        await localAuth.canCheckBiometrics || await localAuth.isDeviceSupported();
+    if (!canUseBiometrics) {
+      return false;
+    }
+    state = state.copyWith(biometricEnabled: true);
+    await _persist();
+    return true;
+  }
+
+  Future<void> disableBiometrics() async {
+    state = state.copyWith(biometricEnabled: false);
+    await _persist();
+  }
+
+  Future<void> setPin(String pin) async {
+    final secureStorage = ref.read(secureStorageProvider);
+    await secureStorage.write(key: _AppLockStorageKeys.pin, value: pin);
+    state = state.copyWith(hasPin: true);
+    await _persist();
+  }
+
+  Future<void> clearPin() async {
+    final secureStorage = ref.read(secureStorageProvider);
+    await secureStorage.delete(key: _AppLockStorageKeys.pin);
+    state = state.copyWith(hasPin: false);
+    await _persist();
+  }
+
+  Future<bool> verifyPin(String pin) async {
+    final secureStorage = ref.read(secureStorageProvider);
+    final savedPin = await secureStorage.read(key: _AppLockStorageKeys.pin) ?? '';
+    if (savedPin == pin && pin.isNotEmpty) {
+      state = state.copyWith(isUnlocked: true);
+      return true;
+    }
+    return false;
+  }
+
+  Future<bool> unlockWithBiometrics() async {
+    final localAuth = ref.read(localAuthenticationProvider);
+    final didAuthenticate = await localAuth.authenticate(
+      localizedReason: 'Unlock Synetra',
+      options: const AuthenticationOptions(
+        biometricOnly: true,
+        stickyAuth: true,
+      ),
+    );
+    if (didAuthenticate) {
+      state = state.copyWith(isUnlocked: true);
+    }
+    return didAuthenticate;
+  }
+
+  void unlockForActiveSession() {
+    state = state.copyWith(isUnlocked: true);
+  }
+
+  void lockForCurrentSession() {
+    if (state.requiresUnlock) {
+      state = state.copyWith(isUnlocked: false);
+    }
+  }
+
+  void resetForSignedOutState() {
+    state = state.copyWith(isUnlocked: true);
+  }
+
+  Future<void> _persist() async {
+    final preferences = ref.read(sharedPreferencesProvider);
+    await preferences.setBool(
+      _AppLockStorageKeys.biometricEnabled,
+      state.biometricEnabled,
+    );
+  }
+}
+
+class _AppLockStorageKeys {
+  const _AppLockStorageKeys._();
+
+  static const biometricEnabled = 'appLock.biometricEnabled';
+  static const pin = 'appLock.pin';
+}
+
+final appLockProvider = NotifierProvider<AppLockController, AppLockState>(
+  AppLockController.new,
 );
 
 final sessionRestoreProvider = FutureProvider<bool>((ref) async {
@@ -287,6 +450,10 @@ final eventsArenaDataProvider = FutureProvider<EventsArenaData>(
 
 final dashboardDataProvider = FutureProvider<DashboardData>(
   (ref) => ref.watch(apiClientProvider).loadDashboardData(),
+);
+
+final sessionReportProvider = FutureProvider<SessionReportData>(
+  (ref) => ref.watch(apiClientProvider).fetchSessionReport(),
 );
 
 final vendorDirectoryProvider = FutureProvider<List<DashboardVendorItem>>(

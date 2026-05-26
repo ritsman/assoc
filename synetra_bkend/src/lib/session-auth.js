@@ -124,6 +124,22 @@ export function requireAuthenticatedSession(req, res, next) {
   return next();
 }
 
+export function requireAdminUser(req, res, next) {
+  if (!req.auth?.user) {
+    return res.status(401).json({
+      error: "Authentication is required for this action.",
+    });
+  }
+
+  if (!req.auth.user.isAdmin) {
+    return res.status(403).json({
+      error: "Admin access is required for this action.",
+    });
+  }
+
+  return next();
+}
+
 export async function resolveRefreshableSession(refreshToken) {
   if (!refreshToken) {
     return null;

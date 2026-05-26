@@ -3,6 +3,7 @@ import prismaPkg from "@prisma/client";
 import { z } from "zod";
 import { buildDefaultMemberPasswordHash } from "../lib/auth.js";
 import { prisma } from "../lib/prisma.js";
+import { requireAdminUser, requireAuthenticatedSession } from "../lib/session-auth.js";
 
 const router = Router();
 const { ApprovalStatus, MemberStatus } = prismaPkg;
@@ -55,6 +56,22 @@ function buildAccessUpdate(accessStatus) {
   }
 }
 
+function resolveViewerRole(user) {
+  if (user.isAdmin) {
+    return "admin";
+  }
+
+  if (user.isMember) {
+    return "member";
+  }
+
+  if (user.isVendor) {
+    return "vendor";
+  }
+
+  return "viewOnly";
+}
+
 router.get("/", async (req, res) => {
   const { associationId, role } = req.query;
 
@@ -73,6 +90,75 @@ router.get("/", async (req, res) => {
 
   res.json({ users });
 });
+
+router.get(
+  "/session-report",
+  requireAuthenticatedSession,
+  requireAdminUser,
+  async (req, res) => {
+    const activeWindowMinutes = Math.max(
+      1,
+      Math.min(120, Number(req.query.activeWindowMinutes || 5)),
+    );
+    const now = new Date();
+    const activeSince = new Date(now.getTime() - activeWindowMinutes * 60 * 1000);
+    const associationId = req.auth.user.associationId || undefined;
+
+    const sessions = await prisma.userSession.findMany({
+      where: {
+        revokedAt: null,
+        refreshExpiresAt: {
+          gt: now,
+        },
+        user: {
+          ...(associationId ? { associationId } : {}),
+        },
+      },
+      include: {
+        user: true,
+      },
+      orderBy: {
+        lastSeenAt: "desc",
+      },
+    });
+
+    const loggedInUserIds = new Set(sessions.map((session) => session.userId));
+    const activeSessions = sessions.filter((session) => session.lastSeenAt >= activeSince);
+    const activeUserIds = new Set(activeSessions.map((session) => session.userId));
+    const todayStart = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+    );
+
+    res.json({
+      summary: {
+        activeWindowMinutes,
+        loggedInUsers: loggedInUserIds.size,
+        activeUsers: activeUserIds.size,
+        totalSessions: sessions.length,
+        activeSessions: activeSessions.length,
+        sessionsToday: sessions.filter((session) => session.createdAt >= todayStart).length,
+      },
+      sessions: sessions.map((session) => ({
+        sessionId: session.id,
+        userId: session.userId,
+        displayName: [session.user.firstName, session.user.lastName]
+          .filter(Boolean)
+          .join(" ")
+          .trim(),
+        email: session.user.email,
+        viewerRole: resolveViewerRole(session.user),
+        isActiveNow: session.lastSeenAt >= activeSince,
+        createdAt: session.createdAt,
+        lastSeenAt: session.lastSeenAt,
+        expiresAt: session.expiresAt,
+        refreshExpiresAt: session.refreshExpiresAt,
+        deviceInfo: session.deviceInfo,
+        userAgent: session.userAgent,
+        ipAddress: session.ipAddress,
+      })),
+    });
+  },
+);
 
 router.patch("/:id/access", async (req, res) => {
   const parsed = accessStatusSchema.safeParse(req.body);

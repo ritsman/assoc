@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
+import 'package:local_auth/local_auth.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -35,12 +36,19 @@ Future<void> main() async {
     sharedPreferences,
     secureStorage,
   );
+  final initialAppLockState = await AppLockState.loadFromStorage(
+    sharedPreferences,
+    secureStorage,
+    hasActiveSession: initialSessionState.isAuthenticated,
+  );
   runApp(
     ProviderScope(
       overrides: [
         sharedPreferencesProvider.overrideWithValue(sharedPreferences),
         secureStorageProvider.overrideWithValue(secureStorage),
+        localAuthenticationProvider.overrideWithValue(LocalAuthentication()),
         initialSessionStateProvider.overrideWithValue(initialSessionState),
+        initialAppLockStateProvider.overrideWithValue(initialAppLockState),
       ],
       child: const SynetraApp(),
     ),

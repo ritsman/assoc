@@ -269,6 +269,15 @@ class SynetraApiClient {
         .toList();
   }
 
+  Future<SessionReportData> fetchSessionReport() async {
+    final json = await _getCachedJson(
+      Uri.parse('$_baseUrl/users/session-report'),
+      cacheKey: 'session-report',
+      ttl: _shortCacheTtl,
+    );
+    return SessionReportData.fromJson(json);
+  }
+
   Future<EventsArenaData> loadEventsArenaData() async {
     final results = await Future.wait<dynamic>([
       fetchEvents(),
