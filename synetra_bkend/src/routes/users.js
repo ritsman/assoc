@@ -14,6 +14,14 @@ const { ApprovalStatus, MemberStatus } = prismaPkg;
 const accessStatusSchema = z.object({
   accessStatus: z.enum(["PENDING", "APPROVED", "SUSPENDED", "CANCELLED"]),
 });
+const adminRoleSchema = z.object({
+  isAdmin: z.boolean(),
+});
+
+function serializeUser(user) {
+  const { passwordHash, ...safeUser } = user;
+  return safeUser;
+}
 
 function buildAccessUpdate(accessStatus) {
   switch (accessStatus) {
@@ -95,7 +103,7 @@ router.get(
       orderBy: { createdAt: "desc" },
     });
 
-    res.json({ users });
+    res.json({ users: users.map(serializeUser) });
   },
 );
 
@@ -228,7 +236,71 @@ router.patch(
       return nextUser;
     });
 
-    return res.json({ user: updatedUser });
+    return res.json({ user: serializeUser(updatedUser) });
+  },
+);
+
+router.patch(
+  "/:id/admin-role",
+  requireAuthenticatedSession,
+  requireAdminUser,
+  async (req, res) => {
+    const parsed = adminRoleSchema.safeParse(req.body);
+
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: "Invalid admin role payload",
+        details: parsed.error.flatten(),
+      });
+    }
+
+    const targetUser = await prisma.user.findUnique({
+      where: { id: req.params.id },
+      include: {
+        member: true,
+      },
+    });
+
+    if (!targetUser) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    if (!targetUser.isMember) {
+      return res.status(400).json({
+        error: "Only member accounts can be promoted to admin right now.",
+      });
+    }
+
+    if (
+      parsed.data.isAdmin &&
+      (targetUser.approvalStatus !== ApprovalStatus.APPROVED ||
+        !targetUser.isActive)
+    ) {
+      return res.status(400).json({
+        error: "Only approved active members can be promoted to admin.",
+      });
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: req.params.id },
+      data: {
+        isAdmin: parsed.data.isAdmin,
+        isActive: true,
+        ...(parsed.data.isAdmin
+          ? {
+              approvalStatus: ApprovalStatus.APPROVED,
+              approvedAt: targetUser.approvedAt ?? new Date(),
+              rejectedAt: null,
+            }
+          : {}),
+      },
+      include: {
+        member: true,
+        vendor: true,
+      },
+    });
+
+    return res.json({ user: serializeUser(updatedUser) });
   },
 );
 

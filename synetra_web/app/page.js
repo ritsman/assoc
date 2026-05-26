@@ -3,13 +3,87 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8083/api";
+const apiBaseUrl =
+  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8083/api";
+const webAdminSessionStorageKey = "synetra_web.adminSession";
+
+function normalizeAuthSession(payload) {
+  if (!payload?.auth?.token || !payload?.user) {
+    return null;
+  }
+
+  return {
+    authToken: payload.auth.token,
+    refreshToken: payload.auth.refreshToken || "",
+    sessionId: payload.auth.sessionId || "",
+    email: payload.user.email || "",
+    viewerRole: payload.user.viewerRole || "viewOnly",
+    displayName:
+      payload.user.displayName ||
+      [payload.user.firstName, payload.user.lastName]
+        .filter(Boolean)
+        .join(" ")
+        .trim() ||
+      payload.user.email ||
+      "",
+  };
+}
+
+function readStoredAdminSession() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const rawValue = window.localStorage.getItem(webAdminSessionStorageKey);
+    if (!rawValue) {
+      return null;
+    }
+
+    const parsed = JSON.parse(rawValue);
+    return normalizeAuthSession({
+      auth: {
+        token: parsed.authToken,
+        refreshToken: parsed.refreshToken,
+        sessionId: parsed.sessionId,
+      },
+      user: {
+        email: parsed.email,
+        viewerRole: parsed.viewerRole,
+        displayName: parsed.displayName,
+      },
+    });
+  } catch {
+    return null;
+  }
+}
+
+function persistAdminSession(session) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  if (!session) {
+    window.localStorage.removeItem(webAdminSessionStorageKey);
+    return;
+  }
+
+  window.localStorage.setItem(
+    webAdminSessionStorageKey,
+    JSON.stringify(session),
+  );
+}
 
 const navSections = [
   {
     label: "Dashboard",
     icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      >
         <rect x="3.5" y="3.5" width="7" height="7" rx="1.8" />
         <rect x="13.5" y="3.5" width="7" height="4.5" rx="1.8" />
         <rect x="13.5" y="11.5" width="7" height="9" rx="1.8" />
@@ -20,7 +94,12 @@ const navSections = [
   {
     label: "Member Arena",
     icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      >
         <circle cx="9" cy="8" r="3" />
         <path d="M4.5 18c.9-2.8 3-4.2 6-4.2s5.1 1.4 6 4.2" />
         <path d="M16.5 9.5c.7-.8 1.6-1.2 2.8-1.2 1.7 0 3.1 1 3.7 2.7" />
@@ -30,7 +109,12 @@ const navSections = [
   {
     label: "Association arena",
     icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      >
         <path d="M4 19.5h16" />
         <path d="M6 19.5V10.5h12v9" />
         <path d="M3.5 10.5 12 4l8.5 6.5" />
@@ -41,7 +125,12 @@ const navSections = [
   {
     label: "Admin arena",
     icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      >
         <circle cx="12" cy="8" r="3.2" />
         <path d="M5 19c1.2-3 3.5-4.5 7-4.5S17.8 16 19 19" />
         <path d="M18.5 6.5h2" />
@@ -52,7 +141,12 @@ const navSections = [
   {
     label: "Vendor Arena",
     icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      >
         <path d="M4 7.5 12 4l8 3.5-8 3.5L4 7.5Z" />
         <path d="M4 12l8 3.5 8-3.5" />
         <path d="M4 16.5 12 20l8-3.5" />
@@ -62,7 +156,12 @@ const navSections = [
   {
     label: "Timeline",
     icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      >
         <path d="M7 5.5h13" />
         <path d="M7 12h13" />
         <path d="M7 18.5h13" />
@@ -75,7 +174,12 @@ const navSections = [
   {
     label: "Events Arena",
     icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      >
         <rect x="4" y="5" width="16" height="15" rx="2.4" />
         <path d="M8 3.5v4" />
         <path d="M16 3.5v4" />
@@ -87,8 +191,22 @@ const navSections = [
   },
 ];
 
-const adminAccessSections = ["App Access", "Member Access", "Vendor Access", "Timeline Access", "App Banner Access", "Add Bulk Member", "Event Access"];
-const vendorSubSections = ["Category", "Sub Category", "Vendor Registration", "Vendor Status", "App Banner"];
+const adminAccessSections = [
+  "App Access",
+  "Member Access",
+  "Vendor Access",
+  "Timeline Access",
+  "App Banner Access",
+  "Add Bulk Member",
+  "Event Access",
+];
+const vendorSubSections = [
+  "Category",
+  "Sub Category",
+  "Vendor Registration",
+  "Vendor Status",
+  "App Banner",
+];
 const flutterAppPermissions = [
   {
     key: "approveMembersLogin",
@@ -414,7 +532,12 @@ const memberArenaTabs = [
   "Master",
 ];
 const vendorArenaTabs = ["Registration", "Membership & Payment", "Master"];
-const eventsArenaTabs = ["Master", "Create New Event", "Type of Event", "Event"];
+const eventsArenaTabs = [
+  "Master",
+  "Create New Event",
+  "Type of Event",
+  "Event",
+];
 const initialCreatedEvents = [];
 const defaultEventForm = {
   name: "",
@@ -478,7 +601,8 @@ const memberRecords = [
     company: "Rao Process Engineers",
     address: "22 C G Road, Ahmedabad",
     gst: "24AADCR3321J1ZU",
-    membershipDetails: "Secretary account managing member circular coordination.",
+    membershipDetails:
+      "Secretary account managing member circular coordination.",
     phone: "+91 98765 10002",
     whatsapp: "919876510002",
     email: "nisha@raoengineers.com",
@@ -522,7 +646,8 @@ const memberRecords = [
     company: "Patel Precision Cast",
     address: "85 Ring Road, Surat",
     gst: "24AAICP6722K1ZT",
-    membershipDetails: "Primary member with casting and traceability specialization.",
+    membershipDetails:
+      "Primary member with casting and traceability specialization.",
     phone: "+91 98765 10004",
     whatsapp: "919876510004",
     email: "rhea@patelprecision.com",
@@ -635,7 +760,14 @@ const memberSummaryStats = [
   { value: "108", label: "Visitors" },
 ];
 const initialMembershipFormFields = [
-  { id: "field-name", key: "name", label: "Name", type: "text", required: true, isDefault: true },
+  {
+    id: "field-name",
+    key: "name",
+    label: "Name",
+    type: "text",
+    required: true,
+    isDefault: true,
+  },
   {
     id: "field-company-address",
     key: "companyAddress",
@@ -644,7 +776,14 @@ const initialMembershipFormFields = [
     required: true,
     isDefault: true,
   },
-  { id: "field-gst", key: "gst", label: "GST", type: "text", required: true, isDefault: true },
+  {
+    id: "field-gst",
+    key: "gst",
+    label: "GST",
+    type: "text",
+    required: true,
+    isDefault: true,
+  },
   {
     id: "field-membership-details",
     key: "membershipDetails",
@@ -746,7 +885,9 @@ function getCommitteeMembers(allMembers) {
   return [...allMembers]
     .filter((member) => member.isCommitteeMember)
     .sort((left, right) => {
-      const rankDiff = getCommitteeRank(left.committeePost) - getCommitteeRank(right.committeePost);
+      const rankDiff =
+        getCommitteeRank(left.committeePost) -
+        getCommitteeRank(right.committeePost);
       if (rankDiff !== 0) {
         return rankDiff;
       }
@@ -765,7 +906,8 @@ function mapApiMemberToUi(member, linkedUser = member.user ?? null) {
   const isInactiveMember = membershipStatus === "INACTIVE";
   const appAccessStatus = getMemberAccessStatus(linkedUser, membershipStatus);
   const committeePost = member.committeePost || "";
-  const committeeTenureStart = member.committeeTenureStart?.slice?.(0, 10) || "";
+  const committeeTenureStart =
+    member.committeeTenureStart?.slice?.(0, 10) || "";
   const committeeTenureEnd = member.committeeTenureEnd?.slice?.(0, 10) || "";
 
   return {
@@ -799,7 +941,10 @@ function mapApiMemberToUi(member, linkedUser = member.user ?? null) {
     committeePost,
     committeeTenureStart,
     committeeTenureEnd,
-    committeeTenure: formatCommitteeTenure(committeeTenureStart, committeeTenureEnd),
+    committeeTenure: formatCommitteeTenure(
+      committeeTenureStart,
+      committeeTenureEnd,
+    ),
     memberBio: member.memberBio || "",
     isCommitteeMember: Boolean(committeePost),
     initials: name
@@ -816,9 +961,14 @@ function mapApiMemberToUi(member, linkedUser = member.user ?? null) {
           : membershipType === "Temporary Visit"
             ? "Temporary Visitors"
             : "Primary Members",
-    expiryStatus: isPendingMember ? "expiring-soon" : isInactiveMember ? "expiring-soon" : "active",
+    expiryStatus: isPendingMember
+      ? "expiring-soon"
+      : isInactiveMember
+        ? "expiring-soon"
+        : "active",
     appAccessStatus,
     accessUserId: linkedUser?.id ?? "",
+    isAdmin: Boolean(linkedUser?.isAdmin),
     approvalStatus: linkedUser?.approvalStatus ?? "",
     membershipStatus,
     customFieldValues: member.customFieldValues || {},
@@ -831,9 +981,9 @@ function mapApiMemberPostToUi(post) {
       ? "Approved"
       : post.reviewStatus === "ON_HOLD"
         ? "Hold"
-      : post.reviewStatus === "REJECTED"
-        ? "Rejected"
-        : "Pending Review";
+        : post.reviewStatus === "REJECTED"
+          ? "Rejected"
+          : "Pending Review";
   const displayPeriod =
     post.displayStart && post.displayEnd
       ? `${post.displayStart} to ${post.displayEnd}`
@@ -867,9 +1017,9 @@ function mapApiTimelinePostToUi(post) {
       ? "Approved"
       : post.reviewStatus === "ON_HOLD"
         ? "Hold"
-      : post.reviewStatus === "REJECTED"
-        ? "Rejected"
-        : "Pending Review";
+        : post.reviewStatus === "REJECTED"
+          ? "Rejected"
+          : "Pending Review";
 
   return {
     id: post.id,
@@ -898,9 +1048,9 @@ function mapApiAppBannerToUi(banner) {
       ? "Approved"
       : banner.reviewStatus === "ON_HOLD"
         ? "Hold"
-      : banner.reviewStatus === "REJECTED"
-        ? "Rejected"
-        : "Pending Review";
+        : banner.reviewStatus === "REJECTED"
+          ? "Rejected"
+          : "Pending Review";
 
   return {
     id: banner.id,
@@ -918,7 +1068,8 @@ function mapApiAppBannerToUi(banner) {
     paymentRemarks: banner.paymentRemarks || "",
     displayStart: banner.displayStart || "",
     displayEnd: banner.displayEnd || "",
-    displayIndex: typeof banner.displayIndex === "number" ? banner.displayIndex : "",
+    displayIndex:
+      typeof banner.displayIndex === "number" ? banner.displayIndex : "",
     postedOn: banner.postedOn || "",
     createdAt: banner.createdAt || "",
     status,
@@ -931,10 +1082,15 @@ function isAppBannerVisibleOnDashboard(banner) {
   }
 
   const today = new Date().toISOString().slice(0, 10);
-  const startsOnOrBeforeToday = !banner.displayStart || banner.displayStart <= today;
+  const startsOnOrBeforeToday =
+    !banner.displayStart || banner.displayStart <= today;
   const endsOnOrAfterToday = !banner.displayEnd || banner.displayEnd >= today;
 
-  return startsOnOrBeforeToday && endsOnOrAfterToday && Number.isInteger(Number(banner.displayIndex));
+  return (
+    startsOnOrBeforeToday &&
+    endsOnOrAfterToday &&
+    Number.isInteger(Number(banner.displayIndex))
+  );
 }
 
 function formatVendorRange(startDate, endDate) {
@@ -959,7 +1115,8 @@ function isTimelinePostVisibleOnDashboard(post) {
   }
 
   const today = new Date().toISOString().slice(0, 10);
-  const startsOnOrBeforeToday = !post.displayStart || post.displayStart <= today;
+  const startsOnOrBeforeToday =
+    !post.displayStart || post.displayStart <= today;
   const endsOnOrAfterToday = !post.displayEnd || post.displayEnd >= today;
 
   return startsOnOrBeforeToday && endsOnOrAfterToday;
@@ -992,7 +1149,8 @@ function DashboardTimelineFeed({ posts }) {
                 <div className="dashboard-timeline-heading">
                   <strong>{post.sourceName}</strong>
                   <span>
-                    Posted by {post.postedBy || post.sourceName} on {post.postedOn}
+                    Posted by {post.postedBy || post.sourceName} on{" "}
+                    {post.postedOn}
                   </span>
                 </div>
               </div>
@@ -1001,14 +1159,29 @@ function DashboardTimelineFeed({ posts }) {
 
               {post.imageUrl ? (
                 <div className="dashboard-timeline-visual">
-                  <img src={post.imageUrl} alt={post.caption.slice(0, 80) || "Timeline post"} />
+                  <img
+                    src={post.imageUrl}
+                    alt={post.caption.slice(0, 80) || "Timeline post"}
+                  />
                 </div>
               ) : null}
 
               <div className="dashboard-timeline-actions">
                 {post.landingPageUrl ? (
-                  <a className="dashboard-timeline-icon" href={post.landingPageUrl} target="_blank" rel="noreferrer" aria-label="Open landing page" title="Landing page">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <a
+                    className="dashboard-timeline-icon"
+                    href={post.landingPageUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label="Open landing page"
+                    title="Landing page"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                    >
                       <path d="M10 14 21 3" />
                       <path d="M15 3h6v6" />
                       <path d="M21 14v4a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3h4" />
@@ -1016,23 +1189,63 @@ function DashboardTimelineFeed({ posts }) {
                   </a>
                 ) : null}
                 {post.youtubeUrl ? (
-                  <a className="dashboard-timeline-icon" href={post.youtubeUrl} target="_blank" rel="noreferrer" aria-label="Open YouTube" title="YouTube">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <a
+                    className="dashboard-timeline-icon"
+                    href={post.youtubeUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label="Open YouTube"
+                    title="YouTube"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                    >
                       <rect x="3" y="6" width="18" height="12" rx="3" />
-                      <path d="m10 9 5 3-5 3V9Z" fill="currentColor" stroke="none" />
+                      <path
+                        d="m10 9 5 3-5 3V9Z"
+                        fill="currentColor"
+                        stroke="none"
+                      />
                     </svg>
                   </a>
                 ) : null}
                 {post.facebookUrl ? (
-                  <a className="dashboard-timeline-icon" href={post.facebookUrl} target="_blank" rel="noreferrer" aria-label="Open Facebook" title="Facebook">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <a
+                    className="dashboard-timeline-icon"
+                    href={post.facebookUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label="Open Facebook"
+                    title="Facebook"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                    >
                       <path d="M14 8h3V4h-3c-2.2 0-4 1.8-4 4v3H7v4h3v5h4v-5h3l1-4h-4v-3c0-.6.4-1 1-1Z" />
                     </svg>
                   </a>
                 ) : null}
                 {post.brochureUrl ? (
-                  <a className="dashboard-timeline-icon" href={post.brochureUrl} target="_blank" rel="noreferrer" aria-label="Open brochure" title="Brochure">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <a
+                    className="dashboard-timeline-icon"
+                    href={post.brochureUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label="Open brochure"
+                    title="Brochure"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                    >
                       <path d="M7 3h7l5 5v13H7z" />
                       <path d="M14 3v5h5" />
                       <path d="M10 13h4" />
@@ -1041,8 +1254,18 @@ function DashboardTimelineFeed({ posts }) {
                   </a>
                 ) : null}
                 {post.contactNumber ? (
-                  <a className="dashboard-timeline-icon" href={`tel:${post.contactNumber.replace(/\s+/g, "")}`} aria-label="Call contact number" title={post.contactNumber}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <a
+                    className="dashboard-timeline-icon"
+                    href={`tel:${post.contactNumber.replace(/\s+/g, "")}`}
+                    aria-label="Call contact number"
+                    title={post.contactNumber}
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                    >
                       <path d="M5 4h4l2 5-2.5 1.5a16 16 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A15 15 0 0 1 3 6a2 2 0 0 1 2-2Z" />
                     </svg>
                   </a>
@@ -1055,7 +1278,10 @@ function DashboardTimelineFeed({ posts }) {
             <article className="association-empty-state">
               <span className="mini-label">Timeline Feed</span>
               <h2>No approved timeline posts are currently live.</h2>
-              <p>Approve a timeline post in Admin arena, then Timeline Access, to feature it here.</p>
+              <p>
+                Approve a timeline post in Admin arena, then Timeline Access, to
+                feature it here.
+              </p>
             </article>
           ) : null}
         </div>
@@ -1064,11 +1290,16 @@ function DashboardTimelineFeed({ posts }) {
       <aside className="dashboard-timeline-sidecard">
         <span className="mini-label">Feed Notes</span>
         <h3>Stream Rules</h3>
-        <p>This feed is styled like a Facebook page stream, but without likes, comments, or reaction counts.</p>
+        <p>
+          This feed is styled like a Facebook page stream, but without likes,
+          comments, or reaction counts.
+        </p>
         <ul className="dashboard-timeline-rules">
           <li>Only approved posts appear here.</li>
           <li>Posts respect their saved visibility dates.</li>
-          <li>Icons route users directly to links, brochures, or contact actions.</li>
+          <li>
+            Icons route users directly to links, brochures, or contact actions.
+          </li>
         </ul>
       </aside>
     </section>
@@ -1089,7 +1320,10 @@ function DashboardAppBannerCarousel({ items }) {
         <article className="association-empty-state">
           <span className="mini-label">No Active Banners</span>
           <h2>No approved app banners are active right now.</h2>
-          <p>Approved banners with sequence numbers from 1 to 50 will appear here in order.</p>
+          <p>
+            Approved banners with sequence numbers from 1 to 50 will appear here
+            in order.
+          </p>
         </article>
       </section>
     );
@@ -1108,10 +1342,16 @@ function DashboardAppBannerCarousel({ items }) {
       <div className="carousel-viewport">
         <div className="carousel-row carousel-row-moving">
           {[...items, ...items].map((item, index) => (
-            <article key={`${item.id}-${index}`} className="carousel-card tone-advertisement">
+            <article
+              key={`${item.id}-${index}`}
+              className="carousel-card tone-advertisement"
+            >
               <div className="carousel-visual">
                 {item.mediaUrl ? (
-                  <img src={item.mediaUrl} alt={item.shortText.slice(0, 60) || "App banner"} />
+                  <img
+                    src={item.mediaUrl}
+                    alt={item.shortText.slice(0, 60) || "App banner"}
+                  />
                 ) : (
                   <span>Ad</span>
                 )}
@@ -1134,7 +1374,10 @@ function getVendorAccessStatus(linkedUser, vendorStatus) {
     return "Removed";
   }
 
-  if (linkedUser?.approvalStatus === "APPROVED" && linkedUser?.isActive === false) {
+  if (
+    linkedUser?.approvalStatus === "APPROVED" &&
+    linkedUser?.isActive === false
+  ) {
     return "Suspended";
   }
 
@@ -1179,7 +1422,10 @@ function mapApiVendorToUi(vendor) {
     youtubeUrl: vendor.youtubeUrl || "",
     linkedinUrl: vendor.linkedinUrl || "",
     xUrl: vendor.xUrl || "",
-    onboardingPeriod: formatVendorRange(vendor.onboardingStartAt, vendor.onboardingEndAt),
+    onboardingPeriod: formatVendorRange(
+      vendor.onboardingStartAt,
+      vendor.onboardingEndAt,
+    ),
     onboardingStartDate: vendor.onboardingStartAt || "",
     onboardingEndDate: vendor.onboardingEndAt || "",
     registrationStatus:
@@ -1230,8 +1476,14 @@ function buildVendorApprovalForm(vendor) {
     planName: readVendorNoteValue(vendor?.notes, "Plan Name"),
     openingTime: readVendorNoteValue(vendor?.notes, "Opening Time"),
     closingTime: readVendorNoteValue(vendor?.notes, "Closing Time"),
-    membershipPlan: vendor?.membershipPlan && vendor.membershipPlan !== "Standard Listing" ? vendor.membershipPlan : "",
-    paymentAmount: vendor?.paymentAmount && vendor.paymentAmount !== "--" ? vendor.paymentAmount : "",
+    membershipPlan:
+      vendor?.membershipPlan && vendor.membershipPlan !== "Standard Listing"
+        ? vendor.membershipPlan
+        : "",
+    paymentAmount:
+      vendor?.paymentAmount && vendor.paymentAmount !== "--"
+        ? vendor.paymentAmount
+        : "",
     onboardingStartAt: vendor?.onboardingStartDate || "",
     onboardingEndAt: vendor?.onboardingEndDate || "",
     idProof: null,
@@ -1241,12 +1493,17 @@ function buildVendorApprovalForm(vendor) {
     profilePhoto: null,
     visitingCard: null,
     isRestaurant: readVendorNoteValue(vendor?.notes, "Is Restaurant") === "Yes",
-    paymentMode: readVendorNoteValue(vendor?.notes, "Payment Mode") || "Online/NEFT/IMPS",
+    paymentMode:
+      readVendorNoteValue(vendor?.notes, "Payment Mode") || "Online/NEFT/IMPS",
     bankName: readVendorNoteValue(vendor?.notes, "Bank Name"),
     transactionId: readVendorNoteValue(vendor?.notes, "Transaction ID"),
-    paymentDescription: readVendorNoteValue(vendor?.notes, "Payment Description"),
+    paymentDescription: readVendorNoteValue(
+      vendor?.notes,
+      "Payment Description",
+    ),
     googleLocation: readVendorNoteValue(vendor?.notes, "Google Location"),
-    paymentDueDate: vendor?.paymentDue && vendor.paymentDue !== "--" ? vendor.paymentDue : "",
+    paymentDueDate:
+      vendor?.paymentDue && vendor.paymentDue !== "--" ? vendor.paymentDue : "",
   };
 }
 
@@ -1309,7 +1566,12 @@ function MemberMediaPanel({
         <div className="profile-form-grid">
           <label className="profile-field">
             <span>Post as Member</span>
-            <select value={form.memberId} onChange={(event) => onFieldChange("memberId", event.target.value)}>
+            <select
+              value={form.memberId}
+              onChange={(event) =>
+                onFieldChange("memberId", event.target.value)
+              }
+            >
               <option value="">Select member</option>
               {members.map((member) => (
                 <option key={member.id} value={member.id}>
@@ -1352,24 +1614,41 @@ function MemberMediaPanel({
           <div className="profile-field profile-field-wide">
             <span>Picture</span>
             <label className="member-media-upload">
-              <input type="file" accept="image/*" onChange={(event) => onImageChange(event.target.files?.[0] ?? null)} />
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(event) =>
+                  onImageChange(event.target.files?.[0] ?? null)
+                }
+              />
               <span>{form.imageName || "Choose picture"}</span>
             </label>
-            <p className="member-media-hint">Only image uploads are allowed here. Videos are not supported.</p>
+            <p className="member-media-hint">
+              Only image uploads are allowed here. Videos are not supported.
+            </p>
           </div>
         </div>
 
         {form.imagePreviewUrl ? (
           <div className="member-media-preview-card">
             <img src={form.imagePreviewUrl} alt="Member post preview" />
-            <button className="secondary-link secondary-button" type="button" onClick={onClearImage}>
+            <button
+              className="secondary-link secondary-button"
+              type="button"
+              onClick={onClearImage}
+            >
               Remove picture
             </button>
           </div>
         ) : null}
 
         <div className="profile-action-row">
-          <button className="primary-link admin-action-button" type="button" onClick={onSubmit} disabled={isSaving}>
+          <button
+            className="primary-link admin-action-button"
+            type="button"
+            onClick={onSubmit}
+            disabled={isSaving}
+          >
             {isSaving ? "Posting..." : "Publish Member Post"}
           </button>
         </div>
@@ -1405,7 +1684,9 @@ function MemberMediaPanel({
                     <p>{post.memberCompany || "Member update"}</p>
                     <span>{post.postedOn}</span>
                   </div>
-                  <span className={`member-feed-status status-${(post.status || "pending").toLowerCase().replace(/\s+/g, "-")}`}>
+                  <span
+                    className={`member-feed-status status-${(post.status || "pending").toLowerCase().replace(/\s+/g, "-")}`}
+                  >
                     {post.status}
                   </span>
                 </div>
@@ -1413,7 +1694,9 @@ function MemberMediaPanel({
                 <div className="member-feed-card-copy">
                   <h3>{post.title}</h3>
                   <p>{post.summary}</p>
-                  {post.body ? <div className="member-feed-body">{post.body}</div> : null}
+                  {post.body ? (
+                    <div className="member-feed-body">{post.body}</div>
+                  ) : null}
                 </div>
 
                 {post.mediaUrl ? (
@@ -1426,7 +1709,12 @@ function MemberMediaPanel({
                   <div className="member-feed-admin-row">
                     <label className="content-control-field">
                       <span>Post Status</span>
-                      <select value={post.status} onChange={(event) => onStatusChange(post.id, event.target.value)}>
+                      <select
+                        value={post.status}
+                        onChange={(event) =>
+                          onStatusChange(post.id, event.target.value)
+                        }
+                      >
                         <option value="Approved">Approved</option>
                         <option value="Rejected">Rejected</option>
                         <option value="Pending Review">Pending Review</option>
@@ -1441,7 +1729,10 @@ function MemberMediaPanel({
           <article className="association-empty-state">
             <span className="mini-label">No Posts</span>
             <h2>No member media posts yet.</h2>
-            <p>The first approved or pending image post will appear here as soon as it is submitted.</p>
+            <p>
+              The first approved or pending image post will appear here as soon
+              as it is submitted.
+            </p>
           </article>
         )}
       </section>
@@ -1555,9 +1846,19 @@ const initialVendorCategories = [
   "Events & Promotion",
 ];
 const vendorSubCategoryMap = {
-  "Industrial Machinery": ["CNC Machines", "Tooling", "Automation", "Packaging"],
+  "Industrial Machinery": [
+    "CNC Machines",
+    "Tooling",
+    "Automation",
+    "Packaging",
+  ],
   "Digital Solutions": ["ERP", "CRM", "IoT", "Cybersecurity"],
-  "Events & Promotion": ["Exhibitions", "Media", "Conference Support", "Brand Activation"],
+  "Events & Promotion": [
+    "Exhibitions",
+    "Media",
+    "Conference Support",
+    "Brand Activation",
+  ],
 };
 const vendorCountryOptions = ["India", "United Arab Emirates", "Singapore"];
 const vendorStateOptionsByCountry = {
@@ -1576,14 +1877,20 @@ const vendorCityOptionsByState = {
   "Central Region": ["Singapore"],
 };
 const vendorPhoneCodeOptions = ["+91", "+971", "+65"];
-const vendorPlanOptions = ["Basic Plan", "Silver Plan", "Gold Plan", "Premium Plan"];
+const vendorPlanOptions = [
+  "Basic Plan",
+  "Silver Plan",
+  "Gold Plan",
+  "Premium Plan",
+];
 const vendorPaymentModeOptions = ["Online/NEFT/IMPS", "Cheque", "Cash", "UPI"];
 const vendorContentPosts = [
   {
     id: "vendor-post-1",
     vendorId: "vendor-1",
     title: "High Precision CNC Package",
-    summary: "Short-form ad banner promoting a new CNC bundle for association members.",
+    summary:
+      "Short-form ad banner promoting a new CNC bundle for association members.",
     status: "Approved",
     postedBy: "Precision Tools Partner",
     postedOn: "20 Apr 2026",
@@ -1596,7 +1903,8 @@ const vendorContentPosts = [
     id: "vendor-post-2",
     vendorId: "vendor-2",
     title: "ERP Migration Campaign",
-    summary: "Short article-style ad for digital transformation onboarding and implementation support.",
+    summary:
+      "Short article-style ad for digital transformation onboarding and implementation support.",
     status: "Pending Review",
     postedBy: "Industrial ERP Suite",
     postedOn: "19 Apr 2026",
@@ -1609,7 +1917,8 @@ const vendorContentPosts = [
     id: "vendor-post-3",
     vendorId: "vendor-3",
     title: "Expo Floor Visitor Pass",
-    summary: "Guest-facing ad campaign offering early registration for the next fabrication expo.",
+    summary:
+      "Guest-facing ad campaign offering early registration for the next fabrication expo.",
     status: "Rejected",
     postedBy: "Fabrication Expo",
     postedOn: "18 Apr 2026",
@@ -1623,10 +1932,18 @@ const vendorContentPosts = [
 function buildMemberTabData(allMembers) {
   return {
     "All Members": allMembers,
-    "Primary Members": allMembers.filter((member) => member.group === "Primary Members"),
-    "Associate Members": allMembers.filter((member) => member.group === "Associate Members"),
-    "Temporary Visitors": allMembers.filter((member) => member.group === "Temporary Visitors"),
-    "Committee Members": allMembers.filter((member) => member.group === "Committee Members"),
+    "Primary Members": allMembers.filter(
+      (member) => member.group === "Primary Members",
+    ),
+    "Associate Members": allMembers.filter(
+      (member) => member.group === "Associate Members",
+    ),
+    "Temporary Visitors": allMembers.filter(
+      (member) => member.group === "Temporary Visitors",
+    ),
+    "Committee Members": allMembers.filter(
+      (member) => member.group === "Committee Members",
+    ),
   };
 }
 
@@ -1787,8 +2104,10 @@ const defaultAppBannerForm = {
   brochureFile: null,
 };
 
-const appBannerMediaRecommendation = "Recommended banner: 1080 x 360 px, JPG/PNG/WebP, max 1 MB.";
-const appBannerPdfRecommendation = "Optional brochure PDF: keep under 2 MB for smoother Flutter downloads.";
+const appBannerMediaRecommendation =
+  "Recommended banner: 1080 x 360 px, JPG/PNG/WebP, max 1 MB.";
+const appBannerPdfRecommendation =
+  "Optional brochure PDF: keep under 2 MB for smoother Flutter downloads.";
 
 function getGoogleMapsEmbedUrl(value) {
   const trimmedValue = value?.trim();
@@ -1799,7 +2118,10 @@ function getGoogleMapsEmbedUrl(value) {
   try {
     const parsedUrl = new URL(trimmedValue);
 
-    if (parsedUrl.hostname.includes("google.") && parsedUrl.pathname.includes("/maps/embed")) {
+    if (
+      parsedUrl.hostname.includes("google.") &&
+      parsedUrl.pathname.includes("/maps/embed")
+    ) {
       return parsedUrl.toString();
     }
 
@@ -1846,7 +2168,12 @@ function AssociationMapPreview({ label, value }) {
           referrerPolicy="no-referrer-when-downgrade"
           allowFullScreen
         />
-        <a className="association-map-link" href={trimmedValue} target="_blank" rel="noreferrer">
+        <a
+          className="association-map-link"
+          href={trimmedValue}
+          target="_blank"
+          rel="noreferrer"
+        >
           Open in Google Maps
         </a>
       </div>
@@ -1858,15 +2185,22 @@ function mapAssociationAboutToForm(aboutContent) {
   return {
     heroTitle: aboutContent?.heroTitle ?? defaultAssociationAbout.heroTitle,
     heroIntro: aboutContent?.heroIntro ?? defaultAssociationAbout.heroIntro,
-    missionTitle: aboutContent?.missionTitle ?? defaultAssociationAbout.missionTitle,
-    missionText: aboutContent?.missionText ?? defaultAssociationAbout.missionText,
+    missionTitle:
+      aboutContent?.missionTitle ?? defaultAssociationAbout.missionTitle,
+    missionText:
+      aboutContent?.missionText ?? defaultAssociationAbout.missionText,
     goalsTitle: aboutContent?.goalsTitle ?? defaultAssociationAbout.goalsTitle,
     goalsText: aboutContent?.goalsText ?? defaultAssociationAbout.goalsText,
-    journeyTitle: aboutContent?.journeyTitle ?? defaultAssociationAbout.journeyTitle,
-    journeyText: aboutContent?.journeyText ?? defaultAssociationAbout.journeyText,
-    headOfficeImage: aboutContent?.headOfficeImage ?? defaultAssociationAbout.headOfficeImage,
-    galleryImageOne: aboutContent?.galleryImageOne ?? defaultAssociationAbout.galleryImageOne,
-    galleryImageTwo: aboutContent?.galleryImageTwo ?? defaultAssociationAbout.galleryImageTwo,
+    journeyTitle:
+      aboutContent?.journeyTitle ?? defaultAssociationAbout.journeyTitle,
+    journeyText:
+      aboutContent?.journeyText ?? defaultAssociationAbout.journeyText,
+    headOfficeImage:
+      aboutContent?.headOfficeImage ?? defaultAssociationAbout.headOfficeImage,
+    galleryImageOne:
+      aboutContent?.galleryImageOne ?? defaultAssociationAbout.galleryImageOne,
+    galleryImageTwo:
+      aboutContent?.galleryImageTwo ?? defaultAssociationAbout.galleryImageTwo,
     stats:
       Array.isArray(aboutContent?.stats) && aboutContent.stats.length > 0
         ? aboutContent.stats
@@ -1907,7 +2241,13 @@ function mapAssociationCircularDocuments(items) {
 }
 
 const INDIA_STATE_CITY_OPTIONS = {
-  "Andhra Pradesh": ["Visakhapatnam", "Vijayawada", "Guntur", "Nellore", "Kurnool"],
+  "Andhra Pradesh": [
+    "Visakhapatnam",
+    "Vijayawada",
+    "Guntur",
+    "Nellore",
+    "Kurnool",
+  ],
   "Arunachal Pradesh": ["Itanagar", "Naharlagun", "Tawang", "Pasighat", "Ziro"],
   Assam: ["Guwahati", "Dibrugarh", "Silchar", "Jorhat", "Tezpur"],
   Bihar: ["Patna", "Gaya", "Muzaffarpur", "Bhagalpur", "Purnia"],
@@ -1929,7 +2269,13 @@ const INDIA_STATE_CITY_OPTIONS = {
   Punjab: ["Ludhiana", "Amritsar", "Jalandhar", "Patiala", "Mohali"],
   Rajasthan: ["Jaipur", "Jodhpur", "Udaipur", "Kota", "Ajmer"],
   Sikkim: ["Gangtok", "Namchi", "Geyzing", "Mangan", "Singtam"],
-  "Tamil Nadu": ["Chennai", "Coimbatore", "Madurai", "Salem", "Tiruchirappalli"],
+  "Tamil Nadu": [
+    "Chennai",
+    "Coimbatore",
+    "Madurai",
+    "Salem",
+    "Tiruchirappalli",
+  ],
   Telangana: ["Hyderabad", "Warangal", "Nizamabad", "Karimnagar", "Khammam"],
   Tripura: ["Agartala", "Udaipur", "Dharmanagar", "Kailashahar", "Belonia"],
   "Uttar Pradesh": ["Lucknow", "Kanpur", "Noida", "Varanasi", "Agra"],
@@ -1939,7 +2285,13 @@ const INDIA_STATE_CITY_OPTIONS = {
   Chandigarh: ["Chandigarh"],
   "Dadra and Nagar Haveli and Daman and Diu": ["Daman", "Diu", "Silvassa"],
   Delhi: ["New Delhi", "Central Delhi", "Dwarka", "Rohini", "Saket"],
-  "Jammu and Kashmir": ["Srinagar", "Jammu", "Anantnag", "Baramulla", "Pulwama"],
+  "Jammu and Kashmir": [
+    "Srinagar",
+    "Jammu",
+    "Anantnag",
+    "Baramulla",
+    "Pulwama",
+  ],
   Ladakh: ["Leh", "Kargil"],
   Lakshadweep: ["Kavaratti"],
   Puducherry: ["Puducherry", "Karaikal", "Mahe", "Yanam"],
@@ -2012,7 +2364,11 @@ function mergeMemberUsers(members, users) {
   const userByEmail = new Map(users.map((user) => [user.email, user]));
 
   return members.map((member) => {
-    const linkedUser = userByMemberId.get(member.id) ?? userByEmail.get(member.email) ?? member.user ?? null;
+    const linkedUser =
+      userByMemberId.get(member.id) ??
+      userByEmail.get(member.email) ??
+      member.user ??
+      null;
     return mapApiMemberToUi(member, linkedUser);
   });
 }
@@ -2023,7 +2379,9 @@ function CarouselSection({ title, items, tone, compact = false }) {
   const carouselItems = compact ? [...items, ...items] : items;
 
   return (
-    <section className={`welcome-panel ${compact ? "welcome-panel-compact" : ""}`}>
+    <section
+      className={`welcome-panel ${compact ? "welcome-panel-compact" : ""}`}
+    >
       <div className="panel-topline">
         <h2>{title}</h2>
         <Link className="text-link" href="#">
@@ -2039,7 +2397,9 @@ function CarouselSection({ title, items, tone, compact = false }) {
               className={`carousel-card ${tone}`}
             >
               <div className="carousel-visual">
-                <span>{String((index % items.length) + 1).padStart(2, "0")}</span>
+                <span>
+                  {String((index % items.length) + 1).padStart(2, "0")}
+                </span>
               </div>
               <div className="carousel-copy">
                 <em className="carousel-badge">{item.badge}</em>
@@ -2085,7 +2445,15 @@ function MemberCarouselSection({ title, items, tone }) {
               className={`carousel-card member-carousel-card ${tone}`}
             >
               <div className="member-carousel-photo">
-                {member.photoUrl ? <img className="member-record-photo-image" src={member.photoUrl} alt={member.name} /> : <span>{member.initials}</span>}
+                {member.photoUrl ? (
+                  <img
+                    className="member-record-photo-image"
+                    src={member.photoUrl}
+                    alt={member.name}
+                  />
+                ) : (
+                  <span>{member.initials}</span>
+                )}
               </div>
               <div className="member-carousel-copy">
                 <em className="carousel-badge">{member.badge}</em>
@@ -2134,13 +2502,25 @@ function AssociationCrudHeader({
       {isAdmin ? (
         <div className="association-admin-actions">
           <label className="selection-chip">
-            <input type="checkbox" checked={allSelected} onChange={onToggleSelectAll} />
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={onToggleSelectAll}
+            />
             <span>Select multiple</span>
           </label>
-          <button className="secondary-link secondary-button" type="button" onClick={onDeleteSelected}>
+          <button
+            className="secondary-link secondary-button"
+            type="button"
+            onClick={onDeleteSelected}
+          >
             Delete Selected
           </button>
-          <button className="primary-link admin-action-button" type="button" onClick={onAddNew}>
+          <button
+            className="primary-link admin-action-button"
+            type="button"
+            onClick={onAddNew}
+          >
             Add New
           </button>
         </div>
@@ -2229,15 +2609,26 @@ function FinanceStatementPanel({
         <div className="admin-member-toolbar">
           <label className="content-control-field">
             <span>From Date</span>
-            <input type="date" value={dateFrom} onChange={(event) => onDateFromChange(event.target.value)} />
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(event) => onDateFromChange(event.target.value)}
+            />
           </label>
           <label className="content-control-field">
             <span>To Date</span>
-            <input type="date" value={dateTo} onChange={(event) => onDateToChange(event.target.value)} />
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(event) => onDateToChange(event.target.value)}
+            />
           </label>
           <label className="content-control-field">
             <span>Entry Type</span>
-            <select value={filterType} onChange={(event) => onFilterTypeChange(event.target.value)}>
+            <select
+              value={filterType}
+              onChange={(event) => onFilterTypeChange(event.target.value)}
+            >
               <option value="">All Entries</option>
               <option value="Credit">Credit</option>
               <option value="Debit">Debit</option>
@@ -2267,7 +2658,9 @@ function FinanceStatementPanel({
                   <td>{entry.reference}</td>
                   <td>{entry.entryType}</td>
                   <td>
-                    <span className="access-status-chip">{entry.direction}</span>
+                    <span className="access-status-chip">
+                      {entry.direction}
+                    </span>
                   </td>
                   <td>{entry.amount}</td>
                 </tr>
@@ -2468,7 +2861,11 @@ function AssociationTabContent({
       ) : (
         <>
           <AssociationCrudHeader
-            activeTab={activeTab === "Finance" ? `Finance · ${activeFinanceTab}` : activeTab}
+            activeTab={
+              activeTab === "Finance"
+                ? `Finance · ${activeFinanceTab}`
+                : activeTab
+            }
             isAdmin={isAdmin}
             items={tabItems}
             selectedIds={selectedIds}
@@ -2518,14 +2915,20 @@ function AssociationProfilePanel({
           <div className="profile-form-grid">
             <label className="profile-field">
               <span>Association Name</span>
-              <input type="text" value={formData.name} onChange={(event) => onFieldChange("name", event.target.value)} />
+              <input
+                type="text"
+                value={formData.name}
+                onChange={(event) => onFieldChange("name", event.target.value)}
+              />
             </label>
             <label className="profile-field">
               <span>Registration Number</span>
               <input
                 type="text"
                 value={formData.registrationNumber}
-                onChange={(event) => onFieldChange("registrationNumber", event.target.value)}
+                onChange={(event) =>
+                  onFieldChange("registrationNumber", event.target.value)
+                }
               />
             </label>
             <label className="profile-field profile-field-wide">
@@ -2533,13 +2936,21 @@ function AssociationProfilePanel({
               <textarea
                 rows="3"
                 value={formData.headOfficeAddress}
-                onChange={(event) => onFieldChange("headOfficeAddress", event.target.value)}
+                onChange={(event) =>
+                  onFieldChange("headOfficeAddress", event.target.value)
+                }
               />
             </label>
             <label className="profile-field">
               <span>City</span>
-              <select value={formData.city} onChange={(event) => onFieldChange("city", event.target.value)} disabled={!formData.state}>
-                <option value="">{formData.state ? "Select city" : "Select state first"}</option>
+              <select
+                value={formData.city}
+                onChange={(event) => onFieldChange("city", event.target.value)}
+                disabled={!formData.state}
+              >
+                <option value="">
+                  {formData.state ? "Select city" : "Select state first"}
+                </option>
                 {headOfficeCities.map((city) => (
                   <option key={city} value={city}>
                     {city}
@@ -2549,7 +2960,10 @@ function AssociationProfilePanel({
             </label>
             <label className="profile-field">
               <span>State</span>
-              <select value={formData.state} onChange={(event) => onFieldChange("state", event.target.value)}>
+              <select
+                value={formData.state}
+                onChange={(event) => onFieldChange("state", event.target.value)}
+              >
                 <option value="">Select state</option>
                 {INDIA_STATES.map((state) => (
                   <option key={state} value={state}>
@@ -2560,22 +2974,42 @@ function AssociationProfilePanel({
             </label>
             <label className="profile-field">
               <span>Pincode</span>
-              <input type="text" value={formData.pincode} onChange={(event) => onFieldChange("pincode", event.target.value)} />
+              <input
+                type="text"
+                value={formData.pincode}
+                onChange={(event) =>
+                  onFieldChange("pincode", event.target.value)
+                }
+              />
             </label>
             <label className="profile-field">
               <span>GST Number</span>
-              <input type="text" value={formData.gstNumber} onChange={(event) => onFieldChange("gstNumber", event.target.value)} />
+              <input
+                type="text"
+                value={formData.gstNumber}
+                onChange={(event) =>
+                  onFieldChange("gstNumber", event.target.value)
+                }
+              />
             </label>
             <label className="profile-field">
               <span>Website</span>
-              <input type="text" value={formData.website} onChange={(event) => onFieldChange("website", event.target.value)} />
+              <input
+                type="text"
+                value={formData.website}
+                onChange={(event) =>
+                  onFieldChange("website", event.target.value)
+                }
+              />
             </label>
             <label className="profile-field">
               <span>Helpdesk Number</span>
               <input
                 type="text"
                 value={formData.helpdeskNumber}
-                onChange={(event) => onFieldChange("helpdeskNumber", event.target.value)}
+                onChange={(event) =>
+                  onFieldChange("helpdeskNumber", event.target.value)
+                }
               />
             </label>
             <label className="profile-field profile-field-wide">
@@ -2584,7 +3018,9 @@ function AssociationProfilePanel({
                 type="text"
                 value={formData.contactNumbers}
                 placeholder="Comma separated numbers"
-                onChange={(event) => onFieldChange("contactNumbers", event.target.value)}
+                onChange={(event) =>
+                  onFieldChange("contactNumbers", event.target.value)
+                }
               />
             </label>
             <label className="profile-field profile-field-wide">
@@ -2593,7 +3029,9 @@ function AssociationProfilePanel({
                 type="text"
                 value={formData.googleMapsLink}
                 placeholder="Google Maps URL"
-                onChange={(event) => onFieldChange("googleMapsLink", event.target.value)}
+                onChange={(event) =>
+                  onFieldChange("googleMapsLink", event.target.value)
+                }
               />
             </label>
           </div>
@@ -2603,7 +3041,11 @@ function AssociationProfilePanel({
               <span className="mini-label">Regional Offices</span>
               <h3>Regional Address List</h3>
             </div>
-            <button className="secondary-link secondary-button" type="button" onClick={onAddRegionalAddress}>
+            <button
+              className="secondary-link secondary-button"
+              type="button"
+              onClick={onAddRegionalAddress}
+            >
               Add Regional Address
             </button>
           </div>
@@ -2613,10 +3055,17 @@ function AssociationProfilePanel({
               const regionalCities = getIndianCities(address.state);
 
               return (
-                <article key={address.id || `regional-${index}`} className="association-profile-card">
+                <article
+                  key={address.id || `regional-${index}`}
+                  className="association-profile-card"
+                >
                   <div className="panel-topline">
                     <h3>Regional Office {index + 1}</h3>
-                    <button className="secondary-link secondary-button danger-button" type="button" onClick={() => onRemoveRegionalAddress(index)}>
+                    <button
+                      className="secondary-link secondary-button danger-button"
+                      type="button"
+                      onClick={() => onRemoveRegionalAddress(index)}
+                    >
                       Remove
                     </button>
                   </div>
@@ -2627,7 +3076,13 @@ function AssociationProfilePanel({
                       <input
                         type="text"
                         value={address.label}
-                        onChange={(event) => onRegionalFieldChange(index, "label", event.target.value)}
+                        onChange={(event) =>
+                          onRegionalFieldChange(
+                            index,
+                            "label",
+                            event.target.value,
+                          )
+                        }
                       />
                     </label>
                     <label className="profile-field">
@@ -2635,7 +3090,13 @@ function AssociationProfilePanel({
                       <input
                         type="text"
                         value={address.registrationNumber}
-                        onChange={(event) => onRegionalFieldChange(index, "registrationNumber", event.target.value)}
+                        onChange={(event) =>
+                          onRegionalFieldChange(
+                            index,
+                            "registrationNumber",
+                            event.target.value,
+                          )
+                        }
                       />
                     </label>
                     <label className="profile-field profile-field-wide">
@@ -2643,17 +3104,31 @@ function AssociationProfilePanel({
                       <textarea
                         rows="3"
                         value={address.officeAddress}
-                        onChange={(event) => onRegionalFieldChange(index, "officeAddress", event.target.value)}
+                        onChange={(event) =>
+                          onRegionalFieldChange(
+                            index,
+                            "officeAddress",
+                            event.target.value,
+                          )
+                        }
                       />
                     </label>
                     <label className="profile-field">
                       <span>City</span>
                       <select
                         value={address.city}
-                        onChange={(event) => onRegionalFieldChange(index, "city", event.target.value)}
+                        onChange={(event) =>
+                          onRegionalFieldChange(
+                            index,
+                            "city",
+                            event.target.value,
+                          )
+                        }
                         disabled={!address.state}
                       >
-                        <option value="">{address.state ? "Select city" : "Select state first"}</option>
+                        <option value="">
+                          {address.state ? "Select city" : "Select state first"}
+                        </option>
                         {regionalCities.map((city) => (
                           <option key={city} value={city}>
                             {city}
@@ -2663,7 +3138,16 @@ function AssociationProfilePanel({
                     </label>
                     <label className="profile-field">
                       <span>State</span>
-                      <select value={address.state} onChange={(event) => onRegionalFieldChange(index, "state", event.target.value)}>
+                      <select
+                        value={address.state}
+                        onChange={(event) =>
+                          onRegionalFieldChange(
+                            index,
+                            "state",
+                            event.target.value,
+                          )
+                        }
+                      >
                         <option value="">Select state</option>
                         {INDIA_STATES.map((state) => (
                           <option key={state} value={state}>
@@ -2674,22 +3158,58 @@ function AssociationProfilePanel({
                     </label>
                     <label className="profile-field">
                       <span>Pincode</span>
-                      <input type="text" value={address.pincode} onChange={(event) => onRegionalFieldChange(index, "pincode", event.target.value)} />
+                      <input
+                        type="text"
+                        value={address.pincode}
+                        onChange={(event) =>
+                          onRegionalFieldChange(
+                            index,
+                            "pincode",
+                            event.target.value,
+                          )
+                        }
+                      />
                     </label>
                     <label className="profile-field">
                       <span>GST Number</span>
-                      <input type="text" value={address.gstNumber} onChange={(event) => onRegionalFieldChange(index, "gstNumber", event.target.value)} />
+                      <input
+                        type="text"
+                        value={address.gstNumber}
+                        onChange={(event) =>
+                          onRegionalFieldChange(
+                            index,
+                            "gstNumber",
+                            event.target.value,
+                          )
+                        }
+                      />
                     </label>
                     <label className="profile-field">
                       <span>Website</span>
-                      <input type="text" value={address.website} onChange={(event) => onRegionalFieldChange(index, "website", event.target.value)} />
+                      <input
+                        type="text"
+                        value={address.website}
+                        onChange={(event) =>
+                          onRegionalFieldChange(
+                            index,
+                            "website",
+                            event.target.value,
+                          )
+                        }
+                      />
                     </label>
                     <label className="profile-field">
                       <span>Helpdesk Number</span>
                       <input
                         type="text"
                         value={address.helpdeskNumber}
-                        onChange={(event) => onRegionalFieldChange(index, "helpdeskNumber", event.target.value)}
+                        onChange={(event) =>
+                          onRegionalFieldChange(
+                            index,
+                            "helpdeskNumber",
+                            event.target.value,
+                          )
+                        }
                       />
                     </label>
                     <label className="profile-field profile-field-wide">
@@ -2698,7 +3218,13 @@ function AssociationProfilePanel({
                         type="text"
                         value={address.contactNumbers}
                         placeholder="Comma separated numbers"
-                        onChange={(event) => onRegionalFieldChange(index, "contactNumbers", event.target.value)}
+                        onChange={(event) =>
+                          onRegionalFieldChange(
+                            index,
+                            "contactNumbers",
+                            event.target.value,
+                          )
+                        }
                       />
                     </label>
                     <label className="profile-field profile-field-wide">
@@ -2706,7 +3232,13 @@ function AssociationProfilePanel({
                       <input
                         type="text"
                         value={address.googleMapsLink}
-                        onChange={(event) => onRegionalFieldChange(index, "googleMapsLink", event.target.value)}
+                        onChange={(event) =>
+                          onRegionalFieldChange(
+                            index,
+                            "googleMapsLink",
+                            event.target.value,
+                          )
+                        }
                       />
                     </label>
                   </div>
@@ -2716,10 +3248,18 @@ function AssociationProfilePanel({
           </div>
 
           <div className="profile-action-row">
-            <button className="secondary-link secondary-button" type="button" onClick={onCancel}>
+            <button
+              className="secondary-link secondary-button"
+              type="button"
+              onClick={onCancel}
+            >
               Cancel
             </button>
-            <button className="primary-link admin-action-button" type="button" onClick={onSave}>
+            <button
+              className="primary-link admin-action-button"
+              type="button"
+              onClick={onSave}
+            >
               Save Profile
             </button>
           </div>
@@ -2734,7 +3274,11 @@ function AssociationProfilePanel({
         <article className="association-profile-card">
           <div className="panel-topline">
             <h2>{associationProfile.name || "Association Profile"}</h2>
-            <button className="primary-link admin-action-button" type="button" onClick={onEdit}>
+            <button
+              className="primary-link admin-action-button"
+              type="button"
+              onClick={onEdit}
+            >
               Edit
             </button>
           </div>
@@ -2747,7 +3291,11 @@ function AssociationProfilePanel({
             <div>
               <span className="mini-label">City, State with Pincode</span>
               <p>
-                {[associationProfile.city, associationProfile.state, associationProfile.pincode]
+                {[
+                  associationProfile.city,
+                  associationProfile.state,
+                  associationProfile.pincode,
+                ]
                   .filter(Boolean)
                   .join(", ") || "Not added yet"}
               </p>
@@ -2782,7 +3330,10 @@ function AssociationProfilePanel({
         {associationProfile.regionalAddresses.length > 0 ? (
           <div className="association-profile-stack">
             {associationProfile.regionalAddresses.map((address, index) => (
-              <article key={address.id || `regional-card-${index}`} className="association-profile-card">
+              <article
+                key={address.id || `regional-card-${index}`}
+                className="association-profile-card"
+              >
                 <div className="panel-topline">
                   <h3>{address.label || `Regional Office ${index + 1}`}</h3>
                   <span className="mini-label">Regional Address</span>
@@ -2795,7 +3346,11 @@ function AssociationProfilePanel({
                   </div>
                   <div>
                     <span className="mini-label">City, State with Pincode</span>
-                    <p>{[address.city, address.state, address.pincode].filter(Boolean).join(", ") || "Not added yet"}</p>
+                    <p>
+                      {[address.city, address.state, address.pincode]
+                        .filter(Boolean)
+                        .join(", ") || "Not added yet"}
+                    </p>
                   </div>
                   <div>
                     <span className="mini-label">Registration Number</span>
@@ -2853,42 +3408,95 @@ function AssociationAboutPanel({
           <div className="profile-form-grid">
             <label className="profile-field profile-field-wide">
               <span>Hero Title</span>
-              <input type="text" value={formData.heroTitle} onChange={(event) => onFieldChange("heroTitle", event.target.value)} />
+              <input
+                type="text"
+                value={formData.heroTitle}
+                onChange={(event) =>
+                  onFieldChange("heroTitle", event.target.value)
+                }
+              />
             </label>
             <label className="profile-field profile-field-wide">
               <span>Hero Intro</span>
-              <textarea rows="3" value={formData.heroIntro} onChange={(event) => onFieldChange("heroIntro", event.target.value)} />
+              <textarea
+                rows="3"
+                value={formData.heroIntro}
+                onChange={(event) =>
+                  onFieldChange("heroIntro", event.target.value)
+                }
+              />
             </label>
             <label className="profile-field">
               <span>Mission Title</span>
-              <input type="text" value={formData.missionTitle} onChange={(event) => onFieldChange("missionTitle", event.target.value)} />
+              <input
+                type="text"
+                value={formData.missionTitle}
+                onChange={(event) =>
+                  onFieldChange("missionTitle", event.target.value)
+                }
+              />
             </label>
             <label className="profile-field">
               <span>Goals Title</span>
-              <input type="text" value={formData.goalsTitle} onChange={(event) => onFieldChange("goalsTitle", event.target.value)} />
+              <input
+                type="text"
+                value={formData.goalsTitle}
+                onChange={(event) =>
+                  onFieldChange("goalsTitle", event.target.value)
+                }
+              />
             </label>
             <label className="profile-field profile-field-wide">
               <span>Mission Text</span>
-              <textarea rows="4" value={formData.missionText} onChange={(event) => onFieldChange("missionText", event.target.value)} />
+              <textarea
+                rows="4"
+                value={formData.missionText}
+                onChange={(event) =>
+                  onFieldChange("missionText", event.target.value)
+                }
+              />
             </label>
             <label className="profile-field profile-field-wide">
               <span>Goals Text</span>
-              <textarea rows="4" value={formData.goalsText} onChange={(event) => onFieldChange("goalsText", event.target.value)} />
+              <textarea
+                rows="4"
+                value={formData.goalsText}
+                onChange={(event) =>
+                  onFieldChange("goalsText", event.target.value)
+                }
+              />
             </label>
             <label className="profile-field">
               <span>Journey Title</span>
-              <input type="text" value={formData.journeyTitle} onChange={(event) => onFieldChange("journeyTitle", event.target.value)} />
+              <input
+                type="text"
+                value={formData.journeyTitle}
+                onChange={(event) =>
+                  onFieldChange("journeyTitle", event.target.value)
+                }
+              />
             </label>
             <label className="profile-field profile-field-wide">
               <span>Journey Text</span>
-              <textarea rows="4" value={formData.journeyText} onChange={(event) => onFieldChange("journeyText", event.target.value)} />
+              <textarea
+                rows="4"
+                value={formData.journeyText}
+                onChange={(event) =>
+                  onFieldChange("journeyText", event.target.value)
+                }
+              />
             </label>
             <label className="profile-field">
               <span>Head Office Image</span>
               <input
                 type="file"
                 accept="image/*"
-                onChange={(event) => onImageChange("headOfficeImage", event.target.files?.[0] ?? null)}
+                onChange={(event) =>
+                  onImageChange(
+                    "headOfficeImage",
+                    event.target.files?.[0] ?? null,
+                  )
+                }
               />
             </label>
             <label className="profile-field">
@@ -2896,7 +3504,12 @@ function AssociationAboutPanel({
               <input
                 type="file"
                 accept="image/*"
-                onChange={(event) => onImageChange("galleryImageOne", event.target.files?.[0] ?? null)}
+                onChange={(event) =>
+                  onImageChange(
+                    "galleryImageOne",
+                    event.target.files?.[0] ?? null,
+                  )
+                }
               />
             </label>
             <label className="profile-field">
@@ -2904,7 +3517,12 @@ function AssociationAboutPanel({
               <input
                 type="file"
                 accept="image/*"
-                onChange={(event) => onImageChange("galleryImageTwo", event.target.files?.[0] ?? null)}
+                onChange={(event) =>
+                  onImageChange(
+                    "galleryImageTwo",
+                    event.target.files?.[0] ?? null,
+                  )
+                }
               />
             </label>
             <div className="about-edit-preview-row profile-field-wide">
@@ -2915,10 +3533,18 @@ function AssociationAboutPanel({
           </div>
 
           <div className="profile-action-row">
-            <button className="secondary-link secondary-button" type="button" onClick={onCancel}>
+            <button
+              className="secondary-link secondary-button"
+              type="button"
+              onClick={onCancel}
+            >
               Cancel
             </button>
-            <button className="primary-link admin-action-button" type="button" onClick={onSave}>
+            <button
+              className="primary-link admin-action-button"
+              type="button"
+              onClick={onSave}
+            >
               Save About Us
             </button>
           </div>
@@ -2945,7 +3571,10 @@ function AssociationAboutPanel({
             </div>
           </div>
           <div className="about-hero-visual">
-            <img src={aboutData.headOfficeImage} alt="Association head office" />
+            <img
+              src={aboutData.headOfficeImage}
+              alt="Association head office"
+            />
           </div>
         </article>
 
@@ -2967,13 +3596,23 @@ function AssociationAboutPanel({
             <span className="mini-label">So Far</span>
             <h3>{aboutData.journeyTitle}</h3>
             <p>{aboutData.journeyText}</p>
-            <button className="primary-link admin-action-button" type="button" onClick={onEdit}>
+            <button
+              className="primary-link admin-action-button"
+              type="button"
+              onClick={onEdit}
+            >
               Edit
             </button>
           </div>
           <div className="about-gallery-grid">
-            <img src={aboutData.galleryImageOne} alt="Association community event" />
-            <img src={aboutData.galleryImageTwo} alt="Association industry journey" />
+            <img
+              src={aboutData.galleryImageOne}
+              alt="Association community event"
+            />
+            <img
+              src={aboutData.galleryImageTwo}
+              alt="Association industry journey"
+            />
           </div>
         </article>
       </section>
@@ -3011,28 +3650,42 @@ function ManagementCommitteePanel({
               <h2>Leadership Panel</h2>
             </div>
             {isAdmin ? (
-              <button className="primary-link admin-action-button" type="button" onClick={() => onOpenEditor("")}>
+              <button
+                className="primary-link admin-action-button"
+                type="button"
+                onClick={() => onOpenEditor("")}
+              >
                 Add Committee Member
               </button>
             ) : null}
           </div>
           <p className="committee-hero-copy">
-            Leadership cards are driven from the member table. Admins can assign a post, set tenure, and update a short
-            bio for each committee representative.
+            Leadership cards are driven from the member table. Admins can assign
+            a post, set tenure, and update a short bio for each committee
+            representative.
           </p>
         </article>
 
         {editingMemberId !== null ? (
           <article className="association-profile-card">
             <div className="panel-topline">
-              <h3>{editingMemberId ? "Edit Committee Member" : "Assign Committee Member"}</h3>
+              <h3>
+                {editingMemberId
+                  ? "Edit Committee Member"
+                  : "Assign Committee Member"}
+              </h3>
               <span className="mini-label">Admin Editor</span>
             </div>
 
             <div className="profile-form-grid">
               <label className="profile-field profile-field-wide">
                 <span>Member</span>
-                <select value={formData.memberId} onChange={(event) => onFormChange("memberId", event.target.value)}>
+                <select
+                  value={formData.memberId}
+                  onChange={(event) =>
+                    onFormChange("memberId", event.target.value)
+                  }
+                >
                   <option value="">Select member</option>
                   {availableMembers.map((member) => (
                     <option key={member.id} value={member.id}>
@@ -3043,7 +3696,12 @@ function ManagementCommitteePanel({
               </label>
               <label className="profile-field">
                 <span>Post</span>
-                <select value={formData.committeePost} onChange={(event) => onFormChange("committeePost", event.target.value)}>
+                <select
+                  value={formData.committeePost}
+                  onChange={(event) =>
+                    onFormChange("committeePost", event.target.value)
+                  }
+                >
                   <option value="">Select post</option>
                   <option value="Chairman">Chairman</option>
                   <option value="Secretary">Secretary</option>
@@ -3057,7 +3715,9 @@ function ManagementCommitteePanel({
                 <input
                   type="date"
                   value={formData.committeeTenureStart}
-                  onChange={(event) => onFormChange("committeeTenureStart", event.target.value)}
+                  onChange={(event) =>
+                    onFormChange("committeeTenureStart", event.target.value)
+                  }
                 />
               </label>
               <label className="profile-field">
@@ -3065,20 +3725,36 @@ function ManagementCommitteePanel({
                 <input
                   type="date"
                   value={formData.committeeTenureEnd}
-                  onChange={(event) => onFormChange("committeeTenureEnd", event.target.value)}
+                  onChange={(event) =>
+                    onFormChange("committeeTenureEnd", event.target.value)
+                  }
                 />
               </label>
               <label className="profile-field profile-field-wide">
                 <span>Brief About Member</span>
-                <textarea rows="4" value={formData.memberBio} onChange={(event) => onFormChange("memberBio", event.target.value)} />
+                <textarea
+                  rows="4"
+                  value={formData.memberBio}
+                  onChange={(event) =>
+                    onFormChange("memberBio", event.target.value)
+                  }
+                />
               </label>
             </div>
 
             <div className="profile-action-row">
-              <button className="secondary-link secondary-button" type="button" onClick={onCancelEdit}>
+              <button
+                className="secondary-link secondary-button"
+                type="button"
+                onClick={onCancelEdit}
+              >
                 Cancel
               </button>
-              <button className="primary-link admin-action-button" type="button" onClick={onSave}>
+              <button
+                className="primary-link admin-action-button"
+                type="button"
+                onClick={onSave}
+              >
                 Save Committee Details
               </button>
             </div>
@@ -3091,12 +3767,24 @@ function ManagementCommitteePanel({
               <article key={member.id} className="committee-member-card">
                 <div className="committee-member-head">
                   <div className="member-record-photo committee-member-photo">
-                    {member.photoUrl ? <img className="member-record-photo-image" src={member.photoUrl} alt={member.name} /> : <span>{member.initials}</span>}
+                    {member.photoUrl ? (
+                      <img
+                        className="member-record-photo-image"
+                        src={member.photoUrl}
+                        alt={member.name}
+                      />
+                    ) : (
+                      <span>{member.initials}</span>
+                    )}
                   </div>
                   <div>
-                    <span className="mini-label">{member.committeePost || "Committee"}</span>
+                    <span className="mini-label">
+                      {member.committeePost || "Committee"}
+                    </span>
                     <h3>{member.name}</h3>
-                    <p className="member-company">{member.company || "Company not added yet"}</p>
+                    <p className="member-company">
+                      {member.company || "Company not added yet"}
+                    </p>
                   </div>
                 </div>
 
@@ -3109,14 +3797,24 @@ function ManagementCommitteePanel({
                   </p>
                 </div>
 
-                <p className="committee-member-bio">{member.memberBio || "Brief introduction not added yet."}</p>
+                <p className="committee-member-bio">
+                  {member.memberBio || "Brief introduction not added yet."}
+                </p>
 
                 {isAdmin ? (
                   <div className="record-actions">
-                    <button className="secondary-link secondary-button" type="button" onClick={() => onOpenEditor(member.id)}>
+                    <button
+                      className="secondary-link secondary-button"
+                      type="button"
+                      onClick={() => onOpenEditor(member.id)}
+                    >
                       Edit
                     </button>
-                    <button className="secondary-link secondary-button danger-button" type="button" onClick={() => onRemove(member.id)}>
+                    <button
+                      className="secondary-link secondary-button danger-button"
+                      type="button"
+                      onClick={() => onRemove(member.id)}
+                    >
                       Remove From Committee
                     </button>
                   </div>
@@ -3128,7 +3826,10 @@ function ManagementCommitteePanel({
           <article className="association-profile-card committee-empty-card">
             <span className="mini-label">Management Committee</span>
             <h3>No committee members assigned yet</h3>
-            <p>Assign members to posts like Chairman, Secretary, Treasurer, or Committee Member to populate this section.</p>
+            <p>
+              Assign members to posts like Chairman, Secretary, Treasurer, or
+              Committee Member to populate this section.
+            </p>
           </article>
         )}
       </section>
@@ -3158,20 +3859,27 @@ function AssociationGalleryPanel({
               <h2>Visual Stories</h2>
             </div>
             {isAdmin ? (
-              <button className="primary-link admin-action-button" type="button" onClick={() => onOpenEditor("")}>
+              <button
+                className="primary-link admin-action-button"
+                type="button"
+                onClick={() => onOpenEditor("")}
+              >
                 Add New
               </button>
             ) : null}
           </div>
           <p className="committee-hero-copy">
-            Each gallery entry uses one main image on top with a clear headline, short tagline, and full description below.
+            Each gallery entry uses one main image on top with a clear headline,
+            short tagline, and full description below.
           </p>
         </article>
 
         {editingItemId !== null ? (
           <article className="association-profile-card">
             <div className="panel-topline">
-              <h3>{editingItemId ? "Edit Gallery Item" : "Add Gallery Item"}</h3>
+              <h3>
+                {editingItemId ? "Edit Gallery Item" : "Add Gallery Item"}
+              </h3>
               <span className="mini-label">Gallery CMS</span>
             </div>
 
@@ -3181,33 +3889,70 @@ function AssociationGalleryPanel({
                   {formData.imageUrl ? (
                     <img src={formData.imageUrl} alt="Gallery preview" />
                   ) : (
-                    <div className="gallery-form-placeholder">Image preview</div>
+                    <div className="gallery-form-placeholder">
+                      Image preview
+                    </div>
                   )}
                 </div>
-                <button className="secondary-link secondary-button profile-upload-button" type="button">
+                <button
+                  className="secondary-link secondary-button profile-upload-button"
+                  type="button"
+                >
                   Upload Gallery Picture
-                  <input type="file" accept="image/*" onChange={(event) => onImageChange(event.target.files?.[0] ?? null)} />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(event) =>
+                      onImageChange(event.target.files?.[0] ?? null)
+                    }
+                  />
                 </button>
               </div>
               <label className="profile-field profile-field-wide">
                 <span>Headline</span>
-                <input type="text" value={formData.headline} onChange={(event) => onFieldChange("headline", event.target.value)} />
+                <input
+                  type="text"
+                  value={formData.headline}
+                  onChange={(event) =>
+                    onFieldChange("headline", event.target.value)
+                  }
+                />
               </label>
               <label className="profile-field profile-field-wide">
                 <span>Tagline</span>
-                <input type="text" value={formData.tagline} onChange={(event) => onFieldChange("tagline", event.target.value)} />
+                <input
+                  type="text"
+                  value={formData.tagline}
+                  onChange={(event) =>
+                    onFieldChange("tagline", event.target.value)
+                  }
+                />
               </label>
               <label className="profile-field profile-field-wide">
                 <span>Description</span>
-                <textarea rows="5" value={formData.description} onChange={(event) => onFieldChange("description", event.target.value)} />
+                <textarea
+                  rows="5"
+                  value={formData.description}
+                  onChange={(event) =>
+                    onFieldChange("description", event.target.value)
+                  }
+                />
               </label>
             </div>
 
             <div className="profile-action-row">
-              <button className="secondary-link secondary-button" type="button" onClick={onCancelEdit}>
+              <button
+                className="secondary-link secondary-button"
+                type="button"
+                onClick={onCancelEdit}
+              >
                 Cancel
               </button>
-              <button className="primary-link admin-action-button" type="button" onClick={onSave}>
+              <button
+                className="primary-link admin-action-button"
+                type="button"
+                onClick={onSave}
+              >
                 Save Gallery Item
               </button>
             </div>
@@ -3219,19 +3964,33 @@ function AssociationGalleryPanel({
             {items.map((item) => (
               <article key={item.id} className="association-gallery-card">
                 <div className="association-gallery-visual">
-                  {item.imageUrl ? <img src={item.imageUrl} alt={item.headline} /> : <div className="gallery-form-placeholder">No image</div>}
+                  {item.imageUrl ? (
+                    <img src={item.imageUrl} alt={item.headline} />
+                  ) : (
+                    <div className="gallery-form-placeholder">No image</div>
+                  )}
                 </div>
                 <div className="association-gallery-copy">
                   <h3>{item.headline}</h3>
-                  <span className="mini-label">{item.tagline || "No tagline added yet"}</span>
+                  <span className="mini-label">
+                    {item.tagline || "No tagline added yet"}
+                  </span>
                   <p>{item.description || "No description added yet."}</p>
                 </div>
                 {isAdmin ? (
                   <div className="record-actions">
-                    <button className="secondary-link secondary-button" type="button" onClick={() => onOpenEditor(item.id)}>
+                    <button
+                      className="secondary-link secondary-button"
+                      type="button"
+                      onClick={() => onOpenEditor(item.id)}
+                    >
                       Edit
                     </button>
-                    <button className="secondary-link secondary-button danger-button" type="button" onClick={() => onDelete(item.id)}>
+                    <button
+                      className="secondary-link secondary-button danger-button"
+                      type="button"
+                      onClick={() => onDelete(item.id)}
+                    >
                       Delete
                     </button>
                   </div>
@@ -3243,7 +4002,10 @@ function AssociationGalleryPanel({
           <article className="association-profile-card committee-empty-card">
             <span className="mini-label">Gallery</span>
             <h3>No gallery entries yet</h3>
-            <p>Add a gallery item to start showing image-led stories for the association.</p>
+            <p>
+              Add a gallery item to start showing image-led stories for the
+              association.
+            </p>
           </article>
         )}
       </section>
@@ -3273,13 +4035,19 @@ function AssociationCircularsPanel({
               <h2>Document Library</h2>
             </div>
             {isAdmin ? (
-              <button className="primary-link admin-action-button" type="button" onClick={() => onOpenEditor("")}>
+              <button
+                className="primary-link admin-action-button"
+                type="button"
+                onClick={() => onOpenEditor("")}
+              >
                 Add New
               </button>
             ) : null}
           </div>
           <p className="committee-hero-copy">
-            Upload PDFs, DOC files, or scanned items with a headline, tagline, and brief summary. Opening a card takes the user to the full document in a new tab.
+            Upload PDFs, DOC files, or scanned items with a headline, tagline,
+            and brief summary. Opening a card takes the user to the full
+            document in a new tab.
           </p>
         </article>
 
@@ -3298,38 +4066,71 @@ function AssociationCircularsPanel({
                   ) : (
                     <div className="gallery-form-placeholder circular-file-placeholder">
                       <strong>{formData.fileExtension || "DOC"}</strong>
-                      <span>{formData.fileName || "Upload a PDF, DOC, or scan"}</span>
+                      <span>
+                        {formData.fileName || "Upload a PDF, DOC, or scan"}
+                      </span>
                     </div>
                   )}
                 </div>
-                <button className="secondary-link secondary-button profile-upload-button" type="button">
+                <button
+                  className="secondary-link secondary-button profile-upload-button"
+                  type="button"
+                >
                   Upload Document
                   <input
                     type="file"
                     accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.webp,.tif,.tiff"
-                    onChange={(event) => onFileChange(event.target.files?.[0] ?? null)}
+                    onChange={(event) =>
+                      onFileChange(event.target.files?.[0] ?? null)
+                    }
                   />
                 </button>
               </div>
               <label className="profile-field profile-field-wide">
                 <span>Headline</span>
-                <input type="text" value={formData.headline} onChange={(event) => onFieldChange("headline", event.target.value)} />
+                <input
+                  type="text"
+                  value={formData.headline}
+                  onChange={(event) =>
+                    onFieldChange("headline", event.target.value)
+                  }
+                />
               </label>
               <label className="profile-field profile-field-wide">
                 <span>Tagline</span>
-                <input type="text" value={formData.tagline} onChange={(event) => onFieldChange("tagline", event.target.value)} />
+                <input
+                  type="text"
+                  value={formData.tagline}
+                  onChange={(event) =>
+                    onFieldChange("tagline", event.target.value)
+                  }
+                />
               </label>
               <label className="profile-field profile-field-wide">
                 <span>Brief Text</span>
-                <textarea rows="5" value={formData.summary} onChange={(event) => onFieldChange("summary", event.target.value)} />
+                <textarea
+                  rows="5"
+                  value={formData.summary}
+                  onChange={(event) =>
+                    onFieldChange("summary", event.target.value)
+                  }
+                />
               </label>
             </div>
 
             <div className="profile-action-row">
-              <button className="secondary-link secondary-button" type="button" onClick={onCancelEdit}>
+              <button
+                className="secondary-link secondary-button"
+                type="button"
+                onClick={onCancelEdit}
+              >
                 Cancel
               </button>
-              <button className="primary-link admin-action-button" type="button" onClick={onSave}>
+              <button
+                className="primary-link admin-action-button"
+                type="button"
+                onClick={onSave}
+              >
                 Save Circular
               </button>
             </div>
@@ -3339,8 +4140,16 @@ function AssociationCircularsPanel({
         {items.length > 0 ? (
           <div className="association-gallery-grid">
             {items.map((item) => (
-              <article key={item.id} className="association-gallery-card circular-card">
-                <a className="circular-card-link" href={item.documentUrl} target="_blank" rel="noreferrer">
+              <article
+                key={item.id}
+                className="association-gallery-card circular-card"
+              >
+                <a
+                  className="circular-card-link"
+                  href={item.documentUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
                   <div className="association-gallery-visual">
                     {item.previewUrl ? (
                       <img src={item.previewUrl} alt={item.headline} />
@@ -3353,16 +4162,26 @@ function AssociationCircularsPanel({
                   </div>
                   <div className="association-gallery-copy">
                     <h3>{item.headline}</h3>
-                    <span className="mini-label">{item.tagline || "No tagline added yet"}</span>
+                    <span className="mini-label">
+                      {item.tagline || "No tagline added yet"}
+                    </span>
                     <p>{item.summary || "No brief text added yet."}</p>
                   </div>
                 </a>
                 {isAdmin ? (
                   <div className="record-actions circular-card-actions">
-                    <button className="secondary-link secondary-button" type="button" onClick={() => onOpenEditor(item.id)}>
+                    <button
+                      className="secondary-link secondary-button"
+                      type="button"
+                      onClick={() => onOpenEditor(item.id)}
+                    >
                       Edit
                     </button>
-                    <button className="secondary-link secondary-button danger-button" type="button" onClick={() => onDelete(item.id)}>
+                    <button
+                      className="secondary-link secondary-button danger-button"
+                      type="button"
+                      onClick={() => onDelete(item.id)}
+                    >
                       Delete
                     </button>
                   </div>
@@ -3374,7 +4193,9 @@ function AssociationCircularsPanel({
           <article className="association-profile-card committee-empty-card">
             <span className="mini-label">Circulars</span>
             <h3>No circular documents yet</h3>
-            <p>Upload your first circular to start building the document library.</p>
+            <p>
+              Upload your first circular to start building the document library.
+            </p>
           </article>
         )}
       </section>
@@ -3403,7 +4224,10 @@ function MemberCrudHeader({
       <div>
         <span className="mini-label">{activeTab}</span>
         <h2>{activeTab} Directory</h2>
-        <p>CRUD and communication controls are kept behind an admin flag for future auth roles.</p>
+        <p>
+          CRUD and communication controls are kept behind an admin flag for
+          future auth roles.
+        </p>
       </div>
 
       {isAdmin ? (
@@ -3418,38 +4242,73 @@ function MemberCrudHeader({
             </button>
             {isReminderPanelOpen ? (
               <div className="reminder-filter-panel">
-                <button type="button" onClick={() => onApplyReminderFilter("expiring-soon")}>
+                <button
+                  type="button"
+                  onClick={() => onApplyReminderFilter("expiring-soon")}
+                >
                   Expiring Soon
                 </button>
-                <button type="button" onClick={() => onApplyReminderFilter("Temporary Visitors")}>
+                <button
+                  type="button"
+                  onClick={() => onApplyReminderFilter("Temporary Visitors")}
+                >
                   Temporary Visitors
                 </button>
-                <button type="button" onClick={() => onApplyReminderFilter("Primary Members")}>
+                <button
+                  type="button"
+                  onClick={() => onApplyReminderFilter("Primary Members")}
+                >
                   Primary Members
                 </button>
-                <button type="button" onClick={() => onApplyReminderFilter("Associate Members")}>
+                <button
+                  type="button"
+                  onClick={() => onApplyReminderFilter("Associate Members")}
+                >
                   Associate Members
                 </button>
-                <button type="button" onClick={() => onApplyReminderFilter("Committee Members")}>
+                <button
+                  type="button"
+                  onClick={() => onApplyReminderFilter("Committee Members")}
+                >
                   Committee Members
                 </button>
               </div>
             ) : null}
           </div>
           <label className="selection-chip">
-            <input type="checkbox" checked={allSelected} onChange={onToggleSelectAll} />
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={onToggleSelectAll}
+            />
             <span>Select multiple</span>
           </label>
-          <button className="secondary-link secondary-button" type="button" onClick={onContactSelected}>
+          <button
+            className="secondary-link secondary-button"
+            type="button"
+            onClick={onContactSelected}
+          >
             Contact
           </button>
-          <button className="secondary-link secondary-button" type="button" onClick={onSendNotice}>
+          <button
+            className="secondary-link secondary-button"
+            type="button"
+            onClick={onSendNotice}
+          >
             Send Notice
           </button>
-          <button className="secondary-link secondary-button" type="button" onClick={onDeleteSelected}>
+          <button
+            className="secondary-link secondary-button"
+            type="button"
+            onClick={onDeleteSelected}
+          >
             Delete Selected
           </button>
-          <button className="primary-link admin-action-button" type="button" onClick={onAddNew}>
+          <button
+            className="primary-link admin-action-button"
+            type="button"
+            onClick={onAddNew}
+          >
             Add Member
           </button>
         </div>
@@ -3458,14 +4317,28 @@ function MemberCrudHeader({
   );
 }
 
-function MemberCardGrid({ items, selectedIds, isAdmin, onToggleSelect, onDeleteOne }) {
+function MemberCardGrid({
+  items,
+  selectedIds,
+  isAdmin,
+  onToggleSelect,
+  onDeleteOne,
+}) {
   return (
     <div className="member-record-grid">
       {items.map((member) => (
         <article key={member.id} className="member-record-card">
           <div className="member-record-head">
             <div className="member-record-photo">
-              {member.photoUrl ? <img className="member-record-photo-image" src={member.photoUrl} alt={member.name} /> : <span>{member.initials}</span>}
+              {member.photoUrl ? (
+                <img
+                  className="member-record-photo-image"
+                  src={member.photoUrl}
+                  alt={member.name}
+                />
+              ) : (
+                <span>{member.initials}</span>
+              )}
             </div>
             <div className="member-record-heading">
               <em className="carousel-badge">{member.badge}</em>
@@ -3494,7 +4367,12 @@ function MemberCardGrid({ items, selectedIds, isAdmin, onToggleSelect, onDeleteO
           </div>
 
           <div className="record-actions">
-            <a className="secondary-link" href={`https://wa.me/${member.whatsapp}`} target="_blank" rel="noreferrer">
+            <a
+              className="secondary-link"
+              href={`https://wa.me/${member.whatsapp}`}
+              target="_blank"
+              rel="noreferrer"
+            >
               WhatsApp
             </a>
             <a className="secondary-link" href={`mailto:${member.email}`}>
@@ -3546,7 +4424,9 @@ function MemberTable({ items, selectedIds, isAdmin, onToggleSelect }) {
               <tr
                 key={member.id}
                 className={
-                  member.expiryStatus === "expiring-soon" ? "member-row-expiring" : "member-row-active"
+                  member.expiryStatus === "expiring-soon"
+                    ? "member-row-expiring"
+                    : "member-row-active"
                 }
               >
                 {isAdmin ? (
@@ -3567,7 +4447,9 @@ function MemberTable({ items, selectedIds, isAdmin, onToggleSelect }) {
                     {member.expiryStatus === "expiring-soon" ? (
                       <span className="expiry-chip">Expiring Soon</span>
                     ) : (
-                      <span className="expiry-chip expiry-chip-active">Active</span>
+                      <span className="expiry-chip expiry-chip-active">
+                        Active
+                      </span>
                     )}
                   </div>
                 </td>
@@ -3578,17 +4460,28 @@ function MemberTable({ items, selectedIds, isAdmin, onToggleSelect }) {
                   </div>
                 </td>
                 <td>
-                  <a className="table-action-link" href={`https://wa.me/${member.whatsapp}`} target="_blank" rel="noreferrer">
+                  <a
+                    className="table-action-link"
+                    href={`https://wa.me/${member.whatsapp}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
                     Open Chat
                   </a>
                 </td>
                 <td>
                   {member.expiryStatus === "expiring-soon" ? (
-                    <button className="secondary-link secondary-button table-button reminder-button" type="button">
+                    <button
+                      className="secondary-link secondary-button table-button reminder-button"
+                      type="button"
+                    >
                       Send Reminder
                     </button>
                   ) : (
-                    <button className="secondary-link secondary-button table-button" type="button">
+                    <button
+                      className="secondary-link secondary-button table-button"
+                      type="button"
+                    >
                       Send Notice
                     </button>
                   )}
@@ -3731,7 +4624,11 @@ function MemberMembershipForm({
         <div className="profile-avatar-panel profile-field-wide member-photo-field">
           <div className="profile-avatar-wrap">
             {formData.photoUrl ? (
-              <img className="profile-avatar-image" src={formData.photoUrl} alt="Member preview" />
+              <img
+                className="profile-avatar-image"
+                src={formData.photoUrl}
+                alt="Member preview"
+              />
             ) : (
               <span className="profile-avatar-placeholder">
                 {formData.name
@@ -3743,27 +4640,53 @@ function MemberMembershipForm({
               </span>
             )}
           </div>
-          <button className="secondary-link secondary-button profile-upload-button" type="button">
+          <button
+            className="secondary-link secondary-button profile-upload-button"
+            type="button"
+          >
             Upload Member Picture
-            <input type="file" accept="image/*" onChange={(event) => onImageChange(event.target.files?.[0] ?? null)} />
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(event) =>
+                onImageChange(event.target.files?.[0] ?? null)
+              }
+            />
           </button>
         </div>
 
         <label className="profile-field">
           <span>Company</span>
-          <input type="text" value={formData.company} onChange={(event) => onFieldChange("company", event.target.value)} />
+          <input
+            type="text"
+            value={formData.company}
+            onChange={(event) => onFieldChange("company", event.target.value)}
+          />
         </label>
         <label className="profile-field">
           <span>Email</span>
-          <input type="email" value={formData.email} onChange={(event) => onFieldChange("email", event.target.value)} />
+          <input
+            type="email"
+            value={formData.email}
+            onChange={(event) => onFieldChange("email", event.target.value)}
+          />
         </label>
         <label className="profile-field">
           <span>Phone</span>
-          <input type="text" value={formData.phone} onChange={(event) => onFieldChange("phone", event.target.value)} />
+          <input
+            type="text"
+            value={formData.phone}
+            onChange={(event) => onFieldChange("phone", event.target.value)}
+          />
         </label>
         <label className="profile-field">
           <span>Membership Type</span>
-          <select value={formData.membershipType} onChange={(event) => onFieldChange("membershipType", event.target.value)}>
+          <select
+            value={formData.membershipType}
+            onChange={(event) =>
+              onFieldChange("membershipType", event.target.value)
+            }
+          >
             <option value="Primary">Primary</option>
             <option value="Associate">Associate</option>
             <option value="Temporary Visit">Temporary Visit</option>
@@ -3777,9 +4700,18 @@ function MemberMembershipForm({
 
           if (field.type === "textarea") {
             return (
-              <label key={field.id} className="profile-field profile-field-wide">
+              <label
+                key={field.id}
+                className="profile-field profile-field-wide"
+              >
                 <span>{label}</span>
-                <textarea rows="3" value={value} onChange={(event) => onFieldChange(field.id, event.target.value)} />
+                <textarea
+                  rows="3"
+                  value={value}
+                  onChange={(event) =>
+                    onFieldChange(field.id, event.target.value)
+                  }
+                />
               </label>
             );
           }
@@ -3790,7 +4722,9 @@ function MemberMembershipForm({
               <input
                 type={field.type === "date" ? "date" : "text"}
                 value={value}
-                onChange={(event) => onFieldChange(field.id, event.target.value)}
+                onChange={(event) =>
+                  onFieldChange(field.id, event.target.value)
+                }
               />
             </label>
           );
@@ -3801,7 +4735,9 @@ function MemberMembershipForm({
           <input
             type="date"
             value={formData.membershipStartDate}
-            onChange={(event) => onFieldChange("membershipStartDate", event.target.value)}
+            onChange={(event) =>
+              onFieldChange("membershipStartDate", event.target.value)
+            }
           />
         </label>
         <label className="profile-field">
@@ -3809,7 +4745,9 @@ function MemberMembershipForm({
           <input
             type="date"
             value={formData.membershipEndDate}
-            onChange={(event) => onFieldChange("membershipEndDate", event.target.value)}
+            onChange={(event) =>
+              onFieldChange("membershipEndDate", event.target.value)
+            }
           />
         </label>
         <label className="profile-field">
@@ -3818,12 +4756,19 @@ function MemberMembershipForm({
             type="text"
             placeholder="Rs. 48,000"
             value={formData.paymentAmount}
-            onChange={(event) => onFieldChange("paymentAmount", event.target.value)}
+            onChange={(event) =>
+              onFieldChange("paymentAmount", event.target.value)
+            }
           />
         </label>
         <label className="profile-field">
           <span>Payment Status</span>
-          <select value={formData.paymentStatus} onChange={(event) => onFieldChange("paymentStatus", event.target.value)}>
+          <select
+            value={formData.paymentStatus}
+            onChange={(event) =>
+              onFieldChange("paymentStatus", event.target.value)
+            }
+          >
             <option value="Pending">Pending</option>
             <option value="Paid">Paid</option>
             <option value="Overdue">Overdue</option>
@@ -3833,10 +4778,18 @@ function MemberMembershipForm({
       </div>
 
       <div className="profile-action-row">
-        <button className="secondary-link secondary-button" type="button" onClick={onCancel}>
+        <button
+          className="secondary-link secondary-button"
+          type="button"
+          onClick={onCancel}
+        >
           Cancel
         </button>
-        <button className="primary-link admin-action-button" type="button" onClick={onSave}>
+        <button
+          className="primary-link admin-action-button"
+          type="button"
+          onClick={onSave}
+        >
           {editingId ? "Update User" : "Save User"}
         </button>
       </div>
@@ -3854,7 +4807,11 @@ function MembershipFormPreview({ fields }) {
           return (
             <label key={field.id} className="profile-field profile-field-wide">
               <span>{label}</span>
-              <textarea rows="3" placeholder={`Preview for ${field.label}`} disabled />
+              <textarea
+                rows="3"
+                placeholder={`Preview for ${field.label}`}
+                disabled
+              />
             </label>
           );
         }
@@ -3910,7 +4867,10 @@ function MemberMasterPanel({
       <article className="association-empty-state">
         <span className="mini-label">Member Master</span>
         <h2>Only admins can update the membership master.</h2>
-        <p>Switch to an admin login to manage users and the membership form fields.</p>
+        <p>
+          Switch to an admin login to manage users and the membership form
+          fields.
+        </p>
       </article>
     );
   }
@@ -3924,7 +4884,11 @@ function MemberMasterPanel({
         </div>
 
         <div className="profile-action-row">
-          <button className="primary-link admin-action-button" type="button" onClick={onOpenMemberForm}>
+          <button
+            className="primary-link admin-action-button"
+            type="button"
+            onClick={onOpenMemberForm}
+          >
             Add User
           </button>
         </div>
@@ -3963,10 +4927,18 @@ function MemberMasterPanel({
                   </td>
                   <td>
                     <div className="member-master-actions">
-                      <button className="secondary-link secondary-button table-button" type="button" onClick={() => onEditMember(member.id)}>
+                      <button
+                        className="secondary-link secondary-button table-button"
+                        type="button"
+                        onClick={() => onEditMember(member.id)}
+                      >
                         Edit
                       </button>
-                      <button className="secondary-link secondary-button danger-button table-button" type="button" onClick={() => onDeleteMember(member.id)}>
+                      <button
+                        className="secondary-link secondary-button danger-button table-button"
+                        type="button"
+                        onClick={() => onDeleteMember(member.id)}
+                      >
                         Delete
                       </button>
                     </div>
@@ -3991,12 +4963,19 @@ function MemberMasterPanel({
               type="text"
               value={fieldDraft.label}
               placeholder="Add a custom field label"
-              onChange={(event) => onFieldDraftChange("label", event.target.value)}
+              onChange={(event) =>
+                onFieldDraftChange("label", event.target.value)
+              }
             />
           </label>
           <label className="content-control-field">
             <span>Field Type</span>
-            <select value={fieldDraft.type} onChange={(event) => onFieldDraftChange("type", event.target.value)}>
+            <select
+              value={fieldDraft.type}
+              onChange={(event) =>
+                onFieldDraftChange("type", event.target.value)
+              }
+            >
               <option value="text">Text</option>
               <option value="textarea">Long Text</option>
               <option value="date">Date</option>
@@ -4006,11 +4985,17 @@ function MemberMasterPanel({
             <input
               type="checkbox"
               checked={fieldDraft.required}
-              onChange={(event) => onFieldDraftChange("required", event.target.checked)}
+              onChange={(event) =>
+                onFieldDraftChange("required", event.target.checked)
+              }
             />
             <span>Required</span>
           </label>
-          <button className="secondary-link secondary-button" type="button" onClick={onAddField}>
+          <button
+            className="secondary-link secondary-button"
+            type="button"
+            onClick={onAddField}
+          >
             Add Field
           </button>
         </div>
@@ -4024,14 +5009,18 @@ function MemberMasterPanel({
                   <input
                     type="text"
                     value={field.label}
-                    onChange={(event) => onUpdateField(field.id, "label", event.target.value)}
+                    onChange={(event) =>
+                      onUpdateField(field.id, "label", event.target.value)
+                    }
                   />
                 </label>
                 <label className="content-control-field">
                   <span>Field Type</span>
                   <select
                     value={field.type}
-                    onChange={(event) => onUpdateField(field.id, "type", event.target.value)}
+                    onChange={(event) =>
+                      onUpdateField(field.id, "type", event.target.value)
+                    }
                   >
                     <option value="text">Text</option>
                     <option value="textarea">Long Text</option>
@@ -4042,7 +5031,9 @@ function MemberMasterPanel({
                   <input
                     type="checkbox"
                     checked={field.required}
-                    onChange={(event) => onUpdateField(field.id, "required", event.target.checked)}
+                    onChange={(event) =>
+                      onUpdateField(field.id, "required", event.target.checked)
+                    }
                   />
                   <span>Required</span>
                 </label>
@@ -4086,7 +5077,9 @@ function VendorStatusGrid({ items }) {
               <strong>{vendor.name}</strong>
               <p className="member-company">{vendor.company}</p>
             </div>
-            <span className="access-status-chip">{vendor.registrationStatus}</span>
+            <span className="access-status-chip">
+              {vendor.registrationStatus}
+            </span>
           </div>
 
           <div className="member-record-details">
@@ -4100,7 +5093,12 @@ function VendorStatusGrid({ items }) {
           </div>
 
           <div className="record-actions">
-            <a className="secondary-link" href={`https://wa.me/${vendor.whatsapp}`} target="_blank" rel="noreferrer">
+            <a
+              className="secondary-link"
+              href={`https://wa.me/${vendor.whatsapp}`}
+              target="_blank"
+              rel="noreferrer"
+            >
               WhatsApp
             </a>
             <a className="secondary-link" href={`mailto:${vendor.email}`}>
@@ -4148,7 +5146,9 @@ function VendorRegistrationTable({ items }) {
                 <td>{vendor.vendorType}</td>
                 <td>{vendor.onboardingPeriod}</td>
                 <td>
-                  <span className="access-status-chip">{vendor.registrationStatus}</span>
+                  <span className="access-status-chip">
+                    {vendor.registrationStatus}
+                  </span>
                 </td>
                 <td>
                   <div className="member-table-contact">
@@ -4169,7 +5169,10 @@ function VendorPaymentGrid({ items }) {
   return (
     <div className="association-record-grid">
       {items.map((vendor, index) => (
-        <article key={vendor.id} className="association-record-card tone-advertisement">
+        <article
+          key={vendor.id}
+          className="association-record-card tone-advertisement"
+        >
           <div className="association-record-visual">
             <span>{String(index + 1).padStart(2, "0")}</span>
           </div>
@@ -4222,7 +5225,9 @@ function VendorPaymentTable({ items }) {
                 <td>{vendor.city}</td>
                 <td>{vendor.membershipPlan}</td>
                 <td>
-                  <span className="access-status-chip">{vendor.paymentStatus}</span>
+                  <span className="access-status-chip">
+                    {vendor.paymentStatus}
+                  </span>
                 </td>
                 <td>{vendor.paymentAmount}</td>
                 <td>{vendor.paymentDue}</td>
@@ -4268,7 +5273,11 @@ function VendorRegistrationForm({
             onChange={(event) => onNewCategoryChange(event.target.value)}
           />
         </div>
-        <button className="secondary-link secondary-button" type="button" onClick={onAddCategory}>
+        <button
+          className="secondary-link secondary-button"
+          type="button"
+          onClick={onAddCategory}
+        >
           Add Category
         </button>
       </div>
@@ -4301,14 +5310,21 @@ function VendorRegistrationForm({
         <label className="profile-field">
           <span>Mobile *</span>
           <div className="split-inline-fields">
-            <select value={formData.phoneCode} onChange={(event) => onChange("phoneCode", event.target.value)}>
+            <select
+              value={formData.phoneCode}
+              onChange={(event) => onChange("phoneCode", event.target.value)}
+            >
               {phoneCodeOptions.map((phoneCode) => (
                 <option key={phoneCode} value={phoneCode}>
                   {phoneCode}
                 </option>
               ))}
             </select>
-            <input type="text" value={formData.phone} onChange={(event) => onChange("phone", event.target.value)} />
+            <input
+              type="text"
+              value={formData.phone}
+              onChange={(event) => onChange("phone", event.target.value)}
+            />
           </div>
         </label>
         <label className="profile-field">
@@ -4341,7 +5357,10 @@ function VendorRegistrationForm({
         </label>
         <label className="profile-field">
           <span>Category *</span>
-          <select value={formData.category} onChange={(event) => onChange("category", event.target.value)}>
+          <select
+            value={formData.category}
+            onChange={(event) => onChange("category", event.target.value)}
+          >
             <option value="">Select category</option>
             {categories.map((category) => (
               <option key={category} value={category}>
@@ -4352,7 +5371,10 @@ function VendorRegistrationForm({
         </label>
         <label className="profile-field">
           <span>Sub Category *</span>
-          <select value={formData.subCategory} onChange={(event) => onChange("subCategory", event.target.value)}>
+          <select
+            value={formData.subCategory}
+            onChange={(event) => onChange("subCategory", event.target.value)}
+          >
             <option value="">Select sub category</option>
             {subCategories.map((subCategory) => (
               <option key={subCategory} value={subCategory}>
@@ -4363,7 +5385,10 @@ function VendorRegistrationForm({
         </label>
         <label className="profile-field">
           <span>Country</span>
-          <select value={formData.country} onChange={(event) => onChange("country", event.target.value)}>
+          <select
+            value={formData.country}
+            onChange={(event) => onChange("country", event.target.value)}
+          >
             <option value="">Select country</option>
             {countryOptions.map((country) => (
               <option key={country} value={country}>
@@ -4374,7 +5399,10 @@ function VendorRegistrationForm({
         </label>
         <label className="profile-field">
           <span>State</span>
-          <select value={formData.state} onChange={(event) => onChange("state", event.target.value)}>
+          <select
+            value={formData.state}
+            onChange={(event) => onChange("state", event.target.value)}
+          >
             <option value="">Select state</option>
             {stateOptions.map((state) => (
               <option key={state} value={state}>
@@ -4385,7 +5413,10 @@ function VendorRegistrationForm({
         </label>
         <label className="profile-field">
           <span>City</span>
-          <select value={formData.city} onChange={(event) => onChange("city", event.target.value)}>
+          <select
+            value={formData.city}
+            onChange={(event) => onChange("city", event.target.value)}
+          >
             <option value="">Select city</option>
             {cityOptions.map((city) => (
               <option key={city} value={city}>
@@ -4444,32 +5475,55 @@ function VendorRegistrationForm({
         </label>
         <label className="profile-field profile-field-wide">
           <span>Address *</span>
-          <textarea rows="3" value={formData.address} onChange={(event) => onChange("address", event.target.value)} />
+          <textarea
+            rows="3"
+            value={formData.address}
+            onChange={(event) => onChange("address", event.target.value)}
+          />
         </label>
         <label className="profile-field profile-field-wide">
           <span>Work Description</span>
           <textarea
             rows="3"
             value={formData.workDescription}
-            onChange={(event) => onChange("workDescription", event.target.value)}
+            onChange={(event) =>
+              onChange("workDescription", event.target.value)
+            }
           />
         </label>
         <label className="profile-field">
           <span>Zipcode</span>
-          <input type="text" value={formData.zipcode} onChange={(event) => onChange("zipcode", event.target.value)} />
+          <input
+            type="text"
+            value={formData.zipcode}
+            onChange={(event) => onChange("zipcode", event.target.value)}
+          />
         </label>
         <label className="profile-field">
           <span>Company Logo</span>
-          <input type="file" accept="image/*" onChange={(event) => onFileChange("companyLogo", event.target.files?.[0] ?? null)} />
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(event) =>
+              onFileChange("companyLogo", event.target.files?.[0] ?? null)
+            }
+          />
         </label>
         <div className="profile-field profile-field-wide vendor-admin-note">
           <span>Admin Review Fields</span>
-          <p>Plan, commercial, schedule, proof, and approval details are completed by the admin during vendor status review.</p>
+          <p>
+            Plan, commercial, schedule, proof, and approval details are
+            completed by the admin during vendor status review.
+          </p>
         </div>
       </div>
 
       <div className="profile-action-row">
-        <button className="primary-link admin-action-button" type="button" onClick={onSubmit}>
+        <button
+          className="primary-link admin-action-button"
+          type="button"
+          onClick={onSubmit}
+        >
           Save Vendor
         </button>
       </div>
@@ -4497,12 +5551,17 @@ function VendorCategoryPanel({
               <span className="mini-label">Vendor Category</span>
               <h2>Category Master</h2>
             </div>
-            <button className="primary-link admin-action-button" type="button" onClick={() => onStartEdit("")}>
+            <button
+              className="primary-link admin-action-button"
+              type="button"
+              onClick={() => onStartEdit("")}
+            >
               Add Category
             </button>
           </div>
           <p className="committee-hero-copy">
-            Create and maintain the main vendor categories used by registration and sub-category mapping.
+            Create and maintain the main vendor categories used by registration
+            and sub-category mapping.
           </p>
         </article>
 
@@ -4516,15 +5575,27 @@ function VendorCategoryPanel({
             <div className="profile-form-grid">
               <label className="profile-field profile-field-wide">
                 <span>Category Name</span>
-                <input type="text" value={draftValue} onChange={(event) => onDraftChange(event.target.value)} />
+                <input
+                  type="text"
+                  value={draftValue}
+                  onChange={(event) => onDraftChange(event.target.value)}
+                />
               </label>
             </div>
 
             <div className="profile-action-row">
-              <button className="secondary-link secondary-button" type="button" onClick={onCancelEdit}>
+              <button
+                className="secondary-link secondary-button"
+                type="button"
+                onClick={onCancelEdit}
+              >
                 Cancel
               </button>
-              <button className="primary-link admin-action-button" type="button" onClick={onSave}>
+              <button
+                className="primary-link admin-action-button"
+                type="button"
+                onClick={onSave}
+              >
                 Save Category
               </button>
             </div>
@@ -4538,13 +5609,24 @@ function VendorCategoryPanel({
                 <div className="association-gallery-copy">
                   <span className="mini-label">Category</span>
                   <h3>{category}</h3>
-                  <p>{(subCategoryMap[category] ?? []).length} sub categories mapped under this category.</p>
+                  <p>
+                    {(subCategoryMap[category] ?? []).length} sub categories
+                    mapped under this category.
+                  </p>
                 </div>
                 <div className="record-actions">
-                  <button className="secondary-link secondary-button" type="button" onClick={() => onStartEdit(category)}>
+                  <button
+                    className="secondary-link secondary-button"
+                    type="button"
+                    onClick={() => onStartEdit(category)}
+                  >
                     Edit
                   </button>
-                  <button className="secondary-link secondary-button danger-button" type="button" onClick={() => onDelete(category)}>
+                  <button
+                    className="secondary-link secondary-button danger-button"
+                    type="button"
+                    onClick={() => onDelete(category)}
+                  >
                     Delete
                   </button>
                 </div>
@@ -4555,7 +5637,9 @@ function VendorCategoryPanel({
           <article className="association-profile-card committee-empty-card">
             <span className="mini-label">Category</span>
             <h3>No vendor categories yet</h3>
-            <p>Add your first category to begin structuring vendor registration.</p>
+            <p>
+              Add your first category to begin structuring vendor registration.
+            </p>
           </article>
         )}
       </section>
@@ -4576,7 +5660,9 @@ function VendorSubCategoryPanel({
   onSave,
   onDelete,
 }) {
-  const items = selectedCategory ? subCategoryMap[selectedCategory] ?? [] : [];
+  const items = selectedCategory
+    ? (subCategoryMap[selectedCategory] ?? [])
+    : [];
 
   return (
     <section className="association-tab-section">
@@ -4587,14 +5673,21 @@ function VendorSubCategoryPanel({
               <span className="mini-label">Vendor Sub Category</span>
               <h2>Sub Category Master</h2>
             </div>
-            <button className="primary-link admin-action-button" type="button" onClick={() => onStartEdit("")}>
+            <button
+              className="primary-link admin-action-button"
+              type="button"
+              onClick={() => onStartEdit("")}
+            >
               Add Sub Category
             </button>
           </div>
           <div className="profile-form-grid">
             <label className="profile-field profile-field-wide">
               <span>Main Category</span>
-              <select value={selectedCategory} onChange={(event) => onSelectCategory(event.target.value)}>
+              <select
+                value={selectedCategory}
+                onChange={(event) => onSelectCategory(event.target.value)}
+              >
                 <option value="">Select category</option>
                 {categories.map((category) => (
                   <option key={category} value={category}>
@@ -4616,7 +5709,10 @@ function VendorSubCategoryPanel({
             <div className="profile-form-grid">
               <label className="profile-field">
                 <span>Main Category</span>
-                <select value={selectedCategory} onChange={(event) => onSelectCategory(event.target.value)}>
+                <select
+                  value={selectedCategory}
+                  onChange={(event) => onSelectCategory(event.target.value)}
+                >
                   <option value="">Select category</option>
                   {categories.map((category) => (
                     <option key={category} value={category}>
@@ -4627,15 +5723,27 @@ function VendorSubCategoryPanel({
               </label>
               <label className="profile-field">
                 <span>Sub Category Name</span>
-                <input type="text" value={draftValue} onChange={(event) => onDraftChange(event.target.value)} />
+                <input
+                  type="text"
+                  value={draftValue}
+                  onChange={(event) => onDraftChange(event.target.value)}
+                />
               </label>
             </div>
 
             <div className="profile-action-row">
-              <button className="secondary-link secondary-button" type="button" onClick={onCancelEdit}>
+              <button
+                className="secondary-link secondary-button"
+                type="button"
+                onClick={onCancelEdit}
+              >
                 Cancel
               </button>
-              <button className="primary-link admin-action-button" type="button" onClick={onSave}>
+              <button
+                className="primary-link admin-action-button"
+                type="button"
+                onClick={onSave}
+              >
                 Save Sub Category
               </button>
             </div>
@@ -4646,17 +5754,31 @@ function VendorSubCategoryPanel({
           items.length > 0 ? (
             <div className="association-gallery-grid">
               {items.map((item) => (
-                <article key={`${selectedCategory}-${item}`} className="association-gallery-card">
+                <article
+                  key={`${selectedCategory}-${item}`}
+                  className="association-gallery-card"
+                >
                   <div className="association-gallery-copy">
                     <span className="mini-label">{selectedCategory}</span>
                     <h3>{item}</h3>
-                    <p>Linked to the selected main category and available for vendor registration.</p>
+                    <p>
+                      Linked to the selected main category and available for
+                      vendor registration.
+                    </p>
                   </div>
                   <div className="record-actions">
-                    <button className="secondary-link secondary-button" type="button" onClick={() => onStartEdit(item)}>
+                    <button
+                      className="secondary-link secondary-button"
+                      type="button"
+                      onClick={() => onStartEdit(item)}
+                    >
                       Edit
                     </button>
-                    <button className="secondary-link secondary-button danger-button" type="button" onClick={() => onDelete(item)}>
+                    <button
+                      className="secondary-link secondary-button danger-button"
+                      type="button"
+                      onClick={() => onDelete(item)}
+                    >
                       Delete
                     </button>
                   </div>
@@ -4667,14 +5789,19 @@ function VendorSubCategoryPanel({
             <article className="association-profile-card committee-empty-card">
               <span className="mini-label">{selectedCategory}</span>
               <h3>No sub categories yet</h3>
-              <p>Add a sub category for the selected main category to continue configuring the vendor master.</p>
+              <p>
+                Add a sub category for the selected main category to continue
+                configuring the vendor master.
+              </p>
             </article>
           )
         ) : (
           <article className="association-profile-card committee-empty-card">
             <span className="mini-label">Sub Category</span>
             <h3>Select a main category first</h3>
-            <p>Choose a category above to fetch and manage its sub categories.</p>
+            <p>
+              Choose a category above to fetch and manage its sub categories.
+            </p>
           </article>
         )}
       </section>
@@ -4721,18 +5848,32 @@ function VendorStatusPanel({
           />
         </div>
         <label className="selection-chip">
-          <input type="checkbox" checked={allSelected} onChange={onToggleSelectAll} />
+          <input
+            type="checkbox"
+            checked={allSelected}
+            onChange={onToggleSelectAll}
+          />
           <span>Select filtered</span>
         </label>
-        <button className="secondary-link secondary-button" type="button" onClick={() => onApplyBulkDecision("APPROVED")}>
+        <button
+          className="secondary-link secondary-button"
+          type="button"
+          onClick={() => onApplyBulkDecision("APPROVED")}
+        >
           Approve Selected Individually
         </button>
-        <button className="secondary-link secondary-button danger-button" type="button" onClick={() => onApplyBulkDecision("CANCELLED")}>
+        <button
+          className="secondary-link secondary-button danger-button"
+          type="button"
+          onClick={() => onApplyBulkDecision("CANCELLED")}
+        >
           Reject Selected
         </button>
       </div>
 
-      {approvalError ? <p className="vendor-admin-note">{approvalError}</p> : null}
+      {approvalError ? (
+        <p className="vendor-admin-note">{approvalError}</p>
+      ) : null}
 
       <div className="member-table-wrap">
         <table className="member-table">
@@ -4772,17 +5913,31 @@ function VendorStatusPanel({
                 <td>{vendor.phone || "--"}</td>
                 <td>{vendor.email || "--"}</td>
                 <td>
-                  <span className="access-status-chip">{vendor.appAccessStatus}</span>
+                  <span className="access-status-chip">
+                    {vendor.appAccessStatus}
+                  </span>
                 </td>
                 <td>
                   <div className="record-actions">
-                    <button className="secondary-link secondary-button" type="button" onClick={() => onSelectVendor(vendor.id)}>
+                    <button
+                      className="secondary-link secondary-button"
+                      type="button"
+                      onClick={() => onSelectVendor(vendor.id)}
+                    >
                       Review
                     </button>
-                    <button className="secondary-link secondary-button" type="button" onClick={() => onApproveOne(vendor.id)}>
+                    <button
+                      className="secondary-link secondary-button"
+                      type="button"
+                      onClick={() => onApproveOne(vendor.id)}
+                    >
                       Approve With Details
                     </button>
-                    <button className="secondary-link secondary-button danger-button" type="button" onClick={() => onRejectOne(vendor.id)}>
+                    <button
+                      className="secondary-link secondary-button danger-button"
+                      type="button"
+                      onClick={() => onRejectOne(vendor.id)}
+                    >
                       Quick Reject
                     </button>
                   </div>
@@ -4797,7 +5952,9 @@ function VendorStatusPanel({
         <article className="association-empty-state">
           <span className="mini-label">No Requests</span>
           <h2>No vendor registration requests match the current filter.</h2>
-          <p>New pending vendor registrations will appear here for admin review.</p>
+          <p>
+            New pending vendor registrations will appear here for admin review.
+          </p>
         </article>
       ) : null}
 
@@ -4808,13 +5965,20 @@ function VendorStatusPanel({
               <span className="mini-label">Admin Decision Form</span>
               <h3>{selectedVendor.company}</h3>
             </div>
-            <span className="access-status-chip">{selectedVendor.appAccessStatus}</span>
+            <span className="access-status-chip">
+              {selectedVendor.appAccessStatus}
+            </span>
           </div>
 
           <div className="profile-form-grid">
             <label className="profile-field">
               <span>Plan Name *</span>
-              <select value={reviewForm.planName} onChange={(event) => onReviewFieldChange("planName", event.target.value)}>
+              <select
+                value={reviewForm.planName}
+                onChange={(event) =>
+                  onReviewFieldChange("planName", event.target.value)
+                }
+              >
                 <option value="">Select Plan</option>
                 {planOptions.map((plan) => (
                   <option key={plan} value={plan}>
@@ -4825,39 +5989,92 @@ function VendorStatusPanel({
             </label>
             <label className="profile-field">
               <span>Membership Plan</span>
-              <input type="text" value={reviewForm.membershipPlan} onChange={(event) => onReviewFieldChange("membershipPlan", event.target.value)} />
+              <input
+                type="text"
+                value={reviewForm.membershipPlan}
+                onChange={(event) =>
+                  onReviewFieldChange("membershipPlan", event.target.value)
+                }
+              />
             </label>
             <label className="profile-field">
               <span>Opening Time</span>
-              <input type="time" value={reviewForm.openingTime} onChange={(event) => onReviewFieldChange("openingTime", event.target.value)} />
+              <input
+                type="time"
+                value={reviewForm.openingTime}
+                onChange={(event) =>
+                  onReviewFieldChange("openingTime", event.target.value)
+                }
+              />
             </label>
             <label className="profile-field">
               <span>Closing Time</span>
-              <input type="time" value={reviewForm.closingTime} onChange={(event) => onReviewFieldChange("closingTime", event.target.value)} />
+              <input
+                type="time"
+                value={reviewForm.closingTime}
+                onChange={(event) =>
+                  onReviewFieldChange("closingTime", event.target.value)
+                }
+              />
             </label>
             <label className="profile-field">
               <span>Payment Amount</span>
-              <input type="text" value={reviewForm.paymentAmount} onChange={(event) => onReviewFieldChange("paymentAmount", event.target.value)} />
+              <input
+                type="text"
+                value={reviewForm.paymentAmount}
+                onChange={(event) =>
+                  onReviewFieldChange("paymentAmount", event.target.value)
+                }
+              />
             </label>
             <label className="profile-field">
               <span>GST Number</span>
-              <input type="text" value={reviewForm.gstNumber} onChange={(event) => onReviewFieldChange("gstNumber", event.target.value)} />
+              <input
+                type="text"
+                value={reviewForm.gstNumber}
+                onChange={(event) =>
+                  onReviewFieldChange("gstNumber", event.target.value)
+                }
+              />
             </label>
             <label className="profile-field">
               <span>Start Date *</span>
-              <input type="date" value={reviewForm.onboardingStartAt} onChange={(event) => onReviewFieldChange("onboardingStartAt", event.target.value)} />
+              <input
+                type="date"
+                value={reviewForm.onboardingStartAt}
+                onChange={(event) =>
+                  onReviewFieldChange("onboardingStartAt", event.target.value)
+                }
+              />
             </label>
             <label className="profile-field">
               <span>End Date *</span>
-              <input type="date" value={reviewForm.onboardingEndAt} onChange={(event) => onReviewFieldChange("onboardingEndAt", event.target.value)} />
+              <input
+                type="date"
+                value={reviewForm.onboardingEndAt}
+                onChange={(event) =>
+                  onReviewFieldChange("onboardingEndAt", event.target.value)
+                }
+              />
             </label>
             <label className="profile-field">
               <span>Payment Due</span>
-              <input type="date" value={reviewForm.paymentDueDate} onChange={(event) => onReviewFieldChange("paymentDueDate", event.target.value)} />
+              <input
+                type="date"
+                value={reviewForm.paymentDueDate}
+                onChange={(event) =>
+                  onReviewFieldChange("paymentDueDate", event.target.value)
+                }
+              />
             </label>
             <label className="profile-field">
               <span>Payment Mode *</span>
-              <select value={reviewForm.paymentMode} onChange={(event) => onReviewFieldChange("paymentMode", event.target.value)}>
+              <select
+                value={reviewForm.paymentMode}
+                onChange={(event) =>
+                  onReviewFieldChange("paymentMode", event.target.value)
+                }
+              >
                 {paymentModeOptions.map((mode) => (
                   <option key={mode} value={mode}>
                     {mode}
@@ -4867,60 +6084,141 @@ function VendorStatusPanel({
             </label>
             <label className="profile-field">
               <span>Bank Name *</span>
-              <input type="text" value={reviewForm.bankName} onChange={(event) => onReviewFieldChange("bankName", event.target.value)} />
+              <input
+                type="text"
+                value={reviewForm.bankName}
+                onChange={(event) =>
+                  onReviewFieldChange("bankName", event.target.value)
+                }
+              />
             </label>
             <label className="profile-field">
               <span>Transaction ID *</span>
-              <input type="text" value={reviewForm.transactionId} onChange={(event) => onReviewFieldChange("transactionId", event.target.value)} />
+              <input
+                type="text"
+                value={reviewForm.transactionId}
+                onChange={(event) =>
+                  onReviewFieldChange("transactionId", event.target.value)
+                }
+              />
             </label>
             <label className="profile-field">
               <span>ID Proof</span>
-              <input type="file" onChange={(event) => onReviewFileChange("idProof", event.target.files?.[0] ?? null)} />
+              <input
+                type="file"
+                onChange={(event) =>
+                  onReviewFileChange("idProof", event.target.files?.[0] ?? null)
+                }
+              />
             </label>
             <label className="profile-field">
               <span>Location Proof</span>
-              <input type="file" onChange={(event) => onReviewFileChange("locationProof", event.target.files?.[0] ?? null)} />
+              <input
+                type="file"
+                onChange={(event) =>
+                  onReviewFileChange(
+                    "locationProof",
+                    event.target.files?.[0] ?? null,
+                  )
+                }
+              />
             </label>
             <label className="profile-field">
               <span>Company Profile / Brochure</span>
-              <input type="file" onChange={(event) => onReviewFileChange("companyBrochure", event.target.files?.[0] ?? null)} />
+              <input
+                type="file"
+                onChange={(event) =>
+                  onReviewFileChange(
+                    "companyBrochure",
+                    event.target.files?.[0] ?? null,
+                  )
+                }
+              />
             </label>
             <label className="profile-field">
               <span>Profile Photo</span>
-              <input type="file" accept="image/*" onChange={(event) => onReviewFileChange("profilePhoto", event.target.files?.[0] ?? null)} />
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(event) =>
+                  onReviewFileChange(
+                    "profilePhoto",
+                    event.target.files?.[0] ?? null,
+                  )
+                }
+              />
             </label>
             <label className="profile-field">
               <span>Visiting Card</span>
-              <input type="file" accept="image/*,.pdf" onChange={(event) => onReviewFileChange("visitingCard", event.target.files?.[0] ?? null)} />
+              <input
+                type="file"
+                accept="image/*,.pdf"
+                onChange={(event) =>
+                  onReviewFileChange(
+                    "visitingCard",
+                    event.target.files?.[0] ?? null,
+                  )
+                }
+              />
             </label>
             <label className="profile-field">
               <span>Is Restaurant?</span>
               <div className="inline-choice-row">
                 <label className="inline-choice-option">
-                  <input type="radio" name="status-isRestaurant" checked={reviewForm.isRestaurant === true} onChange={() => onReviewFieldChange("isRestaurant", true)} />
+                  <input
+                    type="radio"
+                    name="status-isRestaurant"
+                    checked={reviewForm.isRestaurant === true}
+                    onChange={() => onReviewFieldChange("isRestaurant", true)}
+                  />
                   <span>Yes</span>
                 </label>
                 <label className="inline-choice-option">
-                  <input type="radio" name="status-isRestaurant" checked={reviewForm.isRestaurant === false} onChange={() => onReviewFieldChange("isRestaurant", false)} />
+                  <input
+                    type="radio"
+                    name="status-isRestaurant"
+                    checked={reviewForm.isRestaurant === false}
+                    onChange={() => onReviewFieldChange("isRestaurant", false)}
+                  />
                   <span>No</span>
                 </label>
               </div>
             </label>
             <label className="profile-field profile-field-wide">
               <span>Payment Description</span>
-              <textarea rows="3" value={reviewForm.paymentDescription} onChange={(event) => onReviewFieldChange("paymentDescription", event.target.value)} />
+              <textarea
+                rows="3"
+                value={reviewForm.paymentDescription}
+                onChange={(event) =>
+                  onReviewFieldChange("paymentDescription", event.target.value)
+                }
+              />
             </label>
             <label className="profile-field profile-field-wide">
               <span>Google Location</span>
-              <input type="text" value={reviewForm.googleLocation} onChange={(event) => onReviewFieldChange("googleLocation", event.target.value)} />
+              <input
+                type="text"
+                value={reviewForm.googleLocation}
+                onChange={(event) =>
+                  onReviewFieldChange("googleLocation", event.target.value)
+                }
+              />
             </label>
           </div>
 
           <div className="profile-action-row">
-            <button className="secondary-link secondary-button" type="button" onClick={() => onApproveOne(selectedVendor.id)}>
+            <button
+              className="secondary-link secondary-button"
+              type="button"
+              onClick={() => onApproveOne(selectedVendor.id)}
+            >
               Save And Approve
             </button>
-            <button className="secondary-link secondary-button danger-button" type="button" onClick={() => onRejectOne(selectedVendor.id)}>
+            <button
+              className="secondary-link secondary-button danger-button"
+              type="button"
+              onClick={() => onRejectOne(selectedVendor.id)}
+            >
               Save And Reject
             </button>
           </div>
@@ -4953,8 +6251,12 @@ function VendorArenaContent({
 }) {
   const filteredItems = items.filter((vendor) => {
     const matchesName =
-      !filterState.name || `${vendor.name} ${vendor.company}`.toLowerCase().includes(filterState.name.toLowerCase());
-    const matchesCategory = !filterState.category || vendor.category === filterState.category;
+      !filterState.name ||
+      `${vendor.name} ${vendor.company}`
+        .toLowerCase()
+        .includes(filterState.name.toLowerCase());
+    const matchesCategory =
+      !filterState.category || vendor.category === filterState.category;
     const matchesCity = !filterState.city || vendor.city === filterState.city;
     return matchesName && matchesCategory && matchesCity;
   });
@@ -4982,7 +6284,9 @@ function VendorArenaContent({
               <span>Category</span>
               <select
                 value={filterState.category}
-                onChange={(event) => onFilterChange("category", event.target.value)}
+                onChange={(event) =>
+                  onFilterChange("category", event.target.value)
+                }
               >
                 <option value="">All Categories</option>
                 {categories.map((category) => (
@@ -4994,13 +6298,18 @@ function VendorArenaContent({
             </label>
             <label className="content-control-field">
               <span>City</span>
-              <select value={filterState.city} onChange={(event) => onFilterChange("city", event.target.value)}>
+              <select
+                value={filterState.city}
+                onChange={(event) => onFilterChange("city", event.target.value)}
+              >
                 <option value="">All Cities</option>
-                {[...new Set(items.map((vendor) => vendor.city))].map((city) => (
-                  <option key={city} value={city}>
-                    {city}
-                  </option>
-                ))}
+                {[...new Set(items.map((vendor) => vendor.city))].map(
+                  (city) => (
+                    <option key={city} value={city}>
+                      {city}
+                    </option>
+                  ),
+                )}
               </select>
             </label>
           </div>
@@ -5069,7 +6378,10 @@ function TimelinePanel({
           </label>
           <label className="profile-field">
             <span>Select Vendor</span>
-            <select value={formData.vendorId} onChange={(event) => onChange("vendorId", event.target.value)}>
+            <select
+              value={formData.vendorId}
+              onChange={(event) => onChange("vendorId", event.target.value)}
+            >
               <option value="">Select vendor</option>
               {vendorOptions.map((option) => (
                 <option key={option.id} value={option.id}>
@@ -5080,36 +6392,77 @@ function TimelinePanel({
           </label>
           <label className="profile-field profile-field-wide">
             <span>Post Copy *</span>
-            <textarea rows="4" value={formData.caption} onChange={(event) => onChange("caption", event.target.value)} />
+            <textarea
+              rows="4"
+              value={formData.caption}
+              onChange={(event) => onChange("caption", event.target.value)}
+            />
           </label>
           <label className="profile-field">
             <span>Contact Number</span>
-            <input type="text" value={formData.contactNumber} onChange={(event) => onChange("contactNumber", event.target.value)} />
+            <input
+              type="text"
+              value={formData.contactNumber}
+              onChange={(event) =>
+                onChange("contactNumber", event.target.value)
+              }
+            />
           </label>
           <label className="profile-field">
             <span>Landing Page Website</span>
-            <input type="text" value={formData.landingPageUrl} onChange={(event) => onChange("landingPageUrl", event.target.value)} />
+            <input
+              type="text"
+              value={formData.landingPageUrl}
+              onChange={(event) =>
+                onChange("landingPageUrl", event.target.value)
+              }
+            />
           </label>
           <label className="profile-field">
             <span>YouTube Link</span>
-            <input type="text" value={formData.youtubeUrl} onChange={(event) => onChange("youtubeUrl", event.target.value)} />
+            <input
+              type="text"
+              value={formData.youtubeUrl}
+              onChange={(event) => onChange("youtubeUrl", event.target.value)}
+            />
           </label>
           <label className="profile-field">
             <span>Facebook Page</span>
-            <input type="text" value={formData.facebookUrl} onChange={(event) => onChange("facebookUrl", event.target.value)} />
+            <input
+              type="text"
+              value={formData.facebookUrl}
+              onChange={(event) => onChange("facebookUrl", event.target.value)}
+            />
           </label>
           <label className="profile-field">
             <span>Post Picture</span>
-            <input type="file" accept="image/*" onChange={(event) => onFileChange("imageFile", event.target.files?.[0] ?? null)} />
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(event) =>
+                onFileChange("imageFile", event.target.files?.[0] ?? null)
+              }
+            />
           </label>
           <label className="profile-field">
             <span>PDF Brochure</span>
-            <input type="file" accept="application/pdf" onChange={(event) => onFileChange("brochureFile", event.target.files?.[0] ?? null)} />
+            <input
+              type="file"
+              accept="application/pdf"
+              onChange={(event) =>
+                onFileChange("brochureFile", event.target.files?.[0] ?? null)
+              }
+            />
           </label>
         </div>
 
         <div className="profile-action-row">
-          <button className="primary-link admin-action-button" type="button" onClick={onSubmit} disabled={isSaving}>
+          <button
+            className="primary-link admin-action-button"
+            type="button"
+            onClick={onSubmit}
+            disabled={isSaving}
+          >
             {isSaving ? "Saving Timeline..." : "Save Timeline Post"}
           </button>
         </div>
@@ -5132,14 +6485,49 @@ function TimelinePanel({
               {post.contactNumber ? <p>Contact: {post.contactNumber}</p> : null}
               {post.imageUrl ? (
                 <div className="association-gallery-visual">
-                  <img src={post.imageUrl} alt={post.caption.slice(0, 60) || "Timeline post"} />
+                  <img
+                    src={post.imageUrl}
+                    alt={post.caption.slice(0, 60) || "Timeline post"}
+                  />
                 </div>
               ) : null}
               <div className="member-record-details">
-                {post.landingPageUrl ? <p>Landing Page: <a href={post.landingPageUrl} target="_blank" rel="noreferrer">{post.landingPageUrl}</a></p> : null}
-                {post.youtubeUrl ? <p>YouTube: <a href={post.youtubeUrl} target="_blank" rel="noreferrer">{post.youtubeUrl}</a></p> : null}
-                {post.facebookUrl ? <p>Facebook: <a href={post.facebookUrl} target="_blank" rel="noreferrer">{post.facebookUrl}</a></p> : null}
-                {post.brochureUrl ? <p>Brochure: <a href={post.brochureUrl} target="_blank" rel="noreferrer">Open PDF</a></p> : null}
+                {post.landingPageUrl ? (
+                  <p>
+                    Landing Page:{" "}
+                    <a
+                      href={post.landingPageUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {post.landingPageUrl}
+                    </a>
+                  </p>
+                ) : null}
+                {post.youtubeUrl ? (
+                  <p>
+                    YouTube:{" "}
+                    <a href={post.youtubeUrl} target="_blank" rel="noreferrer">
+                      {post.youtubeUrl}
+                    </a>
+                  </p>
+                ) : null}
+                {post.facebookUrl ? (
+                  <p>
+                    Facebook:{" "}
+                    <a href={post.facebookUrl} target="_blank" rel="noreferrer">
+                      {post.facebookUrl}
+                    </a>
+                  </p>
+                ) : null}
+                {post.brochureUrl ? (
+                  <p>
+                    Brochure:{" "}
+                    <a href={post.brochureUrl} target="_blank" rel="noreferrer">
+                      Open PDF
+                    </a>
+                  </p>
+                ) : null}
               </div>
             </div>
           </article>
@@ -5148,7 +6536,10 @@ function TimelinePanel({
           <article className="association-empty-state">
             <span className="mini-label">Timeline</span>
             <h2>No timeline posts yet.</h2>
-            <p>Create the first vendor, member, or association campaign post here.</p>
+            <p>
+              Create the first vendor, member, or association campaign post
+              here.
+            </p>
           </article>
         ) : null}
       </section>
@@ -5177,7 +6568,10 @@ function AppBannerPanel({
         <div className="profile-form-grid">
           <label className="profile-field">
             <span>Select Vendor</span>
-            <select value={formData.vendorId} onChange={(event) => onChange("vendorId", event.target.value)}>
+            <select
+              value={formData.vendorId}
+              onChange={(event) => onChange("vendorId", event.target.value)}
+            >
               <option value="">Select vendor</option>
               {vendorOptions.map((option) => (
                 <option key={option.id} value={option.id}>
@@ -5188,32 +6582,68 @@ function AppBannerPanel({
           </label>
           <label className="profile-field">
             <span>Contact Number</span>
-            <input type="text" value={formData.contactNumber} onChange={(event) => onChange("contactNumber", event.target.value)} />
+            <input
+              type="text"
+              value={formData.contactNumber}
+              onChange={(event) =>
+                onChange("contactNumber", event.target.value)
+              }
+            />
           </label>
           <label className="profile-field profile-field-wide">
             <span>Small Text *</span>
-            <textarea rows="3" value={formData.shortText} onChange={(event) => onChange("shortText", event.target.value)} />
+            <textarea
+              rows="3"
+              value={formData.shortText}
+              onChange={(event) => onChange("shortText", event.target.value)}
+            />
           </label>
           <label className="profile-field">
             <span>Media Link</span>
-            <input type="text" value={formData.socialMediaUrl} onChange={(event) => onChange("socialMediaUrl", event.target.value)} placeholder="Facebook, Instagram, or other media page" />
+            <input
+              type="text"
+              value={formData.socialMediaUrl}
+              onChange={(event) =>
+                onChange("socialMediaUrl", event.target.value)
+              }
+              placeholder="Facebook, Instagram, or other media page"
+            />
           </label>
           <label className="profile-field">
             <span>Banner Media</span>
-            <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => onFileChange("mediaFile", event.target.files?.[0] ?? null)} />
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              onChange={(event) =>
+                onFileChange("mediaFile", event.target.files?.[0] ?? null)
+              }
+            />
             <small>{appBannerMediaRecommendation}</small>
           </label>
           <label className="profile-field">
             <span>PDF Attachment</span>
-            <input type="file" accept="application/pdf" onChange={(event) => onFileChange("brochureFile", event.target.files?.[0] ?? null)} />
+            <input
+              type="file"
+              accept="application/pdf"
+              onChange={(event) =>
+                onFileChange("brochureFile", event.target.files?.[0] ?? null)
+              }
+            />
             <small>{appBannerPdfRecommendation}</small>
           </label>
         </div>
 
-        {errorMessage ? <p className="form-helper-error">{errorMessage}</p> : null}
+        {errorMessage ? (
+          <p className="form-helper-error">{errorMessage}</p>
+        ) : null}
 
         <div className="profile-action-row">
-          <button className="primary-link admin-action-button" type="button" onClick={onSubmit} disabled={isSaving}>
+          <button
+            className="primary-link admin-action-button"
+            type="button"
+            onClick={onSubmit}
+            disabled={isSaving}
+          >
             {isSaving ? "Saving Banner..." : "Submit Paid Advertisement"}
           </button>
         </div>
@@ -5238,13 +6668,34 @@ function AppBannerPanel({
                   {item.mediaType.startsWith("video/") ? (
                     <video src={item.mediaUrl} controls playsInline />
                   ) : (
-                    <img src={item.mediaUrl} alt={item.shortText.slice(0, 60) || "App banner"} />
+                    <img
+                      src={item.mediaUrl}
+                      alt={item.shortText.slice(0, 60) || "App banner"}
+                    />
                   )}
                 </div>
               ) : null}
               <div className="member-record-details">
-                {item.socialMediaUrl ? <p>Media Link: <a href={item.socialMediaUrl} target="_blank" rel="noreferrer">{item.socialMediaUrl}</a></p> : null}
-                {item.brochureUrl ? <p>PDF: <a href={item.brochureUrl} target="_blank" rel="noreferrer">Open attachment</a></p> : null}
+                {item.socialMediaUrl ? (
+                  <p>
+                    Media Link:{" "}
+                    <a
+                      href={item.socialMediaUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {item.socialMediaUrl}
+                    </a>
+                  </p>
+                ) : null}
+                {item.brochureUrl ? (
+                  <p>
+                    PDF:{" "}
+                    <a href={item.brochureUrl} target="_blank" rel="noreferrer">
+                      Open attachment
+                    </a>
+                  </p>
+                ) : null}
               </div>
             </div>
           </article>
@@ -5273,7 +6724,10 @@ function EventTimelineCards({ groups = [], onSelectEvent }) {
             <div className="association-record-topline">
               <em className="carousel-badge">No events yet</em>
             </div>
-            <p>Create an event or add an event type to start building the events desk.</p>
+            <p>
+              Create an event or add an event type to start building the events
+              desk.
+            </p>
           </div>
         </article>
       </div>
@@ -5283,7 +6737,10 @@ function EventTimelineCards({ groups = [], onSelectEvent }) {
   return (
     <div className="association-record-grid">
       {groups.map((group) => (
-        <article key={group.title} className={`association-record-card ${group.tone}`}>
+        <article
+          key={group.title}
+          className={`association-record-card ${group.tone}`}
+        >
           <div className="association-record-visual">
             <span>{group.title.split(" ")[0]}</span>
           </div>
@@ -5309,7 +6766,15 @@ function EventTimelineCards({ groups = [], onSelectEvent }) {
   );
 }
 
-function EventCreateForm({ formData, mediaState, onChange, onMediaChange, eventTypes, onSave, onCancel }) {
+function EventCreateForm({
+  formData,
+  mediaState,
+  onChange,
+  onMediaChange,
+  eventTypes,
+  onSave,
+  onCancel,
+}) {
   return (
     <section className="member-table-panel">
       <div className="panel-topline">
@@ -5320,11 +6785,18 @@ function EventCreateForm({ formData, mediaState, onChange, onMediaChange, eventT
       <div className="profile-form-grid">
         <label className="profile-field">
           <span>Event Name</span>
-          <input type="text" value={formData.name} onChange={(event) => onChange("name", event.target.value)} />
+          <input
+            type="text"
+            value={formData.name}
+            onChange={(event) => onChange("name", event.target.value)}
+          />
         </label>
         <label className="profile-field">
           <span>Type of Event</span>
-          <select value={formData.type} onChange={(event) => onChange("type", event.target.value)}>
+          <select
+            value={formData.type}
+            onChange={(event) => onChange("type", event.target.value)}
+          >
             <option value="">Select event type</option>
             {eventTypes.map((eventType) => (
               <option key={eventType.id} value={eventType.title}>
@@ -5335,7 +6807,10 @@ function EventCreateForm({ formData, mediaState, onChange, onMediaChange, eventT
         </label>
         <label className="profile-field">
           <span>Audience</span>
-          <select value={formData.audience} onChange={(event) => onChange("audience", event.target.value)}>
+          <select
+            value={formData.audience}
+            onChange={(event) => onChange("audience", event.target.value)}
+          >
             <option value="">Select audience</option>
             <option value="Primary Members">Primary Members</option>
             <option value="Associate Members">Associate Members</option>
@@ -5345,7 +6820,10 @@ function EventCreateForm({ formData, mediaState, onChange, onMediaChange, eventT
         </label>
         <label className="profile-field">
           <span>Entry Type</span>
-          <select value={formData.entryType} onChange={(event) => onChange("entryType", event.target.value)}>
+          <select
+            value={formData.entryType}
+            onChange={(event) => onChange("entryType", event.target.value)}
+          >
             <option value="">Select entry type</option>
             <option value="Free">Free</option>
             <option value="Paid">Paid</option>
@@ -5365,17 +6843,27 @@ function EventCreateForm({ formData, mediaState, onChange, onMediaChange, eventT
           <input
             type="text"
             value={formData.participationCharges}
-            onChange={(event) => onChange("participationCharges", event.target.value)}
+            onChange={(event) =>
+              onChange("participationCharges", event.target.value)
+            }
             placeholder="Rs. 0 or participation fee"
           />
         </label>
         <label className="profile-field">
           <span>Event Date</span>
-          <input type="date" value={formData.date} onChange={(event) => onChange("date", event.target.value)} />
+          <input
+            type="date"
+            value={formData.date}
+            onChange={(event) => onChange("date", event.target.value)}
+          />
         </label>
         <label className="profile-field">
           <span>Venue</span>
-          <input type="text" value={formData.venue} onChange={(event) => onChange("venue", event.target.value)} />
+          <input
+            type="text"
+            value={formData.venue}
+            onChange={(event) => onChange("venue", event.target.value)}
+          />
         </label>
         <label className="profile-field">
           <span>Start Time</span>
@@ -5406,7 +6894,9 @@ function EventCreateForm({ formData, mediaState, onChange, onMediaChange, eventT
           <input
             type="file"
             accept="image/*"
-            onChange={(event) => onMediaChange("imageFile", event.target.files?.[0] ?? null)}
+            onChange={(event) =>
+              onMediaChange("imageFile", event.target.files?.[0] ?? null)
+            }
           />
         </label>
         <label className="profile-field profile-field-wide">
@@ -5414,29 +6904,49 @@ function EventCreateForm({ formData, mediaState, onChange, onMediaChange, eventT
           <input
             type="file"
             accept="video/*"
-            onChange={(event) => onMediaChange("videoFile", event.target.files?.[0] ?? null)}
+            onChange={(event) =>
+              onMediaChange("videoFile", event.target.files?.[0] ?? null)
+            }
           />
         </label>
       </div>
 
       <div className="content-member-selector">
-        {mediaState.imageName ? <span className="content-member-chip active">Image: {mediaState.imageName}</span> : null}
-        {mediaState.videoName ? <span className="content-member-chip active">Video: {mediaState.videoName}</span> : null}
+        {mediaState.imageName ? (
+          <span className="content-member-chip active">
+            Image: {mediaState.imageName}
+          </span>
+        ) : null}
+        {mediaState.videoName ? (
+          <span className="content-member-chip active">
+            Video: {mediaState.videoName}
+          </span>
+        ) : null}
         {mediaState.bannerUrl && !mediaState.imageFile ? (
           <span className="content-member-chip">Current banner attached</span>
         ) : null}
         {mediaState.promoVideoUrl && !mediaState.videoFile ? (
-          <span className="content-member-chip">Current promo video attached</span>
+          <span className="content-member-chip">
+            Current promo video attached
+          </span>
         ) : null}
       </div>
 
       <div className="profile-action-row">
         {formData.id ? (
-          <button className="secondary-link secondary-button" type="button" onClick={onCancel}>
+          <button
+            className="secondary-link secondary-button"
+            type="button"
+            onClick={onCancel}
+          >
             Cancel Edit
           </button>
         ) : null}
-        <button className="primary-link admin-action-button" type="button" onClick={onSave}>
+        <button
+          className="primary-link admin-action-button"
+          type="button"
+          onClick={onSave}
+        >
           {formData.id ? "Save Event Changes" : "Save Event Draft"}
         </button>
       </div>
@@ -5444,7 +6954,13 @@ function EventCreateForm({ formData, mediaState, onChange, onMediaChange, eventT
   );
 }
 
-function EventTypeManager({ items, draftType, onDraftChange, onAddType, onUpdateType }) {
+function EventTypeManager({
+  items,
+  draftType,
+  onDraftChange,
+  onAddType,
+  onUpdateType,
+}) {
   return (
     <section className="association-tab-section">
       <section className="member-table-panel">
@@ -5472,7 +6988,11 @@ function EventTypeManager({ items, draftType, onDraftChange, onAddType, onUpdate
               onChange={(event) => onDraftChange("meta", event.target.value)}
             />
           </label>
-          <button className="secondary-link secondary-button" type="button" onClick={onAddType}>
+          <button
+            className="secondary-link secondary-button"
+            type="button"
+            onClick={onAddType}
+          >
             Add Type
           </button>
         </div>
@@ -5489,7 +7009,9 @@ function EventTypeManager({ items, draftType, onDraftChange, onAddType, onUpdate
                   <input
                     type="text"
                     value={item.title}
-                    onChange={(event) => onUpdateType(item.id, "title", event.target.value)}
+                    onChange={(event) =>
+                      onUpdateType(item.id, "title", event.target.value)
+                    }
                   />
                 </label>
                 <label className="content-control-field">
@@ -5497,7 +7019,9 @@ function EventTypeManager({ items, draftType, onDraftChange, onAddType, onUpdate
                   <input
                     type="text"
                     value={item.meta}
-                    onChange={(event) => onUpdateType(item.id, "meta", event.target.value)}
+                    onChange={(event) =>
+                      onUpdateType(item.id, "meta", event.target.value)
+                    }
                   />
                 </label>
               </div>
@@ -5556,7 +7080,10 @@ function EventsArenaContent({
   if (activeTab === "Event") {
     return (
       <section className="association-tab-section">
-        <EventTimelineCards groups={eventTimelineGroups} onSelectEvent={onEditEvent} />
+        <EventTimelineCards
+          groups={eventTimelineGroups}
+          onSelectEvent={onEditEvent}
+        />
       </section>
     );
   }
@@ -5633,10 +7160,18 @@ function AdminEventAccessPanel({
                 <td>{eventItem.entryType || "Not set"}</td>
                 <td>
                   <div className="member-master-actions">
-                    <button className="secondary-link secondary-button table-button" type="button" onClick={() => onEditEvent(eventItem.id)}>
+                    <button
+                      className="secondary-link secondary-button table-button"
+                      type="button"
+                      onClick={() => onEditEvent(eventItem.id)}
+                    >
                       Edit
                     </button>
-                    <button className="secondary-link secondary-button danger-button table-button" type="button" onClick={() => onDeleteEvent(eventItem.id)}>
+                    <button
+                      className="secondary-link secondary-button danger-button table-button"
+                      type="button"
+                      onClick={() => onDeleteEvent(eventItem.id)}
+                    >
                       Delete
                     </button>
                   </div>
@@ -5709,7 +7244,10 @@ function AdminTimelineAccessPanel({
               </div>
               {post.imageUrl ? (
                 <div className="association-gallery-visual">
-                  <img src={post.imageUrl} alt={post.caption.slice(0, 60) || "Timeline post"} />
+                  <img
+                    src={post.imageUrl}
+                    alt={post.caption.slice(0, 60) || "Timeline post"}
+                  />
                 </div>
               ) : null}
               <div className="member-content-controls">
@@ -5717,7 +7255,9 @@ function AdminTimelineAccessPanel({
                   <span>Status</span>
                   <select
                     value={edits[post.id]?.status ?? post.status}
-                    onChange={(event) => onUpdatePost(post.id, "status", event.target.value)}
+                    onChange={(event) =>
+                      onUpdatePost(post.id, "status", event.target.value)
+                    }
                   >
                     <option value="Approved">Approved</option>
                     <option value="Rejected">Rejected</option>
@@ -5730,7 +7270,9 @@ function AdminTimelineAccessPanel({
                   <input
                     type="date"
                     value={edits[post.id]?.displayStart ?? post.displayStart}
-                    onChange={(event) => onUpdatePost(post.id, "displayStart", event.target.value)}
+                    onChange={(event) =>
+                      onUpdatePost(post.id, "displayStart", event.target.value)
+                    }
                   />
                 </label>
                 <label className="content-control-field">
@@ -5738,7 +7280,9 @@ function AdminTimelineAccessPanel({
                   <input
                     type="date"
                     value={edits[post.id]?.displayEnd ?? post.displayEnd}
-                    onChange={(event) => onUpdatePost(post.id, "displayEnd", event.target.value)}
+                    onChange={(event) =>
+                      onUpdatePost(post.id, "displayEnd", event.target.value)
+                    }
                   />
                 </label>
               </div>
@@ -5755,7 +7299,11 @@ function AdminTimelineAccessPanel({
       </div>
 
       <div className="profile-action-row">
-        <button className="primary-link admin-action-button" type="button" onClick={onSaveTimelineAccessChanges}>
+        <button
+          className="primary-link admin-action-button"
+          type="button"
+          onClick={onSaveTimelineAccessChanges}
+        >
           Save Timeline Access Changes
         </button>
       </div>
@@ -5803,23 +7351,49 @@ function AdminAppBannerAccessPanel({
                 <span>Date: {item.postedOn}</span>
                 <span>Status: {edits[item.id]?.status ?? item.status}</span>
                 <span>Contact: {item.contactNumber || "--"}</span>
-                <span>Sequence: {(edits[item.id]?.displayIndex ?? item.displayIndex) || "--"}</span>
+                <span>
+                  Sequence:{" "}
+                  {(edits[item.id]?.displayIndex ?? item.displayIndex) || "--"}
+                </span>
               </div>
               {item.mediaUrl ? (
                 <div className="association-gallery-visual">
-                  <img src={item.mediaUrl} alt={item.shortText.slice(0, 60) || "App banner"} />
+                  <img
+                    src={item.mediaUrl}
+                    alt={item.shortText.slice(0, 60) || "App banner"}
+                  />
                 </div>
               ) : null}
               <div className="member-record-details">
-                {item.socialMediaUrl ? <p>Media Link: <a href={item.socialMediaUrl} target="_blank" rel="noreferrer">{item.socialMediaUrl}</a></p> : null}
-                {item.brochureUrl ? <p>PDF: <a href={item.brochureUrl} target="_blank" rel="noreferrer">Open attachment</a></p> : null}
+                {item.socialMediaUrl ? (
+                  <p>
+                    Media Link:{" "}
+                    <a
+                      href={item.socialMediaUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {item.socialMediaUrl}
+                    </a>
+                  </p>
+                ) : null}
+                {item.brochureUrl ? (
+                  <p>
+                    PDF:{" "}
+                    <a href={item.brochureUrl} target="_blank" rel="noreferrer">
+                      Open attachment
+                    </a>
+                  </p>
+                ) : null}
               </div>
               <div className="member-content-controls">
                 <label className="content-control-field">
                   <span>Status</span>
                   <select
                     value={edits[item.id]?.status ?? item.status}
-                    onChange={(event) => onUpdateBanner(item.id, "status", event.target.value)}
+                    onChange={(event) =>
+                      onUpdateBanner(item.id, "status", event.target.value)
+                    }
                   >
                     <option value="Approved">Approved</option>
                     <option value="Rejected">Rejected</option>
@@ -5830,9 +7404,17 @@ function AdminAppBannerAccessPanel({
                 <label className="content-control-field">
                   <span>Payment Received</span>
                   <select
-                    value={(edits[item.id]?.paymentReceived ?? item.paymentReceived) ? "Yes" : "No"}
+                    value={
+                      (edits[item.id]?.paymentReceived ?? item.paymentReceived)
+                        ? "Yes"
+                        : "No"
+                    }
                     onChange={(event) =>
-                      onUpdateBanner(item.id, "paymentReceived", event.target.value === "Yes")
+                      onUpdateBanner(
+                        item.id,
+                        "paymentReceived",
+                        event.target.value === "Yes",
+                      )
                     }
                   >
                     <option value="No">No</option>
@@ -5843,7 +7425,9 @@ function AdminAppBannerAccessPanel({
                   <span>Payment Mode</span>
                   <select
                     value={edits[item.id]?.paymentMode ?? item.paymentMode}
-                    onChange={(event) => onUpdateBanner(item.id, "paymentMode", event.target.value)}
+                    onChange={(event) =>
+                      onUpdateBanner(item.id, "paymentMode", event.target.value)
+                    }
                   >
                     <option value="">Select mode</option>
                     <option value="Bank">Bank</option>
@@ -5856,7 +7440,13 @@ function AdminAppBannerAccessPanel({
                   <input
                     type="date"
                     value={edits[item.id]?.displayStart ?? item.displayStart}
-                    onChange={(event) => onUpdateBanner(item.id, "displayStart", event.target.value)}
+                    onChange={(event) =>
+                      onUpdateBanner(
+                        item.id,
+                        "displayStart",
+                        event.target.value,
+                      )
+                    }
                   />
                 </label>
                 <label className="content-control-field">
@@ -5864,29 +7454,49 @@ function AdminAppBannerAccessPanel({
                   <input
                     type="date"
                     value={edits[item.id]?.displayEnd ?? item.displayEnd}
-                    onChange={(event) => onUpdateBanner(item.id, "displayEnd", event.target.value)}
+                    onChange={(event) =>
+                      onUpdateBanner(item.id, "displayEnd", event.target.value)
+                    }
                   />
                 </label>
                 <label className="content-control-field">
                   <span>Carousel Sequence</span>
                   <select
-                    value={edits[item.id]?.displayIndex ?? item.displayIndex ?? ""}
-                    onChange={(event) => onUpdateBanner(item.id, "displayIndex", event.target.value)}
+                    value={
+                      edits[item.id]?.displayIndex ?? item.displayIndex ?? ""
+                    }
+                    onChange={(event) =>
+                      onUpdateBanner(
+                        item.id,
+                        "displayIndex",
+                        event.target.value,
+                      )
+                    }
                   >
                     <option value="">Select slot</option>
-                    {Array.from({ length: 50 }, (_, index) => index + 1).map((slot) => (
-                      <option key={slot} value={slot}>
-                        {slot}
-                      </option>
-                    ))}
+                    {Array.from({ length: 50 }, (_, index) => index + 1).map(
+                      (slot) => (
+                        <option key={slot} value={slot}>
+                          {slot}
+                        </option>
+                      ),
+                    )}
                   </select>
                 </label>
                 <label className="content-control-field content-control-field-wide">
                   <span>Remarks</span>
                   <textarea
                     rows="2"
-                    value={edits[item.id]?.paymentRemarks ?? item.paymentRemarks}
-                    onChange={(event) => onUpdateBanner(item.id, "paymentRemarks", event.target.value)}
+                    value={
+                      edits[item.id]?.paymentRemarks ?? item.paymentRemarks
+                    }
+                    onChange={(event) =>
+                      onUpdateBanner(
+                        item.id,
+                        "paymentRemarks",
+                        event.target.value,
+                      )
+                    }
                   />
                 </label>
               </div>
@@ -5903,7 +7513,11 @@ function AdminAppBannerAccessPanel({
       </div>
 
       <div className="profile-action-row">
-        <button className="primary-link admin-action-button" type="button" onClick={onSaveAppBannerAccessChanges}>
+        <button
+          className="primary-link admin-action-button"
+          type="button"
+          onClick={onSaveAppBannerAccessChanges}
+        >
           Save App Banner Access Changes
         </button>
       </div>
@@ -5934,15 +7548,25 @@ function AdminBulkMemberPanel({
             accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
             onChange={(event) => onFileChange(event.target.files?.[0] ?? null)}
           />
-          <small>Imported members will use their email as login and default password `Nima@123`.</small>
+          <small>
+            Imported members will use their email as login and default password
+            `Nima@123`.
+          </small>
         </label>
       </div>
 
       {selectedFile ? <p>Selected file: {selectedFile.name}</p> : null}
-      {errorMessage ? <p className="form-helper-error">{errorMessage}</p> : null}
+      {errorMessage ? (
+        <p className="form-helper-error">{errorMessage}</p>
+      ) : null}
 
       <div className="profile-action-row">
-        <button className="primary-link admin-action-button" type="button" onClick={onUpload} disabled={isUploading}>
+        <button
+          className="primary-link admin-action-button"
+          type="button"
+          onClick={onUpload}
+          disabled={isUploading}
+        >
           {isUploading ? "Importing Members..." : "Import Members"}
         </button>
       </div>
@@ -5959,7 +7583,10 @@ function AdminBulkMemberPanel({
                 <span>Total Rows: {result.summary?.totalRows ?? 0}</span>
                 <span>Imported: {result.summary?.importedCount ?? 0}</span>
                 <span>Skipped: {result.summary?.skippedCount ?? 0}</span>
-                <span>Default Password: {result.summary?.defaultLoginPassword ?? "Nima@123"}</span>
+                <span>
+                  Default Password:{" "}
+                  {result.summary?.defaultLoginPassword ?? "Nima@123"}
+                </span>
               </div>
             </div>
           </article>
@@ -5974,7 +7601,8 @@ function AdminBulkMemberPanel({
                 <div className="member-record-details">
                   {(result.imported ?? []).map((item) => (
                     <p key={`${item.rowNumber}-${item.email}`}>
-                      Row {item.rowNumber}: {item.companyName || "--"} ({item.email})
+                      Row {item.rowNumber}: {item.companyName || "--"} (
+                      {item.email})
                     </p>
                   ))}
                 </div>
@@ -5993,7 +7621,9 @@ function AdminBulkMemberPanel({
               {(result.skipped ?? []).length > 0 ? (
                 <div className="member-record-details">
                   {(result.skipped ?? []).map((item) => (
-                    <p key={`${item.rowNumber}-${item.email || item.companyName || item.reason}`}>
+                    <p
+                      key={`${item.rowNumber}-${item.email || item.companyName || item.reason}`}
+                    >
                       Row {item.rowNumber}: {item.reason}
                     </p>
                   ))}
@@ -6034,6 +7664,8 @@ function AdminMemberAccessPanel({
   onSelectAllContentMembers,
   onClearContentMemberSelection,
   onUpdateContentPost,
+  onToggleAdminRole,
+  updatingAdminUserIds,
 }) {
   const allSelected = items.length > 0 && selectedIds.length === items.length;
 
@@ -6070,7 +7702,11 @@ function AdminMemberAccessPanel({
               />
             </div>
             <label className="selection-chip">
-              <input type="checkbox" checked={allSelected} onChange={onToggleSelectAll} />
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={onToggleSelectAll}
+              />
               <span>Select filtered</span>
             </label>
             <button
@@ -6121,6 +7757,7 @@ function AdminMemberAccessPanel({
                   <th>Member Type</th>
                   <th>Membership Period</th>
                   <th>App Access</th>
+                  <th>Admin Role</th>
                   <th>Contact</th>
                 </tr>
               </thead>
@@ -6143,14 +7780,41 @@ function AdminMemberAccessPanel({
                         className="member-access-select"
                         value={member.appAccessStatus}
                         onChange={(event) =>
-                          onUpdateMemberAccessStatus(member.id, event.target.value)
+                          onUpdateMemberAccessStatus(
+                            member.id,
+                            event.target.value,
+                          )
                         }
                       >
-                        <option value="Pending Approval">Pending Approval</option>
+                        <option value="Pending Approval">
+                          Pending Approval
+                        </option>
                         <option value="Approved">Approved</option>
                         <option value="Suspended">Suspended</option>
                         <option value="Cancelled">Cancelled</option>
                       </select>
+                    </td>
+                    <td>
+                      <div className="member-table-contact">
+                        <span>{member.isAdmin ? "Admin" : "Member"}</span>
+                        <button
+                          className={`secondary-link secondary-button ${
+                            member.isAdmin ? "danger-button" : ""
+                          }`}
+                          type="button"
+                          disabled={
+                            !member.accessUserId ||
+                            updatingAdminUserIds.includes(member.accessUserId)
+                          }
+                          onClick={() => onToggleAdminRole(member)}
+                        >
+                          {updatingAdminUserIds.includes(member.accessUserId)
+                            ? "Saving..."
+                            : member.isAdmin
+                              ? "Remove Admin"
+                              : "Make Admin"}
+                        </button>
+                      </div>
                     </td>
                     <td>
                       <div className="member-table-contact">
@@ -6176,10 +7840,18 @@ function AdminMemberAccessPanel({
                 onChange={(event) => onContentSearchChange(event.target.value)}
               />
             </div>
-            <button className="secondary-link secondary-button" type="button" onClick={onSelectAllContentMembers}>
+            <button
+              className="secondary-link secondary-button"
+              type="button"
+              onClick={onSelectAllContentMembers}
+            >
               Select All Matched Members
             </button>
-            <button className="secondary-link secondary-button" type="button" onClick={onClearContentMemberSelection}>
+            <button
+              className="secondary-link secondary-button"
+              type="button"
+              onClick={onClearContentMemberSelection}
+            >
               Clear Selection
             </button>
           </div>
@@ -6211,13 +7883,17 @@ function AdminMemberAccessPanel({
                   <div className="member-content-meta">
                     <span>Member: {post.postedBy}</span>
                     <span>Date: {post.postedOn}</span>
-                    <span>Status: {contentPostEdits[post.id]?.status ?? post.status}</span>
+                    <span>
+                      Status: {contentPostEdits[post.id]?.status ?? post.status}
+                    </span>
                     <span>
                       Display:{" "}
-                      {(contentPostEdits[post.id]?.displayStart ?? post.displayStart) &&
+                      {(contentPostEdits[post.id]?.displayStart ??
+                        post.displayStart) &&
                       (contentPostEdits[post.id]?.displayEnd ?? post.displayEnd)
                         ? `${contentPostEdits[post.id]?.displayStart ?? post.displayStart} to ${
-                            contentPostEdits[post.id]?.displayEnd ?? post.displayEnd
+                            contentPostEdits[post.id]?.displayEnd ??
+                            post.displayEnd
                           }`
                         : post.displayPeriod}
                     </span>
@@ -6228,7 +7904,11 @@ function AdminMemberAccessPanel({
                       <select
                         value={contentPostEdits[post.id]?.status ?? post.status}
                         onChange={(event) =>
-                          onUpdateContentPost(post.id, "status", event.target.value)
+                          onUpdateContentPost(
+                            post.id,
+                            "status",
+                            event.target.value,
+                          )
                         }
                       >
                         <option value="Approved">Approved</option>
@@ -6240,9 +7920,16 @@ function AdminMemberAccessPanel({
                       <span>Display Start</span>
                       <input
                         type="date"
-                        value={contentPostEdits[post.id]?.displayStart ?? post.displayStart}
+                        value={
+                          contentPostEdits[post.id]?.displayStart ??
+                          post.displayStart
+                        }
                         onChange={(event) =>
-                          onUpdateContentPost(post.id, "displayStart", event.target.value)
+                          onUpdateContentPost(
+                            post.id,
+                            "displayStart",
+                            event.target.value,
+                          )
                         }
                       />
                     </label>
@@ -6250,9 +7937,16 @@ function AdminMemberAccessPanel({
                       <span>Display End</span>
                       <input
                         type="date"
-                        value={contentPostEdits[post.id]?.displayEnd ?? post.displayEnd}
+                        value={
+                          contentPostEdits[post.id]?.displayEnd ??
+                          post.displayEnd
+                        }
                         onChange={(event) =>
-                          onUpdateContentPost(post.id, "displayEnd", event.target.value)
+                          onUpdateContentPost(
+                            post.id,
+                            "displayEnd",
+                            event.target.value,
+                          )
                         }
                       />
                     </label>
@@ -6264,7 +7958,10 @@ function AdminMemberAccessPanel({
               <article className="association-empty-state">
                 <span className="mini-label">No Posts</span>
                 <h2>No member posts match the current member selection.</h2>
-                <p>Select one or more members above to review content intended for the Flutter app.</p>
+                <p>
+                  Select one or more members above to review content intended
+                  for the Flutter app.
+                </p>
               </article>
             ) : null}
           </div>
@@ -6275,9 +7972,15 @@ function AdminMemberAccessPanel({
         <button
           className="primary-link admin-action-button"
           type="button"
-          onClick={activeView === "app" ? onSaveMemberAccessChanges : onSaveContentAccessChanges}
+          onClick={
+            activeView === "app"
+              ? onSaveMemberAccessChanges
+              : onSaveContentAccessChanges
+          }
         >
-          {activeView === "app" ? "Save Member Access Changes" : "Save Content Access Changes"}
+          {activeView === "app"
+            ? "Save Member Access Changes"
+            : "Save Content Access Changes"}
         </button>
       </div>
     </article>
@@ -6337,16 +8040,32 @@ function AdminVendorAccessPanel({
               />
             </div>
             <label className="selection-chip">
-              <input type="checkbox" checked={allSelected} onChange={onToggleSelectAll} />
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={onToggleSelectAll}
+              />
               <span>Select filtered</span>
             </label>
-            <button className="secondary-link secondary-button" type="button" onClick={() => onApplyAccessStatus("PENDING")}>
+            <button
+              className="secondary-link secondary-button"
+              type="button"
+              onClick={() => onApplyAccessStatus("PENDING")}
+            >
               Restrict App Usage
             </button>
-            <button className="secondary-link secondary-button" type="button" onClick={() => onApplyAccessStatus("SUSPENDED")}>
+            <button
+              className="secondary-link secondary-button"
+              type="button"
+              onClick={() => onApplyAccessStatus("SUSPENDED")}
+            >
               Suspend Access
             </button>
-            <button className="secondary-link secondary-button danger-button" type="button" onClick={() => onApplyAccessStatus("CANCELLED")}>
+            <button
+              className="secondary-link secondary-button danger-button"
+              type="button"
+              onClick={() => onApplyAccessStatus("CANCELLED")}
+            >
               Remove App Usage
             </button>
           </div>
@@ -6379,7 +8098,9 @@ function AdminVendorAccessPanel({
                     <td>{vendor.vendorType}</td>
                     <td>{vendor.onboardingPeriod}</td>
                     <td>
-                      <span className="access-status-chip">{vendor.appAccessStatus}</span>
+                      <span className="access-status-chip">
+                        {vendor.appAccessStatus}
+                      </span>
                     </td>
                     <td>
                       <div className="member-table-contact">
@@ -6432,13 +8153,17 @@ function AdminVendorAccessPanel({
                   <div className="member-content-meta">
                     <span>Vendor: {post.postedBy}</span>
                     <span>Date: {post.postedOn}</span>
-                    <span>Status: {contentPostEdits[post.id]?.status ?? post.status}</span>
+                    <span>
+                      Status: {contentPostEdits[post.id]?.status ?? post.status}
+                    </span>
                     <span>
                       Display:{" "}
-                      {(contentPostEdits[post.id]?.displayStart ?? post.displayStart) &&
+                      {(contentPostEdits[post.id]?.displayStart ??
+                        post.displayStart) &&
                       (contentPostEdits[post.id]?.displayEnd ?? post.displayEnd)
                         ? `${contentPostEdits[post.id]?.displayStart ?? post.displayStart} to ${
-                            contentPostEdits[post.id]?.displayEnd ?? post.displayEnd
+                            contentPostEdits[post.id]?.displayEnd ??
+                            post.displayEnd
                           }`
                         : post.displayPeriod}
                     </span>
@@ -6448,7 +8173,13 @@ function AdminVendorAccessPanel({
                       <span>Status</span>
                       <select
                         value={contentPostEdits[post.id]?.status ?? post.status}
-                        onChange={(event) => onUpdateContentPost(post.id, "status", event.target.value)}
+                        onChange={(event) =>
+                          onUpdateContentPost(
+                            post.id,
+                            "status",
+                            event.target.value,
+                          )
+                        }
                       >
                         <option value="Approved">Approved</option>
                         <option value="Rejected">Rejected</option>
@@ -6459,9 +8190,16 @@ function AdminVendorAccessPanel({
                       <span>Display Start</span>
                       <input
                         type="date"
-                        value={contentPostEdits[post.id]?.displayStart ?? post.displayStart}
+                        value={
+                          contentPostEdits[post.id]?.displayStart ??
+                          post.displayStart
+                        }
                         onChange={(event) =>
-                          onUpdateContentPost(post.id, "displayStart", event.target.value)
+                          onUpdateContentPost(
+                            post.id,
+                            "displayStart",
+                            event.target.value,
+                          )
                         }
                       />
                     </label>
@@ -6469,9 +8207,16 @@ function AdminVendorAccessPanel({
                       <span>Display End</span>
                       <input
                         type="date"
-                        value={contentPostEdits[post.id]?.displayEnd ?? post.displayEnd}
+                        value={
+                          contentPostEdits[post.id]?.displayEnd ??
+                          post.displayEnd
+                        }
                         onChange={(event) =>
-                          onUpdateContentPost(post.id, "displayEnd", event.target.value)
+                          onUpdateContentPost(
+                            post.id,
+                            "displayEnd",
+                            event.target.value,
+                          )
                         }
                       />
                     </label>
@@ -6483,7 +8228,10 @@ function AdminVendorAccessPanel({
               <article className="association-empty-state">
                 <span className="mini-label">No Ads</span>
                 <h2>No vendor ads match the current vendor selection.</h2>
-                <p>Select one or more vendors above to review ad content intended for the Flutter app.</p>
+                <p>
+                  Select one or more vendors above to review ad content intended
+                  for the Flutter app.
+                </p>
               </article>
             ) : null}
           </div>
@@ -6491,29 +8239,131 @@ function AdminVendorAccessPanel({
       )}
 
       <div className="profile-action-row">
-        <button className="primary-link admin-action-button" type="button" onClick={onSaveVendorAccessChanges}>
-          {activeView === "app" ? "Save Vendor Access Changes" : "Save Vendor Content Changes"}
+        <button
+          className="primary-link admin-action-button"
+          type="button"
+          onClick={onSaveVendorAccessChanges}
+        >
+          {activeView === "app"
+            ? "Save Vendor Access Changes"
+            : "Save Vendor Content Changes"}
         </button>
       </div>
     </article>
   );
 }
 
+function WebAdminLoginScreen({
+  form,
+  errorMessage,
+  isSubmitting,
+  onFieldChange,
+  onSubmit,
+}) {
+  return (
+    <main className="dashboard-shell">
+      <section className="content-shell">
+        <section className="welcome-hero">
+          <div>
+            <span className="eyebrow">NIMA Admin Login</span>
+            <h1>Sign in with an admin account.</h1>
+            <p>
+              Use the backend admin credentials to open member access controls,
+              promote members to admin, and manage the association workspace
+              from the laptop.
+            </p>
+          </div>
+
+          <div className="hero-spotlight">
+            <span className="spotlight-label">Default bootstrap admin</span>
+            <strong>ritsman@gmail.com</strong>
+            <p>Password: Admin@123</p>
+          </div>
+        </section>
+
+        <section className="association-tab-section">
+          <article className="welcome-panel">
+            <div className="panel-topline">
+              <h2>Admin Session</h2>
+              <span className="mini-label">Backend Auth</span>
+            </div>
+
+            <div className="profile-form-grid">
+              <label className="profile-field">
+                <span>Email</span>
+                <input
+                  type="email"
+                  value={form.email}
+                  onChange={(event) =>
+                    onFieldChange("email", event.target.value)
+                  }
+                />
+              </label>
+
+              <label className="profile-field">
+                <span>Password</span>
+                <input
+                  type="password"
+                  value={form.password}
+                  onChange={(event) =>
+                    onFieldChange("password", event.target.value)
+                  }
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      onSubmit();
+                    }
+                  }}
+                />
+              </label>
+            </div>
+
+            {errorMessage ? (
+              <p className="form-helper error-text">{errorMessage}</p>
+            ) : null}
+
+            <div className="profile-action-row">
+              <button
+                className="primary-link admin-action-button"
+                type="button"
+                onClick={onSubmit}
+              >
+                {isSubmitting ? "Signing in..." : "Sign in as Admin"}
+              </button>
+            </div>
+          </article>
+        </section>
+      </section>
+    </main>
+  );
+}
+
 export default function HomePage() {
+  const [authReady, setAuthReady] = useState(false);
+  const [authSession, setAuthSession] = useState(null);
+  const [loginForm, setLoginForm] = useState({
+    email: "ritsman@gmail.com",
+    password: "Admin@123",
+  });
+  const [loginError, setLoginError] = useState("");
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [updatingAdminUserIds, setUpdatingAdminUserIds] = useState([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [activeSection, setActiveSection] = useState("Association arena");
   const [activeAssociationTab, setActiveAssociationTab] = useState("Profile");
   const [activeFinanceTab, setActiveFinanceTab] = useState("Income");
   const [activeEventsTab, setActiveEventsTab] = useState("Master");
-  const [financeStatementFilterType, setFinanceStatementFilterType] = useState("");
+  const [financeStatementFilterType, setFinanceStatementFilterType] =
+    useState("");
   const [financeStatementDateFrom, setFinanceStatementDateFrom] = useState("");
   const [financeStatementDateTo, setFinanceStatementDateTo] = useState("");
   const [activeMemberTab, setActiveMemberTab] = useState("Media");
   const [activeVendorTab, setActiveVendorTab] = useState("Registration");
   const [isAdminAccessOpen, setIsAdminAccessOpen] = useState(false);
   const [isVendorNavOpen, setIsVendorNavOpen] = useState(false);
-  const [activeAdminAccessSection, setActiveAdminAccessSection] = useState("App Access");
+  const [activeAdminAccessSection, setActiveAdminAccessSection] =
+    useState("App Access");
   const [appPermissions, setAppPermissions] = useState({
     approveMembersLogin: true,
     disableScreenshots: false,
@@ -6521,26 +8371,50 @@ export default function HomePage() {
     approveRegistrationRequest: true,
     disableAdminFunctionsFromApp: false,
   });
-  const [associationTabData, setAssociationTabData] = useState(initialAssociationTabData);
-  const [associationProfile, setAssociationProfile] = useState(defaultAssociationProfile);
-  const [associationProfileForm, setAssociationProfileForm] = useState(defaultAssociationProfile);
-  const [isEditingAssociationProfile, setIsEditingAssociationProfile] = useState(false);
-  const [associationAbout, setAssociationAbout] = useState(defaultAssociationAbout);
-  const [associationAboutForm, setAssociationAboutForm] = useState(defaultAssociationAbout);
-  const [isEditingAssociationAbout, setIsEditingAssociationAbout] = useState(false);
+  const [associationTabData, setAssociationTabData] = useState(
+    initialAssociationTabData,
+  );
+  const [associationProfile, setAssociationProfile] = useState(
+    defaultAssociationProfile,
+  );
+  const [associationProfileForm, setAssociationProfileForm] = useState(
+    defaultAssociationProfile,
+  );
+  const [isEditingAssociationProfile, setIsEditingAssociationProfile] =
+    useState(false);
+  const [associationAbout, setAssociationAbout] = useState(
+    defaultAssociationAbout,
+  );
+  const [associationAboutForm, setAssociationAboutForm] = useState(
+    defaultAssociationAbout,
+  );
+  const [isEditingAssociationAbout, setIsEditingAssociationAbout] =
+    useState(false);
   const [galleryItems, setGalleryItems] = useState([]);
   const [editingGalleryItemId, setEditingGalleryItemId] = useState(null);
-  const [galleryItemForm, setGalleryItemForm] = useState(defaultGalleryItemForm);
+  const [galleryItemForm, setGalleryItemForm] = useState(
+    defaultGalleryItemForm,
+  );
   const [circularDocuments, setCircularDocuments] = useState([]);
-  const [editingCircularDocumentId, setEditingCircularDocumentId] = useState(null);
-  const [circularDocumentForm, setCircularDocumentForm] = useState(defaultCircularDocumentForm);
+  const [editingCircularDocumentId, setEditingCircularDocumentId] =
+    useState(null);
+  const [circularDocumentForm, setCircularDocumentForm] = useState(
+    defaultCircularDocumentForm,
+  );
   const [memberTabData, setMemberTabData] = useState(initialMemberTabData);
-  const [editingCommitteeMemberId, setEditingCommitteeMemberId] = useState(null);
-  const [committeeMemberForm, setCommitteeMemberForm] = useState(defaultCommitteeMemberForm);
-  const [memberMasterForm, setMemberMasterForm] = useState(defaultMemberAdminForm);
+  const [editingCommitteeMemberId, setEditingCommitteeMemberId] =
+    useState(null);
+  const [committeeMemberForm, setCommitteeMemberForm] = useState(
+    defaultCommitteeMemberForm,
+  );
+  const [memberMasterForm, setMemberMasterForm] = useState(
+    defaultMemberAdminForm,
+  );
   const [editingMemberId, setEditingMemberId] = useState("");
   const [isMemberFormOpen, setIsMemberFormOpen] = useState(false);
-  const [membershipFormFields, setMembershipFormFields] = useState(initialMembershipFormFields);
+  const [membershipFormFields, setMembershipFormFields] = useState(
+    initialMembershipFormFields,
+  );
   const [membershipFieldDraft, setMembershipFieldDraft] = useState({
     label: "",
     type: "text",
@@ -6561,10 +8435,14 @@ export default function HomePage() {
   const [memberAccessEdits, setMemberAccessEdits] = useState({});
   const [selectedContentMemberIds, setSelectedContentMemberIds] = useState([]);
   const [memberContentPosts, setMemberContentPosts] = useState([]);
-  const [memberMediaPostForm, setMemberMediaPostForm] = useState(defaultMemberMediaPostForm);
+  const [memberMediaPostForm, setMemberMediaPostForm] = useState(
+    defaultMemberMediaPostForm,
+  );
   const [isSavingMemberMediaPost, setIsSavingMemberMediaPost] = useState(false);
   const [timelinePosts, setTimelinePosts] = useState([]);
-  const [timelinePostForm, setTimelinePostForm] = useState(defaultTimelinePostForm);
+  const [timelinePostForm, setTimelinePostForm] = useState(
+    defaultTimelinePostForm,
+  );
   const [isSavingTimelinePost, setIsSavingTimelinePost] = useState(false);
   const [appBanners, setAppBanners] = useState([]);
   const [appBannerForm, setAppBannerForm] = useState(defaultAppBannerForm);
@@ -6585,7 +8463,9 @@ export default function HomePage() {
   const [vendorStatusSearch, setVendorStatusSearch] = useState("");
   const [selectedVendorRequests, setSelectedVendorRequests] = useState([]);
   const [selectedVendorReviewId, setSelectedVendorReviewId] = useState("");
-  const [vendorApprovalForm, setVendorApprovalForm] = useState(buildVendorApprovalForm(null));
+  const [vendorApprovalForm, setVendorApprovalForm] = useState(
+    buildVendorApprovalForm(null),
+  );
   const [vendorApprovalError, setVendorApprovalError] = useState("");
   const [vendorRecords, setVendorRecords] = useState(initialVendorRecords);
   const [vendorAccessEdits, setVendorAccessEdits] = useState({});
@@ -6647,22 +8527,30 @@ export default function HomePage() {
     onboardingEndAt: "",
     paymentDueDate: "",
   });
-  const [vendorCategories, setVendorCategories] = useState(initialVendorCategories);
-  const [vendorSubCategoryRecords, setVendorSubCategoryRecords] = useState(vendorSubCategoryMap);
+  const [vendorCategories, setVendorCategories] = useState(
+    initialVendorCategories,
+  );
+  const [vendorSubCategoryRecords, setVendorSubCategoryRecords] =
+    useState(vendorSubCategoryMap);
   const [newVendorCategory, setNewVendorCategory] = useState("");
   const [vendorCategoryDraft, setVendorCategoryDraft] = useState("");
   const [editingVendorCategory, setEditingVendorCategory] = useState(null);
-  const [selectedVendorParentCategory, setSelectedVendorParentCategory] = useState("");
+  const [selectedVendorParentCategory, setSelectedVendorParentCategory] =
+    useState("");
   const [vendorSubCategoryDraft, setVendorSubCategoryDraft] = useState("");
-  const [editingVendorSubCategory, setEditingVendorSubCategory] = useState(null);
+  const [editingVendorSubCategory, setEditingVendorSubCategory] =
+    useState(null);
   const [vendorFilters, setVendorFilters] = useState({
     name: "",
     category: "",
     city: "",
   });
-  const vendorSubCategoryOptions = vendorSubCategoryRecords[vendorRegistrationForm.category] ?? [];
-  const vendorStateOptions = vendorStateOptionsByCountry[vendorRegistrationForm.country] ?? [];
-  const vendorCityOptions = vendorCityOptionsByState[vendorRegistrationForm.state] ?? [];
+  const vendorSubCategoryOptions =
+    vendorSubCategoryRecords[vendorRegistrationForm.category] ?? [];
+  const vendorStateOptions =
+    vendorStateOptionsByCountry[vendorRegistrationForm.country] ?? [];
+  const vendorCityOptions =
+    vendorCityOptionsByState[vendorRegistrationForm.state] ?? [];
   const [eventForm, setEventForm] = useState({
     ...defaultEventForm,
     id: "",
@@ -6674,13 +8562,193 @@ export default function HomePage() {
     title: "",
     meta: "",
   });
-  const isAssociationAdmin = true;
-  const isMemberAdmin = true;
+  const isAssociationAdmin = authSession?.viewerRole === "admin";
+  const isMemberAdmin = authSession?.viewerRole === "admin";
+
+  const updateLoginField = (field, value) => {
+    setLoginForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  };
+
+  const logoutAdmin = async () => {
+    try {
+      if (authSession?.authToken) {
+        await fetch(`${apiBaseUrl}/auth/logout`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${authSession.authToken}`,
+          },
+        });
+      }
+    } catch {
+      // Ignore logout transport failures and clear the local session anyway.
+    }
+
+    persistAdminSession(null);
+    setAuthSession(null);
+    setLoginError("");
+  };
+
+  const runAuthenticatedFetch = async (
+    path,
+    options = {},
+    sessionOverride = authSession,
+  ) => {
+    const makeRequest = (resolvedSession) => {
+      const headers = new Headers(options.headers || {});
+      if (resolvedSession?.authToken) {
+        headers.set("Authorization", `Bearer ${resolvedSession.authToken}`);
+      }
+
+      return fetch(`${apiBaseUrl}${path}`, {
+        ...options,
+        headers,
+      });
+    };
+
+    let response = await makeRequest(sessionOverride);
+    if (response.status !== 401 || !sessionOverride?.refreshToken) {
+      return response;
+    }
+
+    const refreshResponse = await fetch(`${apiBaseUrl}/auth/refresh`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        refreshToken: sessionOverride.refreshToken,
+      }),
+    });
+
+    if (!refreshResponse.ok) {
+      persistAdminSession(null);
+      setAuthSession(null);
+      return response;
+    }
+
+    const refreshPayload = await refreshResponse.json();
+    const nextSession = normalizeAuthSession(refreshPayload);
+    if (!nextSession || nextSession.viewerRole !== "admin") {
+      persistAdminSession(null);
+      setAuthSession(null);
+      return response;
+    }
+
+    persistAdminSession(nextSession);
+    setAuthSession(nextSession);
+    response = await makeRequest(nextSession);
+    return response;
+  };
+
+  const submitAdminLogin = async () => {
+    if (!loginForm.email.trim() || !loginForm.password) {
+      setLoginError("Enter the admin email and password to continue.");
+      return;
+    }
+
+    setIsLoggingIn(true);
+    setLoginError("");
+
+    try {
+      const response = await fetch(`${apiBaseUrl}/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          username: loginForm.email.trim(),
+          password: loginForm.password,
+        }),
+      });
+
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        setLoginError(payload?.error || "Admin login failed.");
+        return;
+      }
+
+      const nextSession = normalizeAuthSession(payload);
+      if (!nextSession || nextSession.viewerRole !== "admin") {
+        setLoginError("This account does not have admin access.");
+        return;
+      }
+
+      persistAdminSession(nextSession);
+      setAuthSession(nextSession);
+    } catch {
+      setLoginError("Could not reach the backend login service.");
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const restoreSession = async () => {
+      const storedSession = readStoredAdminSession();
+      if (!storedSession) {
+        if (!cancelled) {
+          setAuthReady(true);
+        }
+        return;
+      }
+
+      try {
+        const response = await runAuthenticatedFetch(
+          "/auth/me",
+          { method: "GET" },
+          storedSession,
+        );
+
+        if (!response.ok) {
+          persistAdminSession(null);
+          if (!cancelled) {
+            setAuthSession(null);
+            setAuthReady(true);
+          }
+          return;
+        }
+
+        const payload = await response.json();
+        const nextSession = normalizeAuthSession(payload);
+        if (!nextSession || nextSession.viewerRole !== "admin") {
+          persistAdminSession(null);
+          if (!cancelled) {
+            setAuthSession(null);
+            setAuthReady(true);
+          }
+          return;
+        }
+
+        persistAdminSession(nextSession);
+        if (!cancelled) {
+          setAuthSession(nextSession);
+          setAuthReady(true);
+        }
+      } catch {
+        persistAdminSession(null);
+        if (!cancelled) {
+          setAuthSession(null);
+          setAuthReady(true);
+        }
+      }
+    };
+
+    void restoreSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const loadMembers = async () => {
     const [membersResponse, usersResponse] = await Promise.all([
       fetch(`${apiBaseUrl}/members`),
-      fetch(`${apiBaseUrl}/users?role=member`),
+      runAuthenticatedFetch("/users?role=member"),
     ]);
 
     if (!membersResponse.ok) {
@@ -6688,9 +8756,14 @@ export default function HomePage() {
     }
 
     const membersPayload = await membersResponse.json();
-    const usersPayload = usersResponse.ok ? await usersResponse.json() : { users: [] };
+    const usersPayload = usersResponse.ok
+      ? await usersResponse.json()
+      : { users: [] };
 
-    if (!Array.isArray(membersPayload.members) || membersPayload.members.length === 0) {
+    if (
+      !Array.isArray(membersPayload.members) ||
+      membersPayload.members.length === 0
+    ) {
       return;
     }
 
@@ -6712,7 +8785,9 @@ export default function HomePage() {
     }
 
     const payload = await response.json();
-    const posts = Array.isArray(payload.posts) ? payload.posts.map(mapApiMemberPostToUi) : [];
+    const posts = Array.isArray(payload.posts)
+      ? payload.posts.map(mapApiMemberPostToUi)
+      : [];
     setMemberContentPosts(posts);
     setContentPostEdits(
       Object.fromEntries(
@@ -6735,7 +8810,9 @@ export default function HomePage() {
     }
 
     const payload = await response.json();
-    const posts = Array.isArray(payload.posts) ? payload.posts.map(mapApiTimelinePostToUi) : [];
+    const posts = Array.isArray(payload.posts)
+      ? payload.posts.map(mapApiTimelinePostToUi)
+      : [];
     setTimelinePosts(posts);
     setTimelineAccessEdits(
       Object.fromEntries(
@@ -6758,7 +8835,9 @@ export default function HomePage() {
     }
 
     const payload = await response.json();
-    const banners = Array.isArray(payload.banners) ? payload.banners.map(mapApiAppBannerToUi) : [];
+    const banners = Array.isArray(payload.banners)
+      ? payload.banners.map(mapApiAppBannerToUi)
+      : [];
     setAppBanners(banners);
     setAppBannerAccessEdits(
       Object.fromEntries(
@@ -6785,14 +8864,22 @@ export default function HomePage() {
     }
 
     const payload = await response.json();
-    const nextProfile = mapAssociationProfileToForm(payload.association ?? defaultAssociationProfile);
+    const nextProfile = mapAssociationProfileToForm(
+      payload.association ?? defaultAssociationProfile,
+    );
     setAssociationProfile(nextProfile);
     setAssociationProfileForm(nextProfile);
-    const nextAbout = mapAssociationAboutToForm(payload.association?.aboutContent);
+    const nextAbout = mapAssociationAboutToForm(
+      payload.association?.aboutContent,
+    );
     setAssociationAbout(nextAbout);
     setAssociationAboutForm(nextAbout);
-    setGalleryItems(mapAssociationGalleryItems(payload.association?.galleryItems));
-    setCircularDocuments(mapAssociationCircularDocuments(payload.association?.circularDocuments));
+    setGalleryItems(
+      mapAssociationGalleryItems(payload.association?.galleryItems),
+    );
+    setCircularDocuments(
+      mapAssociationCircularDocuments(payload.association?.circularDocuments),
+    );
   };
 
   const loadEventsArena = async () => {
@@ -6803,7 +8890,9 @@ export default function HomePage() {
 
     if (eventTypesResponse.ok) {
       const payload = await eventTypesResponse.json();
-      setEventTypes(Array.isArray(payload.eventTypes) ? payload.eventTypes : []);
+      setEventTypes(
+        Array.isArray(payload.eventTypes) ? payload.eventTypes : [],
+      );
     }
 
     if (eventsResponse.ok) {
@@ -6819,7 +8908,9 @@ export default function HomePage() {
     }
 
     const payload = await response.json();
-    const vendors = Array.isArray(payload.vendors) ? payload.vendors.map(mapApiVendorToUi) : [];
+    const vendors = Array.isArray(payload.vendors)
+      ? payload.vendors.map(mapApiVendorToUi)
+      : [];
     if (vendors.length === 0) {
       setVendorRecords([]);
       setVendorAccessEdits({});
@@ -6829,9 +8920,10 @@ export default function HomePage() {
     setVendorRecords(vendors);
     setVendorCategories([
       ...new Set(
-        [...vendors.map((vendor) => vendor.category).filter(Boolean), ...initialVendorCategories].sort((left, right) =>
-          left.localeCompare(right),
-        ),
+        [
+          ...vendors.map((vendor) => vendor.category).filter(Boolean),
+          ...initialVendorCategories,
+        ].sort((left, right) => left.localeCompare(right)),
       ),
     ]);
     setVendorAccessEdits({});
@@ -6849,7 +8941,8 @@ export default function HomePage() {
     syncSidebarViewportState(mediaQuery);
     mediaQuery.addEventListener("change", syncSidebarViewportState);
 
-    return () => mediaQuery.removeEventListener("change", syncSidebarViewportState);
+    return () =>
+      mediaQuery.removeEventListener("change", syncSidebarViewportState);
   }, []);
 
   useEffect(() => {
@@ -6873,20 +8966,27 @@ export default function HomePage() {
 
     const loadMembersData = async () => {
       try {
-        const [membersResponse, usersResponse, postsResponse] = await Promise.all([
-          fetch(`${apiBaseUrl}/members`),
-          fetch(`${apiBaseUrl}/users?role=member`),
-          fetch(`${apiBaseUrl}/member-posts`),
-        ]);
+        const [membersResponse, usersResponse, postsResponse] =
+          await Promise.all([
+            fetch(`${apiBaseUrl}/members`),
+            runAuthenticatedFetch("/users?role=member"),
+            fetch(`${apiBaseUrl}/member-posts`),
+          ]);
 
         if (!membersResponse.ok) {
           return;
         }
 
         const membersPayload = await membersResponse.json();
-        const usersPayload = usersResponse.ok ? await usersResponse.json() : { users: [] };
+        const usersPayload = usersResponse.ok
+          ? await usersResponse.json()
+          : { users: [] };
 
-        if (!isActive || !Array.isArray(membersPayload.members) || membersPayload.members.length === 0) {
+        if (
+          !isActive ||
+          !Array.isArray(membersPayload.members) ||
+          membersPayload.members.length === 0
+        ) {
           return;
         }
 
@@ -6901,7 +9001,9 @@ export default function HomePage() {
 
         if (postsResponse.ok) {
           const postsPayload = await postsResponse.json();
-          const posts = Array.isArray(postsPayload.posts) ? postsPayload.posts.map(mapApiMemberPostToUi) : [];
+          const posts = Array.isArray(postsPayload.posts)
+            ? postsPayload.posts.map(mapApiMemberPostToUi)
+            : [];
           setMemberContentPosts(posts);
           setContentPostEdits(
             Object.fromEntries(
@@ -6939,7 +9041,9 @@ export default function HomePage() {
       }
 
       const firstVendorId = vendorRecords[0]?.id ?? "";
-      const firstVendor = vendorRecords.find((vendor) => vendor.id === firstVendorId);
+      const firstVendor = vendorRecords.find(
+        (vendor) => vendor.id === firstVendorId,
+      );
       return firstVendorId
         ? {
             ...current,
@@ -6957,7 +9061,9 @@ export default function HomePage() {
       }
 
       const firstVendorId = vendorRecords[0]?.id ?? "";
-      const firstVendor = vendorRecords.find((vendor) => vendor.id === firstVendorId);
+      const firstVendor = vendorRecords.find(
+        (vendor) => vendor.id === firstVendorId,
+      );
       return firstVendorId
         ? {
             ...current,
@@ -6983,14 +9089,24 @@ export default function HomePage() {
           return;
         }
 
-        const nextProfile = mapAssociationProfileToForm(payload.association ?? defaultAssociationProfile);
+        const nextProfile = mapAssociationProfileToForm(
+          payload.association ?? defaultAssociationProfile,
+        );
         setAssociationProfile(nextProfile);
         setAssociationProfileForm(nextProfile);
-        const nextAbout = mapAssociationAboutToForm(payload.association?.aboutContent);
+        const nextAbout = mapAssociationAboutToForm(
+          payload.association?.aboutContent,
+        );
         setAssociationAbout(nextAbout);
         setAssociationAboutForm(nextAbout);
-        setGalleryItems(mapAssociationGalleryItems(payload.association?.galleryItems));
-        setCircularDocuments(mapAssociationCircularDocuments(payload.association?.circularDocuments));
+        setGalleryItems(
+          mapAssociationGalleryItems(payload.association?.galleryItems),
+        );
+        setCircularDocuments(
+          mapAssociationCircularDocuments(
+            payload.association?.circularDocuments,
+          ),
+        );
       } catch (_error) {
         // Keep default local profile state when the API is unavailable.
       }
@@ -7003,21 +9119,34 @@ export default function HomePage() {
     };
   }, []);
 
-  const filteredFinanceStatementEntries = financeStatementEntries.filter((entry) => {
-    const matchesType = !financeStatementFilterType || entry.entryType === financeStatementFilterType || entry.direction === financeStatementFilterType;
-    const matchesFrom = !financeStatementDateFrom || entry.date >= financeStatementDateFrom;
-    const matchesTo = !financeStatementDateTo || entry.date <= financeStatementDateTo;
-    return matchesType && matchesFrom && matchesTo;
-  });
+  const filteredFinanceStatementEntries = financeStatementEntries.filter(
+    (entry) => {
+      const matchesType =
+        !financeStatementFilterType ||
+        entry.entryType === financeStatementFilterType ||
+        entry.direction === financeStatementFilterType;
+      const matchesFrom =
+        !financeStatementDateFrom || entry.date >= financeStatementDateFrom;
+      const matchesTo =
+        !financeStatementDateTo || entry.date <= financeStatementDateTo;
+      return matchesType && matchesFrom && matchesTo;
+    },
+  );
   const activeTabItems =
     activeAssociationTab === "Finance"
-      ? financeRecords[activeFinanceTab] ?? []
-      : associationTabData[activeAssociationTab] ?? [];
+      ? (financeRecords[activeFinanceTab] ?? [])
+      : (associationTabData[activeAssociationTab] ?? []);
   const activeSelectedIds =
-    activeAssociationTab === "Finance" ? [] : selectedRecords[activeAssociationTab] ?? [];
+    activeAssociationTab === "Finance"
+      ? []
+      : (selectedRecords[activeAssociationTab] ?? []);
   const activeMemberItems =
-    activeMemberTab === "Master" ? memberTabData["All Members"] ?? [] : memberTabData[activeMemberTab] ?? [];
-  const committeeMembers = getCommitteeMembers(memberTabData["All Members"] ?? []);
+    activeMemberTab === "Master"
+      ? (memberTabData["All Members"] ?? [])
+      : (memberTabData[activeMemberTab] ?? []);
+  const committeeMembers = getCommitteeMembers(
+    memberTabData["All Members"] ?? [],
+  );
   const eventTimelineData = buildEventTimelineGroups(createdEvents);
   const activeMemberSelectedIds = selectedMemberRecords[activeMemberTab] ?? [];
   const timelineVendorOptions = vendorRecords.map((vendor) => ({
@@ -7031,14 +9160,18 @@ export default function HomePage() {
   }));
   const dashboardTimelinePosts = timelinePosts
     .filter(isTimelinePostVisibleOnDashboard)
-    .sort((left, right) => String(right.createdAt || "").localeCompare(String(left.createdAt || "")));
+    .sort((left, right) =>
+      String(right.createdAt || "").localeCompare(String(left.createdAt || "")),
+    );
   const filteredAdminTimelinePosts = timelinePosts.filter((post) => {
     const query = adminTimelineSearch.trim().toLowerCase();
     if (!query) {
       return true;
     }
 
-    return `${post.caption} ${post.sourceName} ${post.postedBy} ${post.status}`.toLowerCase().includes(query);
+    return `${post.caption} ${post.sourceName} ${post.postedBy} ${post.status}`
+      .toLowerCase()
+      .includes(query);
   });
   const adminAppBannerItems = appBanners.filter((banner) => {
     const query = adminAppBannerSearch.trim().toLowerCase();
@@ -7052,7 +9185,9 @@ export default function HomePage() {
   });
   const dashboardAppBanners = appBanners
     .filter(isAppBannerVisibleOnDashboard)
-    .sort((left, right) => Number(left.displayIndex) - Number(right.displayIndex));
+    .sort(
+      (left, right) => Number(left.displayIndex) - Number(right.displayIndex),
+    );
   const expiringMembersCount = (memberTabData["All Members"] ?? []).filter(
     (member) => member.expiryStatus === "expiring-soon",
   ).length;
@@ -7061,7 +9196,9 @@ export default function HomePage() {
       const query = adminMemberSearch.trim().toLowerCase();
       const matchesFilter =
         activeAdminMemberFilter === "All"
-          ? ["Primary", "Associate", "Temporary Visit", "Committee"].includes(member.membershipType)
+          ? ["Primary", "Associate", "Temporary Visit", "Committee"].includes(
+              member.membershipType,
+            )
           : activeAdminMemberFilter === "Guest"
             ? member.membershipType === "Temporary Visit"
             : activeAdminMemberFilter === "Committee"
@@ -7076,26 +9213,34 @@ export default function HomePage() {
         return true;
       }
 
-      return `${member.name} ${member.company} ${member.membershipType}`.toLowerCase().includes(query);
+      return `${member.name} ${member.company} ${member.membershipType}`
+        .toLowerCase()
+        .includes(query);
     })
     .map((member) => ({
       ...member,
       appAccessStatus: memberAccessEdits[member.id] ?? member.appAccessStatus,
     }));
-  const contentMemberMatches = (memberTabData["All Members"] ?? []).filter((member) => {
-    const query = adminContentMemberSearch.trim().toLowerCase();
-    if (!query) {
-      return true;
-    }
+  const contentMemberMatches = (memberTabData["All Members"] ?? []).filter(
+    (member) => {
+      const query = adminContentMemberSearch.trim().toLowerCase();
+      if (!query) {
+        return true;
+      }
 
-    return `${member.name} ${member.company}`.toLowerCase().includes(query);
-  });
+      return `${member.name} ${member.company}`.toLowerCase().includes(query);
+    },
+  );
   const filteredMemberContentPosts = memberContentPosts.filter((post) => {
     const query = adminContentMemberSearch.trim().toLowerCase();
-    const postStatus = (contentPostEdits[post.id]?.status ?? post.status).toLowerCase();
+    const postStatus = (
+      contentPostEdits[post.id]?.status ?? post.status
+    ).toLowerCase();
     const matchesQuery =
       !query ||
-      `${post.title} ${post.summary} ${post.postedBy} ${postStatus}`.toLowerCase().includes(query);
+      `${post.title} ${post.summary} ${post.postedBy} ${postStatus}`
+        .toLowerCase()
+        .includes(query);
 
     if (!matchesQuery) {
       return false;
@@ -7110,15 +9255,21 @@ export default function HomePage() {
   const vendorSummaryStats = [
     { value: vendorRecords.length.toString(), label: "Registered Vendors" },
     {
-      value: vendorRecords.filter((vendor) => vendor.registrationStatus === "Active").length.toString(),
+      value: vendorRecords
+        .filter((vendor) => vendor.registrationStatus === "Active")
+        .length.toString(),
       label: "Active",
     },
     {
-      value: vendorRecords.filter((vendor) => vendor.registrationStatus === "Suspended").length.toString(),
+      value: vendorRecords
+        .filter((vendor) => vendor.registrationStatus === "Suspended")
+        .length.toString(),
       label: "Suspended",
     },
     {
-      value: vendorRecords.filter((vendor) => vendor.registrationStatus === "Lapsed").length.toString(),
+      value: vendorRecords
+        .filter((vendor) => vendor.registrationStatus === "Lapsed")
+        .length.toString(),
       label: "Lapsed",
     },
   ];
@@ -7129,7 +9280,9 @@ export default function HomePage() {
         return true;
       }
 
-      return `${vendor.name} ${vendor.company} ${vendor.vendorType}`.toLowerCase().includes(query);
+      return `${vendor.name} ${vendor.company} ${vendor.vendorType}`
+        .toLowerCase()
+        .includes(query);
     })
     .map((vendor) => ({
       ...vendor,
@@ -7148,15 +9301,21 @@ export default function HomePage() {
         .includes(query);
     });
   const selectedVendorReview =
-    vendorStatusRequests.find((vendor) => vendor.id === selectedVendorReviewId) ??
+    vendorStatusRequests.find(
+      (vendor) => vendor.id === selectedVendorReviewId,
+    ) ??
     vendorRecords.find((vendor) => vendor.id === selectedVendorReviewId) ??
     null;
   const filteredVendorContentPosts = vendorContentPosts.filter((post) => {
     const query = adminVendorSearch.trim().toLowerCase();
-    const postStatus = (vendorContentPostEdits[post.id]?.status ?? post.status).toLowerCase();
+    const postStatus = (
+      vendorContentPostEdits[post.id]?.status ?? post.status
+    ).toLowerCase();
     const matchesQuery =
       !query ||
-      `${post.title} ${post.summary} ${post.postedBy} ${postStatus}`.toLowerCase().includes(query);
+      `${post.title} ${post.summary} ${post.postedBy} ${postStatus}`
+        .toLowerCase()
+        .includes(query);
 
     if (!matchesQuery) {
       return false;
@@ -7213,7 +9372,9 @@ export default function HomePage() {
 
     setAssociationTabData((current) => ({
       ...current,
-      [tab]: (current[tab] ?? []).filter((item) => !selectedIds.includes(item.id)),
+      [tab]: (current[tab] ?? []).filter(
+        (item) => !selectedIds.includes(item.id),
+      ),
     }));
 
     setSelectedRecords((current) => ({
@@ -7282,15 +9443,23 @@ export default function HomePage() {
     }
 
     setMemberTabData((current) =>
-      buildMemberTabData((current["All Members"] ?? []).filter((item) => !selectedIds.includes(item.id))),
+      buildMemberTabData(
+        (current["All Members"] ?? []).filter(
+          (item) => !selectedIds.includes(item.id),
+        ),
+      ),
     );
 
-    setSelectedMemberRecords(Object.fromEntries(memberArenaTabs.map((memberTab) => [memberTab, []])));
+    setSelectedMemberRecords(
+      Object.fromEntries(memberArenaTabs.map((memberTab) => [memberTab, []])),
+    );
   };
 
   const deleteSingleMemberRecord = (tab, recordId) => {
     setMemberTabData((current) =>
-      buildMemberTabData((current["All Members"] ?? []).filter((item) => item.id !== recordId)),
+      buildMemberTabData(
+        (current["All Members"] ?? []).filter((item) => item.id !== recordId),
+      ),
     );
 
     setSelectedMemberRecords((current) =>
@@ -7309,7 +9478,9 @@ export default function HomePage() {
   };
   const updateMemberMasterForm = (field, value) => {
     setMemberMasterForm((current) => {
-      const matchingField = membershipFormFields.find((item) => item.id === field);
+      const matchingField = membershipFormFields.find(
+        (item) => item.id === field,
+      );
       if (matchingField && !matchingField.key) {
         return {
           ...current,
@@ -7346,7 +9517,9 @@ export default function HomePage() {
     setEditingMemberId("");
   };
   const editMemberRecord = (memberId) => {
-    const member = (memberTabData["All Members"] ?? []).find((item) => item.id === memberId);
+    const member = (memberTabData["All Members"] ?? []).find(
+      (item) => item.id === memberId,
+    );
     if (!member) {
       return;
     }
@@ -7374,67 +9547,71 @@ export default function HomePage() {
   };
   const saveMemberRecord = () => {
     void (async () => {
-    const normalizedName = memberMasterForm.name.trim();
-    const normalizedCompany = memberMasterForm.company.trim();
-    const normalizedEmail = memberMasterForm.email.trim();
-    if (!normalizedName || !normalizedCompany || !normalizedEmail) {
-      return;
-    }
+      const normalizedName = memberMasterForm.name.trim();
+      const normalizedCompany = memberMasterForm.company.trim();
+      const normalizedEmail = memberMasterForm.email.trim();
+      if (!normalizedName || !normalizedCompany || !normalizedEmail) {
+        return;
+      }
 
-    const [firstName, ...restNameParts] = normalizedName.split(" ").filter(Boolean);
-    const payload = {
-      firstName: firstName || normalizedName,
-      lastName: restNameParts.join(" "),
-      email: normalizedEmail,
-      phone: memberMasterForm.phone.trim(),
-      address: memberMasterForm.companyAddress.trim(),
-      gst: memberMasterForm.gst.trim(),
-      photoUrl: memberMasterForm.photoUrl,
-      companyName: normalizedCompany,
-      roleTitle: memberMasterForm.membershipType,
-      membershipDetails: memberMasterForm.membershipDetails.trim(),
-      membershipStartDate: memberMasterForm.membershipStartDate || undefined,
-      membershipEndDate: memberMasterForm.membershipEndDate || undefined,
-      paymentAmount: memberMasterForm.paymentAmount.trim(),
-      paymentStatus:
-        memberMasterForm.paymentStatus === "Paid"
-          ? "PAID"
-          : memberMasterForm.paymentStatus === "Overdue"
-            ? "OVERDUE"
-            : memberMasterForm.paymentStatus === "Waived"
-              ? "WAIVED"
-              : "PENDING",
-      customFieldValues: memberMasterForm.customFieldValues,
-    };
+      const [firstName, ...restNameParts] = normalizedName
+        .split(" ")
+        .filter(Boolean);
+      const payload = {
+        firstName: firstName || normalizedName,
+        lastName: restNameParts.join(" "),
+        email: normalizedEmail,
+        phone: memberMasterForm.phone.trim(),
+        address: memberMasterForm.companyAddress.trim(),
+        gst: memberMasterForm.gst.trim(),
+        photoUrl: memberMasterForm.photoUrl,
+        companyName: normalizedCompany,
+        roleTitle: memberMasterForm.membershipType,
+        membershipDetails: memberMasterForm.membershipDetails.trim(),
+        membershipStartDate: memberMasterForm.membershipStartDate || undefined,
+        membershipEndDate: memberMasterForm.membershipEndDate || undefined,
+        paymentAmount: memberMasterForm.paymentAmount.trim(),
+        paymentStatus:
+          memberMasterForm.paymentStatus === "Paid"
+            ? "PAID"
+            : memberMasterForm.paymentStatus === "Overdue"
+              ? "OVERDUE"
+              : memberMasterForm.paymentStatus === "Waived"
+                ? "WAIVED"
+                : "PENDING",
+        customFieldValues: memberMasterForm.customFieldValues,
+      };
 
-    const response = await fetch(
-      `${apiBaseUrl}/members${editingMemberId ? `/${editingMemberId}` : ""}`,
-      {
-        method: editingMemberId ? "PATCH" : "POST",
-        headers: {
-          "Content-Type": "application/json",
+      const response = await fetch(
+        `${apiBaseUrl}/members${editingMemberId ? `/${editingMemberId}` : ""}`,
+        {
+          method: editingMemberId ? "PATCH" : "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
         },
-        body: JSON.stringify(payload),
-      },
-    );
+      );
 
-    if (!response.ok) {
-      return;
-    }
+      if (!response.ok) {
+        return;
+      }
 
-    const savedPayload = await response.json();
-    const savedMember = mapApiMemberToUi(savedPayload.member);
+      const savedPayload = await response.json();
+      const savedMember = mapApiMemberToUi(savedPayload.member);
 
-    setMemberTabData((current) => {
-      const allMembers = current["All Members"] ?? [];
-      const nextMembers = editingMemberId
-        ? allMembers.map((member) => (member.id === editingMemberId ? savedMember : member))
-        : [savedMember, ...allMembers];
-      return buildMemberTabData(nextMembers);
-    });
-    await loadMembers();
-    resetMemberMasterForm();
-    setIsMemberFormOpen(false);
+      setMemberTabData((current) => {
+        const allMembers = current["All Members"] ?? [];
+        const nextMembers = editingMemberId
+          ? allMembers.map((member) =>
+              member.id === editingMemberId ? savedMember : member,
+            )
+          : [savedMember, ...allMembers];
+        return buildMemberTabData(nextMembers);
+      });
+      await loadMembers();
+      resetMemberMasterForm();
+      setIsMemberFormOpen(false);
     })();
   };
   const removeMemberRecord = (memberId) => {
@@ -7448,16 +9625,23 @@ export default function HomePage() {
       }
 
       setMemberTabData((current) =>
-        buildMemberTabData((current["All Members"] ?? []).filter((item) => item.id !== memberId)),
+        buildMemberTabData(
+          (current["All Members"] ?? []).filter((item) => item.id !== memberId),
+        ),
       );
-    setSelectedMemberRecords((current) =>
-      Object.fromEntries(memberArenaTabs.map((memberTab) => [memberTab, (current[memberTab] ?? []).filter((id) => id !== memberId)])),
-    );
+      setSelectedMemberRecords((current) =>
+        Object.fromEntries(
+          memberArenaTabs.map((memberTab) => [
+            memberTab,
+            (current[memberTab] ?? []).filter((id) => id !== memberId),
+          ]),
+        ),
+      );
 
-    if (editingMemberId === memberId) {
-      resetMemberMasterForm();
-      setIsMemberFormOpen(false);
-    }
+      if (editingMemberId === memberId) {
+        resetMemberMasterForm();
+        setIsMemberFormOpen(false);
+      }
     })();
   };
   const updateMembershipFieldDraft = (field, value) => {
@@ -7505,7 +9689,9 @@ export default function HomePage() {
   };
   const updateMembershipField = (fieldId, property, value) => {
     setMembershipFormFields((current) =>
-      current.map((field) => (field.id === fieldId ? { ...field, [property]: value } : field)),
+      current.map((field) =>
+        field.id === fieldId ? { ...field, [property]: value } : field,
+      ),
     );
   };
 
@@ -7526,7 +9712,8 @@ export default function HomePage() {
                 : appAccessStatus === "Pending Approval"
                   ? "PENDING"
                   : "INACTIVE",
-            expiryStatus: appAccessStatus === "Approved" ? "active" : "expiring-soon",
+            expiryStatus:
+              appAccessStatus === "Approved" ? "active" : "expiring-soon",
           };
         }),
       ),
@@ -7552,7 +9739,9 @@ export default function HomePage() {
 
     setMemberAccessEdits((current) => ({
       ...current,
-      ...Object.fromEntries(selectedAdminMembers.map((memberId) => [memberId, nextStatusLabel])),
+      ...Object.fromEntries(
+        selectedAdminMembers.map((memberId) => [memberId, nextStatusLabel]),
+      ),
     }));
   };
 
@@ -7564,7 +9753,12 @@ export default function HomePage() {
         return;
       }
 
-      const memberLookup = new Map((memberTabData["All Members"] ?? []).map((member) => [member.id, member]));
+      const memberLookup = new Map(
+        (memberTabData["All Members"] ?? []).map((member) => [
+          member.id,
+          member,
+        ]),
+      );
 
       await Promise.all(
         updates.map(async ([memberId, nextStatusLabel]) => {
@@ -7582,13 +9776,16 @@ export default function HomePage() {
                   ? "CANCELLED"
                   : "PENDING";
 
-          const response = await fetch(`${apiBaseUrl}/members/${memberId}/access`, {
-            method: "PATCH",
-            headers: {
-              "Content-Type": "application/json",
+          const response = await fetch(
+            `${apiBaseUrl}/members/${memberId}/access`,
+            {
+              method: "PATCH",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ accessStatus }),
             },
-            body: JSON.stringify({ accessStatus }),
-          });
+          );
 
           if (!response.ok) {
             return;
@@ -7604,9 +9801,63 @@ export default function HomePage() {
     })();
   };
 
+  const toggleMemberAdminRole = (member) => {
+    if (!member.accessUserId) {
+      return;
+    }
+
+    void (async () => {
+      setUpdatingAdminUserIds((current) =>
+        current.includes(member.accessUserId)
+          ? current
+          : [...current, member.accessUserId],
+      );
+
+      try {
+        const response = await runAuthenticatedFetch(
+          `/users/${member.accessUserId}/admin-role`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              isAdmin: !member.isAdmin,
+            }),
+          },
+        );
+
+        if (!response.ok) {
+          return;
+        }
+
+        setMemberTabData((current) =>
+          buildMemberTabData(
+            (current["All Members"] ?? []).map((item) =>
+              item.id === member.id
+                ? {
+                    ...item,
+                    isAdmin: !member.isAdmin,
+                  }
+                : item,
+            ),
+          ),
+        );
+
+        await loadMembers();
+      } finally {
+        setUpdatingAdminUserIds((current) =>
+          current.filter((userId) => userId !== member.accessUserId),
+        );
+      }
+    })();
+  };
+
   const toggleAdminMemberSelect = (memberId) => {
     setSelectedAdminMembers((current) =>
-      current.includes(memberId) ? current.filter((id) => id !== memberId) : [...current, memberId],
+      current.includes(memberId)
+        ? current.filter((id) => id !== memberId)
+        : [...current, memberId],
     );
   };
 
@@ -7619,11 +9870,15 @@ export default function HomePage() {
 
   const toggleContentMember = (memberId) => {
     setSelectedContentMemberIds((current) =>
-      current.includes(memberId) ? current.filter((id) => id !== memberId) : [...current, memberId],
+      current.includes(memberId)
+        ? current.filter((id) => id !== memberId)
+        : [...current, memberId],
     );
   };
   const selectAllContentMembers = () => {
-    setSelectedContentMemberIds(contentMemberMatches.map((member) => member.id));
+    setSelectedContentMemberIds(
+      contentMemberMatches.map((member) => member.id),
+    );
   };
   const clearContentMemberSelection = () => {
     setSelectedContentMemberIds([]);
@@ -7736,17 +9991,20 @@ export default function HomePage() {
             ? "REJECTED"
             : "PENDING";
 
-      const response = await fetch(`${apiBaseUrl}/member-posts/${postId}/moderation`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
+      const response = await fetch(
+        `${apiBaseUrl}/member-posts/${postId}/moderation`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            reviewStatus,
+            displayStart: currentPost?.displayStart || null,
+            displayEnd: currentPost?.displayEnd || null,
+          }),
         },
-        body: JSON.stringify({
-          reviewStatus,
-          displayStart: currentPost?.displayStart || null,
-          displayEnd: currentPost?.displayEnd || null,
-        }),
-      });
+      );
 
       if (!response.ok) {
         return;
@@ -7790,7 +10048,9 @@ export default function HomePage() {
   };
   const toggleSelectAdminVendor = (vendorId) => {
     setSelectedAdminVendors((current) =>
-      current.includes(vendorId) ? current.filter((id) => id !== vendorId) : [...current, vendorId],
+      current.includes(vendorId)
+        ? current.filter((id) => id !== vendorId)
+        : [...current, vendorId],
     );
   };
   const toggleSelectAllAdminVendors = () => {
@@ -7801,7 +10061,9 @@ export default function HomePage() {
   };
   const toggleContentVendor = (vendorId) => {
     setSelectedContentVendorIds((current) =>
-      current.includes(vendorId) ? current.filter((id) => id !== vendorId) : [...current, vendorId],
+      current.includes(vendorId)
+        ? current.filter((id) => id !== vendorId)
+        : [...current, vendorId],
     );
   };
   const updateVendorContentPost = (postId, field, value) => {
@@ -7932,12 +10194,17 @@ export default function HomePage() {
     }
 
     if (editingVendorCategory) {
-      if (nextName !== editingVendorCategory && vendorCategories.includes(nextName)) {
+      if (
+        nextName !== editingVendorCategory &&
+        vendorCategories.includes(nextName)
+      ) {
         return;
       }
 
       setVendorCategories((current) =>
-        current.map((category) => (category === editingVendorCategory ? nextName : category)),
+        current.map((category) =>
+          category === editingVendorCategory ? nextName : category,
+        ),
       );
       setVendorSubCategoryRecords((current) => {
         const nextRecord = { ...current };
@@ -7969,7 +10236,9 @@ export default function HomePage() {
     cancelVendorCategoryEdit();
   };
   const deleteVendorCategory = (categoryName) => {
-    setVendorCategories((current) => current.filter((category) => category !== categoryName));
+    setVendorCategories((current) =>
+      current.filter((category) => category !== categoryName),
+    );
     setVendorSubCategoryRecords((current) => {
       const nextRecord = { ...current };
       delete nextRecord[categoryName];
@@ -8006,17 +10275,21 @@ export default function HomePage() {
       return;
     }
 
-    const currentItems = vendorSubCategoryRecords[selectedVendorParentCategory] ?? [];
+    const currentItems =
+      vendorSubCategoryRecords[selectedVendorParentCategory] ?? [];
     if (editingVendorSubCategory) {
-      if (nextName !== editingVendorSubCategory && currentItems.includes(nextName)) {
+      if (
+        nextName !== editingVendorSubCategory &&
+        currentItems.includes(nextName)
+      ) {
         return;
       }
 
       setVendorSubCategoryRecords((current) => ({
         ...current,
-        [selectedVendorParentCategory]: (current[selectedVendorParentCategory] ?? []).map((item) =>
-          item === editingVendorSubCategory ? nextName : item,
-        ),
+        [selectedVendorParentCategory]: (
+          current[selectedVendorParentCategory] ?? []
+        ).map((item) => (item === editingVendorSubCategory ? nextName : item)),
       }));
       if (
         vendorRegistrationForm.category === selectedVendorParentCategory &&
@@ -8033,7 +10306,10 @@ export default function HomePage() {
       }
       setVendorSubCategoryRecords((current) => ({
         ...current,
-        [selectedVendorParentCategory]: [...(current[selectedVendorParentCategory] ?? []), nextName],
+        [selectedVendorParentCategory]: [
+          ...(current[selectedVendorParentCategory] ?? []),
+          nextName,
+        ],
       }));
     }
 
@@ -8046,9 +10322,9 @@ export default function HomePage() {
 
     setVendorSubCategoryRecords((current) => ({
       ...current,
-      [selectedVendorParentCategory]: (current[selectedVendorParentCategory] ?? []).filter(
-        (item) => item !== subCategoryName,
-      ),
+      [selectedVendorParentCategory]: (
+        current[selectedVendorParentCategory] ?? []
+      ).filter((item) => item !== subCategoryName),
     }));
     if (
       vendorRegistrationForm.category === selectedVendorParentCategory &&
@@ -8089,29 +10365,45 @@ export default function HomePage() {
           paymentAmount: vendorRegistrationForm.paymentAmount.trim(),
           address: vendorRegistrationForm.address.trim(),
           city: vendorRegistrationForm.city.trim(),
-          phone: `${vendorRegistrationForm.phoneCode} ${vendorRegistrationForm.phone.trim()}`.trim(),
+          phone:
+            `${vendorRegistrationForm.phoneCode} ${vendorRegistrationForm.phone.trim()}`.trim(),
           email: vendorRegistrationForm.email.trim(),
-          whatsapp: `${vendorRegistrationForm.whatsappCode} ${vendorRegistrationForm.whatsapp.trim()}`.trim(),
+          whatsapp:
+            `${vendorRegistrationForm.whatsappCode} ${vendorRegistrationForm.whatsapp.trim()}`.trim(),
           facebookUrl: vendorRegistrationForm.facebookUrl.trim(),
           instagramUrl: vendorRegistrationForm.instagramUrl.trim(),
           youtubeUrl: vendorRegistrationForm.youtubeUrl.trim(),
           linkedinUrl: vendorRegistrationForm.linkedinUrl.trim(),
           xUrl: vendorRegistrationForm.xUrl.trim(),
-          onboardingStartAt: vendorRegistrationForm.onboardingStartAt || undefined,
+          onboardingStartAt:
+            vendorRegistrationForm.onboardingStartAt || undefined,
           onboardingEndAt: vendorRegistrationForm.onboardingEndAt || undefined,
           paymentDueDate: vendorRegistrationForm.paymentDueDate || undefined,
           paymentStatus: "PENDING",
           status: "PENDING",
-          badge: vendorRegistrationForm.subCategory.trim() || vendorRegistrationForm.category.trim() || "Vendor",
+          badge:
+            vendorRegistrationForm.subCategory.trim() ||
+            vendorRegistrationForm.category.trim() ||
+            "Vendor",
           notes: [
-            vendorRegistrationForm.country ? `Country: ${vendorRegistrationForm.country}` : "",
-            vendorRegistrationForm.state ? `State: ${vendorRegistrationForm.state}` : "",
-            vendorRegistrationForm.zipcode ? `Zipcode: ${vendorRegistrationForm.zipcode}` : "",
-            vendorRegistrationForm.website ? `Website: ${vendorRegistrationForm.website.trim()}` : "",
+            vendorRegistrationForm.country
+              ? `Country: ${vendorRegistrationForm.country}`
+              : "",
+            vendorRegistrationForm.state
+              ? `State: ${vendorRegistrationForm.state}`
+              : "",
+            vendorRegistrationForm.zipcode
+              ? `Zipcode: ${vendorRegistrationForm.zipcode}`
+              : "",
+            vendorRegistrationForm.website
+              ? `Website: ${vendorRegistrationForm.website.trim()}`
+              : "",
             vendorRegistrationForm.workDescription
               ? `Work Description: ${vendorRegistrationForm.workDescription.trim()}`
               : "",
-            vendorRegistrationForm.companyLogo?.name ? `Company Logo: ${vendorRegistrationForm.companyLogo.name}` : "",
+            vendorRegistrationForm.companyLogo?.name
+              ? `Company Logo: ${vendorRegistrationForm.companyLogo.name}`
+              : "",
           ]
             .filter(Boolean)
             .join("\n"),
@@ -8160,7 +10452,9 @@ export default function HomePage() {
 
     setVendorAccessEdits((current) => ({
       ...current,
-      ...Object.fromEntries(selectedAdminVendors.map((vendorId) => [vendorId, nextStatusLabel])),
+      ...Object.fromEntries(
+        selectedAdminVendors.map((vendorId) => [vendorId, nextStatusLabel]),
+      ),
     }));
   };
   const saveVendorAccessChanges = () => {
@@ -8182,13 +10476,16 @@ export default function HomePage() {
                   ? "CANCELLED"
                   : "PENDING";
 
-          const response = await fetch(`${apiBaseUrl}/vendors/${vendorId}/access`, {
-            method: "PATCH",
-            headers: {
-              "Content-Type": "application/json",
+          const response = await fetch(
+            `${apiBaseUrl}/vendors/${vendorId}/access`,
+            {
+              method: "PATCH",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ accessStatus }),
             },
-            body: JSON.stringify({ accessStatus }),
-          });
+          );
 
           if (!response.ok) {
             return;
@@ -8205,12 +10502,16 @@ export default function HomePage() {
   };
   const toggleVendorRequestSelect = (vendorId) => {
     setSelectedVendorRequests((current) =>
-      current.includes(vendorId) ? current.filter((id) => id !== vendorId) : [...current, vendorId],
+      current.includes(vendorId)
+        ? current.filter((id) => id !== vendorId)
+        : [...current, vendorId],
     );
   };
   const toggleSelectAllVendorRequests = () => {
     const filteredIds = vendorStatusRequests.map((vendor) => vendor.id);
-    setSelectedVendorRequests((current) => (current.length === filteredIds.length ? [] : filteredIds));
+    setSelectedVendorRequests((current) =>
+      current.length === filteredIds.length ? [] : filteredIds,
+    );
   };
   const openVendorStatusReview = (vendorId) => {
     const vendor = vendorRecords.find((item) => item.id === vendorId);
@@ -8238,9 +10539,12 @@ export default function HomePage() {
   };
   const applySingleVendorDecision = (vendorId, accessStatus) => {
     void (async () => {
-      const reviewTarget = selectedVendorReviewId === vendorId ? vendorApprovalForm : buildVendorApprovalForm(
-        vendorRecords.find((item) => item.id === vendorId) ?? null,
-      );
+      const reviewTarget =
+        selectedVendorReviewId === vendorId
+          ? vendorApprovalForm
+          : buildVendorApprovalForm(
+              vendorRecords.find((item) => item.id === vendorId) ?? null,
+            );
 
       if (accessStatus === "APPROVED") {
         const validationError = getVendorApprovalValidationError(reviewTarget);
@@ -8256,22 +10560,42 @@ export default function HomePage() {
 
       const notes = [
         reviewTarget.planName ? `Plan Name: ${reviewTarget.planName}` : "",
-        reviewTarget.openingTime ? `Opening Time: ${reviewTarget.openingTime}` : "",
-        reviewTarget.closingTime ? `Closing Time: ${reviewTarget.closingTime}` : "",
+        reviewTarget.openingTime
+          ? `Opening Time: ${reviewTarget.openingTime}`
+          : "",
+        reviewTarget.closingTime
+          ? `Closing Time: ${reviewTarget.closingTime}`
+          : "",
         reviewTarget.gstNumber ? `GST Number: ${reviewTarget.gstNumber}` : "",
         `Is Restaurant: ${reviewTarget.isRestaurant ? "Yes" : "No"}`,
-        reviewTarget.paymentMode ? `Payment Mode: ${reviewTarget.paymentMode}` : "",
+        reviewTarget.paymentMode
+          ? `Payment Mode: ${reviewTarget.paymentMode}`
+          : "",
         reviewTarget.bankName ? `Bank Name: ${reviewTarget.bankName}` : "",
-        reviewTarget.transactionId ? `Transaction ID: ${reviewTarget.transactionId}` : "",
-        reviewTarget.paymentDescription ? `Payment Description: ${reviewTarget.paymentDescription}` : "",
-        reviewTarget.googleLocation ? `Google Location: ${reviewTarget.googleLocation}` : "",
-        reviewTarget.idProof?.name ? `ID Proof: ${reviewTarget.idProof.name}` : "",
-        reviewTarget.locationProof?.name ? `Location Proof: ${reviewTarget.locationProof.name}` : "",
+        reviewTarget.transactionId
+          ? `Transaction ID: ${reviewTarget.transactionId}`
+          : "",
+        reviewTarget.paymentDescription
+          ? `Payment Description: ${reviewTarget.paymentDescription}`
+          : "",
+        reviewTarget.googleLocation
+          ? `Google Location: ${reviewTarget.googleLocation}`
+          : "",
+        reviewTarget.idProof?.name
+          ? `ID Proof: ${reviewTarget.idProof.name}`
+          : "",
+        reviewTarget.locationProof?.name
+          ? `Location Proof: ${reviewTarget.locationProof.name}`
+          : "",
         reviewTarget.companyBrochure?.name
           ? `Company Profile/Brochure: ${reviewTarget.companyBrochure.name}`
           : "",
-        reviewTarget.profilePhoto?.name ? `Profile Photo: ${reviewTarget.profilePhoto.name}` : "",
-        reviewTarget.visitingCard?.name ? `Visiting Card: ${reviewTarget.visitingCard.name}` : "",
+        reviewTarget.profilePhoto?.name
+          ? `Profile Photo: ${reviewTarget.profilePhoto.name}`
+          : "",
+        reviewTarget.visitingCard?.name
+          ? `Visiting Card: ${reviewTarget.visitingCard.name}`
+          : "",
       ]
         .filter(Boolean)
         .join("\n");
@@ -8304,7 +10628,9 @@ export default function HomePage() {
       }
 
       setVendorApprovalError("");
-      setSelectedVendorRequests((current) => current.filter((id) => id !== vendorId));
+      setSelectedVendorRequests((current) =>
+        current.filter((id) => id !== vendorId),
+      );
       if (selectedVendorReviewId === vendorId) {
         setSelectedVendorReviewId("");
         setVendorApprovalForm(buildVendorApprovalForm(null));
@@ -8323,7 +10649,9 @@ export default function HomePage() {
         if (firstVendorId) {
           openVendorStatusReview(firstVendorId);
         }
-        setVendorApprovalError("Bulk approval is disabled because each vendor needs plan and billing details before approval.");
+        setVendorApprovalError(
+          "Bulk approval is disabled because each vendor needs plan and billing details before approval.",
+        );
         return;
       }
 
@@ -8346,7 +10674,9 @@ export default function HomePage() {
   const updateTimelinePostForm = (field, value) => {
     setTimelinePostForm((current) => {
       if (field === "vendorId") {
-        const selectedVendor = vendorRecords.find((vendor) => vendor.id === value);
+        const selectedVendor = vendorRecords.find(
+          (vendor) => vendor.id === value,
+        );
         return {
           ...current,
           vendorId: value,
@@ -8413,7 +10743,9 @@ export default function HomePage() {
     setAppBannerError("");
     setAppBannerForm((current) => {
       if (field === "vendorId") {
-        const selectedVendor = vendorRecords.find((vendor) => vendor.id === value);
+        const selectedVendor = vendorRecords.find(
+          (vendor) => vendor.id === value,
+        );
         return {
           ...current,
           vendorId: value,
@@ -8437,27 +10769,42 @@ export default function HomePage() {
   const submitAppBanner = () => {
     void (async () => {
       if (!appBannerForm.shortText.trim() || !appBannerForm.vendorId) {
-        setAppBannerError("Select a vendor and add the banner message before submitting.");
+        setAppBannerError(
+          "Select a vendor and add the banner message before submitting.",
+        );
         return;
       }
 
       if (!appBannerForm.mediaFile) {
-        setAppBannerError("Attach a lightweight banner image for the Flutter app.");
+        setAppBannerError(
+          "Attach a lightweight banner image for the Flutter app.",
+        );
         return;
       }
 
-      if (!["image/jpeg", "image/png", "image/webp"].includes(appBannerForm.mediaFile.type)) {
+      if (
+        !["image/jpeg", "image/png", "image/webp"].includes(
+          appBannerForm.mediaFile.type,
+        )
+      ) {
         setAppBannerError("Banner media must be JPG, PNG, or WebP.");
         return;
       }
 
       if (appBannerForm.mediaFile.size > 1024 * 1024) {
-        setAppBannerError("Banner image is too large. Keep it at or below 1 MB.");
+        setAppBannerError(
+          "Banner image is too large. Keep it at or below 1 MB.",
+        );
         return;
       }
 
-      if (appBannerForm.brochureFile && appBannerForm.brochureFile.size > 2 * 1024 * 1024) {
-        setAppBannerError("Brochure PDF is too large. Keep it at or below 2 MB.");
+      if (
+        appBannerForm.brochureFile &&
+        appBannerForm.brochureFile.size > 2 * 1024 * 1024
+      ) {
+        setAppBannerError(
+          "Brochure PDF is too large. Keep it at or below 2 MB.",
+        );
         return;
       }
 
@@ -8535,7 +10882,9 @@ export default function HomePage() {
               paymentRemarks: edit.paymentRemarks || undefined,
               displayStart: edit.displayStart || undefined,
               displayEnd: edit.displayEnd || undefined,
-              displayIndex: edit.displayIndex ? Number(edit.displayIndex) : undefined,
+              displayIndex: edit.displayIndex
+                ? Number(edit.displayIndex)
+                : undefined,
             }),
           });
         }),
@@ -8566,7 +10915,9 @@ export default function HomePage() {
 
       if (!response.ok) {
         setBulkMemberResult(null);
-        setBulkMemberError(result?.error || "Unable to import members from this file.");
+        setBulkMemberError(
+          result?.error || "Unable to import members from this file.",
+        );
         return;
       }
 
@@ -8640,7 +10991,7 @@ export default function HomePage() {
             }
           : {
               [field]: value,
-        }),
+            }),
     }));
   };
   const resetEventEditor = () => {
@@ -8718,9 +11069,15 @@ export default function HomePage() {
     })();
   };
   const updateEventType = (eventTypeId, field, value) => {
-    setEventTypes((current) => current.map((item) => (item.id === eventTypeId ? { ...item, [field]: value } : item)));
+    setEventTypes((current) =>
+      current.map((item) =>
+        item.id === eventTypeId ? { ...item, [field]: value } : item,
+      ),
+    );
     void (async () => {
-      const targetEventType = eventTypes.find((item) => item.id === eventTypeId);
+      const targetEventType = eventTypes.find(
+        (item) => item.id === eventTypeId,
+      );
       if (!targetEventType) {
         return;
       }
@@ -8769,10 +11126,13 @@ export default function HomePage() {
         payload.append("videoFile", eventMedia.videoFile);
       }
 
-      const response = await fetch(`${apiBaseUrl}/events${eventForm.id ? `/${eventForm.id}` : ""}`, {
-        method: eventForm.id ? "PATCH" : "POST",
-        body: payload,
-      });
+      const response = await fetch(
+        `${apiBaseUrl}/events${eventForm.id ? `/${eventForm.id}` : ""}`,
+        {
+          method: eventForm.id ? "PATCH" : "POST",
+          body: payload,
+        },
+      );
 
       if (!response.ok) {
         return;
@@ -8817,14 +11177,15 @@ export default function HomePage() {
   const updateAssociationRegionalField = (index, field, value) => {
     setAssociationProfileForm((current) => ({
       ...current,
-      regionalAddresses: current.regionalAddresses.map((address, addressIndex) =>
-        addressIndex === index
-          ? {
-              ...address,
-              ...(field === "state" ? { city: "" } : {}),
-              [field]: value,
-            }
-          : address,
+      regionalAddresses: current.regionalAddresses.map(
+        (address, addressIndex) =>
+          addressIndex === index
+            ? {
+                ...address,
+                ...(field === "state" ? { city: "" } : {}),
+                [field]: value,
+              }
+            : address,
       ),
     }));
   };
@@ -8842,7 +11203,9 @@ export default function HomePage() {
   const removeAssociationRegionalAddress = (index) => {
     setAssociationProfileForm((current) => ({
       ...current,
-      regionalAddresses: current.regionalAddresses.filter((_, addressIndex) => addressIndex !== index),
+      regionalAddresses: current.regionalAddresses.filter(
+        (_, addressIndex) => addressIndex !== index,
+      ),
     }));
   };
 
@@ -8862,7 +11225,10 @@ export default function HomePage() {
         name: normalizedName,
         slug:
           associationProfileForm.slug.trim() ||
-          normalizedName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
+          normalizedName
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/^-|-$/g, ""),
         headOfficeAddress: associationProfileForm.headOfficeAddress.trim(),
         city: associationProfileForm.city.trim(),
         state: associationProfileForm.state.trim(),
@@ -8870,31 +11236,38 @@ export default function HomePage() {
         registrationNumber: associationProfileForm.registrationNumber.trim(),
         gstNumber: associationProfileForm.gstNumber.trim(),
         website: associationProfileForm.website.trim(),
-        contactNumbers: splitContactNumbers(associationProfileForm.contactNumbers),
+        contactNumbers: splitContactNumbers(
+          associationProfileForm.contactNumbers,
+        ),
         helpdeskNumber: associationProfileForm.helpdeskNumber.trim(),
         googleMapsLink: associationProfileForm.googleMapsLink.trim(),
-        regionalAddresses: associationProfileForm.regionalAddresses.map((address) => ({
-          label: address.label.trim(),
-          officeAddress: address.officeAddress.trim(),
-          city: address.city.trim(),
-          state: address.state.trim(),
-          pincode: address.pincode.trim(),
-          registrationNumber: address.registrationNumber.trim(),
-          gstNumber: address.gstNumber.trim(),
-          website: address.website.trim(),
-          contactNumbers: splitContactNumbers(address.contactNumbers),
-          helpdeskNumber: address.helpdeskNumber.trim(),
-          googleMapsLink: address.googleMapsLink.trim(),
-        })),
+        regionalAddresses: associationProfileForm.regionalAddresses.map(
+          (address) => ({
+            label: address.label.trim(),
+            officeAddress: address.officeAddress.trim(),
+            city: address.city.trim(),
+            state: address.state.trim(),
+            pincode: address.pincode.trim(),
+            registrationNumber: address.registrationNumber.trim(),
+            gstNumber: address.gstNumber.trim(),
+            website: address.website.trim(),
+            contactNumbers: splitContactNumbers(address.contactNumbers),
+            helpdeskNumber: address.helpdeskNumber.trim(),
+            googleMapsLink: address.googleMapsLink.trim(),
+          }),
+        ),
       };
 
-      const response = await fetch(`${apiBaseUrl}/associations/${associationProfile.id}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
+      const response = await fetch(
+        `${apiBaseUrl}/associations/${associationProfile.id}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
         },
-        body: JSON.stringify(payload),
-      });
+      );
 
       if (!response.ok) {
         return;
@@ -8957,13 +11330,16 @@ export default function HomePage() {
         stats: associationAboutForm.stats,
       };
 
-      const response = await fetch(`${apiBaseUrl}/associations/${associationProfile.id}/about`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
+      const response = await fetch(
+        `${apiBaseUrl}/associations/${associationProfile.id}/about`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
         },
-        body: JSON.stringify(payload),
-      });
+      );
 
       if (!response.ok) {
         return;
@@ -8984,7 +11360,9 @@ export default function HomePage() {
       return;
     }
 
-    const member = (memberTabData["All Members"] ?? []).find((item) => item.id === memberId);
+    const member = (memberTabData["All Members"] ?? []).find(
+      (item) => item.id === memberId,
+    );
     if (!member) {
       return;
     }
@@ -9025,7 +11403,8 @@ export default function HomePage() {
         },
         body: JSON.stringify({
           committeePost: committeeMemberForm.committeePost.trim(),
-          committeeTenureStart: committeeMemberForm.committeeTenureStart || null,
+          committeeTenureStart:
+            committeeMemberForm.committeeTenureStart || null,
           committeeTenureEnd: committeeMemberForm.committeeTenureEnd || null,
           memberBio: committeeMemberForm.memberBio.trim(),
         }),
@@ -9153,9 +11532,12 @@ export default function HomePage() {
         return;
       }
 
-      const response = await fetch(`${apiBaseUrl}/associations/${associationProfile.id}/gallery/${itemId}`, {
-        method: "DELETE",
-      });
+      const response = await fetch(
+        `${apiBaseUrl}/associations/${associationProfile.id}/gallery/${itemId}`,
+        {
+          method: "DELETE",
+        },
+      );
 
       if (!response.ok && response.status !== 204) {
         return;
@@ -9208,7 +11590,9 @@ export default function HomePage() {
         return;
       }
 
-      const previewUrl = file.type.startsWith("image/") ? await readFileAsDataUrl(file) : "";
+      const previewUrl = file.type.startsWith("image/")
+        ? await readFileAsDataUrl(file)
+        : "";
       setCircularDocumentForm((current) => ({
         ...current,
         file,
@@ -9266,9 +11650,12 @@ export default function HomePage() {
         return;
       }
 
-      const response = await fetch(`${apiBaseUrl}/associations/${associationProfile.id}/circulars/${itemId}`, {
-        method: "DELETE",
-      });
+      const response = await fetch(
+        `${apiBaseUrl}/associations/${associationProfile.id}/circulars/${itemId}`,
+        {
+          method: "DELETE",
+        },
+      );
 
       if (!response.ok && response.status !== 204) {
         return;
@@ -9306,6 +11693,35 @@ export default function HomePage() {
     setIsReminderPanelOpen(false);
   };
 
+  if (!authReady) {
+    return (
+      <main className="dashboard-shell">
+        <section className="content-shell">
+          <section className="association-empty-state">
+            <span className="mini-label">Admin Session</span>
+            <h2>Restoring admin session...</h2>
+            <p>
+              Checking the backend token and refresh state for the laptop admin
+              workspace.
+            </p>
+          </section>
+        </section>
+      </main>
+    );
+  }
+
+  if (!authSession) {
+    return (
+      <WebAdminLoginScreen
+        form={loginForm}
+        errorMessage={loginError}
+        isSubmitting={isLoggingIn}
+        onFieldChange={updateLoginField}
+        onSubmit={submitAdminLogin}
+      />
+    );
+  }
+
   return (
     <main
       className={`admin-shell ${isSidebarOpen ? "sidebar-open" : "sidebar-collapsed"} relative min-h-screen`}
@@ -9313,11 +11729,24 @@ export default function HomePage() {
       <aside className={`sidebar ${isSidebarOpen ? "" : "is-collapsed"}`}>
         <div className="sidebar-brand">
           <span className="brand-mark">S</span>
-          <div className={`sidebar-brand-copy ${isSidebarOpen ? "" : "is-hidden"}`}>
-            <strong>Synetra</strong>
-            <p>Association 1</p>
+          <div
+            className={`sidebar-brand-copy ${isSidebarOpen ? "" : "is-hidden"}`}
+          >
+            <strong>{authSession.displayName || "NIMA Admin"}</strong>
+            <p>{authSession.email}</p>
           </div>
         </div>
+        {isSidebarOpen ? (
+          <div className="sidebar-brand-copy" style={{ paddingBottom: 16 }}>
+            <button
+              className="secondary-link secondary-button"
+              type="button"
+              onClick={logoutAdmin}
+            >
+              Logout
+            </button>
+          </div>
+        ) : null}
 
         <nav className="sidebar-nav" aria-label="Sidebar">
           {navSections.map((item) => (
@@ -9326,12 +11755,11 @@ export default function HomePage() {
                 type="button"
                 className={`nav-item ${
                   item.label === activeSection ||
-                  (item.label === "Vendor Arena" && vendorSubSections.includes(activeSection))
+                  (item.label === "Vendor Arena" &&
+                    vendorSubSections.includes(activeSection))
                     ? "active"
                     : ""
-                } ${
-                  isSidebarOpen ? "" : "is-icon-mode"
-                }`}
+                } ${isSidebarOpen ? "" : "is-icon-mode"}`}
                 onClick={() => {
                   setActiveSection(item.label);
                   if (item.label === "Admin arena") {
@@ -9345,7 +11773,9 @@ export default function HomePage() {
                 <span className="nav-icon" aria-hidden="true">
                   {item.icon}
                 </span>
-                <span className={`nav-label ${isSidebarOpen ? "" : "is-hidden"}`}>
+                <span
+                  className={`nav-label ${isSidebarOpen ? "" : "is-hidden"}`}
+                >
                   {item.label}
                 </span>
                 {item.label === "Admin arena" && isSidebarOpen ? (
@@ -9359,7 +11789,9 @@ export default function HomePage() {
                 ) : null}
               </button>
 
-              {item.label === "Admin arena" && isSidebarOpen && isAdminAccessOpen ? (
+              {item.label === "Admin arena" &&
+              isSidebarOpen &&
+              isAdminAccessOpen ? (
                 <div className="sidebar-subnav" aria-label="Admin access menu">
                   {adminAccessSections.map((section) => (
                     <div key={section} className="sidebar-subnav-group">
@@ -9373,13 +11805,18 @@ export default function HomePage() {
                       >
                         <span>{section}</span>
                         {section === activeAdminAccessSection ? (
-                          <span className="sidebar-subnav-active-dot" aria-hidden="true" />
+                          <span
+                            className="sidebar-subnav-active-dot"
+                            aria-hidden="true"
+                          />
                         ) : null}
                       </button>
                     </div>
                   ))}
                 </div>
-              ) : item.label === "Vendor Arena" && isSidebarOpen && isVendorNavOpen ? (
+              ) : item.label === "Vendor Arena" &&
+                isSidebarOpen &&
+                isVendorNavOpen ? (
                 <div className="sidebar-subnav" aria-label="Vendor menu">
                   {vendorSubSections.map((section) => (
                     <div key={section} className="sidebar-subnav-group">
@@ -9393,7 +11830,10 @@ export default function HomePage() {
                       >
                         <span>{section}</span>
                         {section === activeSection ? (
-                          <span className="sidebar-subnav-active-dot" aria-hidden="true" />
+                          <span
+                            className="sidebar-subnav-active-dot"
+                            aria-hidden="true"
+                          />
                         ) : null}
                       </button>
                     </div>
@@ -9406,11 +11846,19 @@ export default function HomePage() {
 
         <div className={`sidebar-note ${isSidebarOpen ? "" : "is-hidden"}`}>
           <span className="mini-label">Current Scope</span>
-          <p>Logged in as Association 1 Admin for one tenant-aware workspace.</p>
+          <p>
+            Logged in as Association 1 Admin for one tenant-aware workspace.
+          </p>
         </div>
 
-        <div className={`sidebar-mobile-account ${isSidebarOpen ? "" : "is-hidden"}`}>
-          <Link className="sidebar-profile-link" href="/profile" aria-label="Open profile settings">
+        <div
+          className={`sidebar-mobile-account ${isSidebarOpen ? "" : "is-hidden"}`}
+        >
+          <Link
+            className="sidebar-profile-link"
+            href="/profile"
+            aria-label="Open profile settings"
+          >
             <span className="avatar-circle">AU</span>
             <span className="sidebar-profile-copy">
               <strong>Admin Profile</strong>
@@ -9454,9 +11902,18 @@ export default function HomePage() {
           </div>
 
           <div className="topbar-actions">
-            <button className="icon-chip" type="button" aria-label="Unread notifications">
+            <button
+              className="icon-chip"
+              type="button"
+              aria-label="Unread notifications"
+            >
               <span className="icon-chip-symbol" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                >
                   <path d="M7 10a5 5 0 1 1 10 0v4.2l1.4 2.3H5.6L7 14.2V10Z" />
                   <path d="M10 18.5a2.2 2.2 0 0 0 4 0" />
                 </svg>
@@ -9468,7 +11925,11 @@ export default function HomePage() {
               Logout
             </Link>
 
-            <Link className="avatar-link" href="/profile" aria-label="Open profile settings">
+            <Link
+              className="avatar-link"
+              href="/profile"
+              aria-label="Open profile settings"
+            >
               <span className="avatar-circle">AU</span>
               <span className="avatar-edit-badge">Edit</span>
             </Link>
@@ -9478,7 +11939,12 @@ export default function HomePage() {
         {activeSection === "Association arena" ? (
           <section className="association-workspace">
             <div className="association-featured-stack">
-              <CarouselSection title="Latest Gallery" items={galleryItems} tone="tone-gallery" compact />
+              <CarouselSection
+                title="Latest Gallery"
+                items={galleryItems}
+                tone="tone-gallery"
+                compact
+              />
               <CarouselSection
                 title="Latest Circulars"
                 items={associationTabData.Circulars}
@@ -9487,7 +11953,10 @@ export default function HomePage() {
               />
             </div>
 
-            <nav className="association-tabbar" aria-label="Association sections">
+            <nav
+              className="association-tabbar"
+              aria-label="Association sections"
+            >
               {associationTabs.map((tab) => (
                 <button
                   key={tab}
@@ -9508,16 +11977,30 @@ export default function HomePage() {
                 financeStatementFilterType={financeStatementFilterType}
                 financeStatementDateFrom={financeStatementDateFrom}
                 financeStatementDateTo={financeStatementDateTo}
-                isAdmin={activeAssociationTab === "Finance" ? false : isAssociationAdmin}
+                isAdmin={
+                  activeAssociationTab === "Finance"
+                    ? false
+                    : isAssociationAdmin
+                }
                 tabItems={activeTabItems}
                 selectedIds={activeSelectedIds}
-                onToggleSelect={(recordId) => toggleSelectRecord(activeAssociationTab, recordId)}
-                onToggleSelectAll={() => toggleSelectAllRecords(activeAssociationTab)}
-                onDeleteSelected={() => deleteSelectedRecords(activeAssociationTab)}
-                onDeleteOne={(recordId) => deleteSingleRecord(activeAssociationTab, recordId)}
+                onToggleSelect={(recordId) =>
+                  toggleSelectRecord(activeAssociationTab, recordId)
+                }
+                onToggleSelectAll={() =>
+                  toggleSelectAllRecords(activeAssociationTab)
+                }
+                onDeleteSelected={() =>
+                  deleteSelectedRecords(activeAssociationTab)
+                }
+                onDeleteOne={(recordId) =>
+                  deleteSingleRecord(activeAssociationTab, recordId)
+                }
                 onAddNew={() => addNewRecord(activeAssociationTab)}
                 onFinanceTabChange={setActiveFinanceTab}
-                onFinanceStatementFilterTypeChange={setFinanceStatementFilterType}
+                onFinanceStatementFilterTypeChange={
+                  setFinanceStatementFilterType
+                }
                 onFinanceStatementDateFromChange={setFinanceStatementDateFrom}
                 onFinanceStatementDateToChange={setFinanceStatementDateTo}
                 associationProfile={associationProfile}
@@ -9525,7 +12008,9 @@ export default function HomePage() {
                 isEditingAssociationProfile={isEditingAssociationProfile}
                 onEditAssociationProfile={openAssociationProfileEditor}
                 onAssociationProfileFieldChange={updateAssociationProfileField}
-                onAssociationRegionalFieldChange={updateAssociationRegionalField}
+                onAssociationRegionalFieldChange={
+                  updateAssociationRegionalField
+                }
                 onAddRegionalAddress={addAssociationRegionalAddress}
                 onRemoveRegionalAddress={removeAssociationRegionalAddress}
                 onCancelAssociationProfileEdit={cancelAssociationProfileEdit}
@@ -9578,7 +12063,10 @@ export default function HomePage() {
               <div className="association-header-meta">
                 <div className="association-dashboard-grid">
                   {associationOverviewStats.map((item) => (
-                    <article key={item.label} className="association-dashboard-card">
+                    <article
+                      key={item.label}
+                      className="association-dashboard-card"
+                    >
                       <strong>{item.value}</strong>
                       <span>{item.label}</span>
                     </article>
@@ -9600,8 +12088,14 @@ export default function HomePage() {
                 <span className="spotlight-label">Committee Board</span>
                 <div className="committee-avatar-row">
                   {committeeHighlights.map((member) => (
-                    <div key={member.name} className="committee-avatar-chip" title={member.name}>
-                      <span className="committee-avatar">{member.initials}</span>
+                    <div
+                      key={member.name}
+                      className="committee-avatar-chip"
+                      title={member.name}
+                    >
+                      <span className="committee-avatar">
+                        {member.initials}
+                      </span>
                       <div>
                         <strong>{member.name}</strong>
                         <p>{member.role}</p>
@@ -9614,7 +12108,10 @@ export default function HomePage() {
               <article className="hero-spotlight association-spotlight-card latest-gallery-card">
                 <span className="spotlight-label">Latest In Gallery</span>
                 <strong>Plant Visit 2026</strong>
-                <p>28 new images added from the manufacturing excellence tour this week.</p>
+                <p>
+                  28 new images added from the manufacturing excellence tour
+                  this week.
+                </p>
                 <div className="latest-gallery-strip" aria-hidden="true">
                   <span />
                   <span />
@@ -9661,7 +12158,9 @@ export default function HomePage() {
                 >
                   <span>{tab}</span>
                   {tab === "All Members" && expiringMembersCount > 0 ? (
-                    <span className="tab-notification-chip">{expiringMembersCount} expiring</span>
+                    <span className="tab-notification-chip">
+                      {expiringMembersCount} expiring
+                    </span>
                   ) : null}
                 </button>
               ))}
@@ -9680,12 +12179,22 @@ export default function HomePage() {
                 membershipFormFields={membershipFormFields}
                 membershipFieldDraft={membershipFieldDraft}
                 isReminderPanelOpen={isReminderPanelOpen}
-                onToggleReminderPanel={() => setIsReminderPanelOpen((current) => !current)}
+                onToggleReminderPanel={() =>
+                  setIsReminderPanelOpen((current) => !current)
+                }
                 onApplyReminderFilter={applyReminderFilter}
-                onToggleSelect={(recordId) => toggleSelectMemberRecord(activeMemberTab, recordId)}
-                onToggleSelectAll={() => toggleSelectAllMemberRecords(activeMemberTab)}
-                onDeleteSelected={() => deleteSelectedMemberRecords(activeMemberTab)}
-                onDeleteOne={(recordId) => deleteSingleMemberRecord(activeMemberTab, recordId)}
+                onToggleSelect={(recordId) =>
+                  toggleSelectMemberRecord(activeMemberTab, recordId)
+                }
+                onToggleSelectAll={() =>
+                  toggleSelectAllMemberRecords(activeMemberTab)
+                }
+                onDeleteSelected={() =>
+                  deleteSelectedMemberRecords(activeMemberTab)
+                }
+                onDeleteOne={(recordId) =>
+                  deleteSingleMemberRecord(activeMemberTab, recordId)
+                }
                 onOpenMemberForm={openMemberForm}
                 onEditMember={editMemberRecord}
                 onDeleteMember={removeMemberRecord}
@@ -9705,13 +12214,19 @@ export default function HomePage() {
               <div>
                 <span className="eyebrow">Member Arena</span>
                 <h1>Association Member Directory</h1>
-                <p>Member cards, bulk actions, and communication controls in one workspace.</p>
+                <p>
+                  Member cards, bulk actions, and communication controls in one
+                  workspace.
+                </p>
               </div>
 
               <div className="association-header-meta">
                 <div className="association-dashboard-grid">
                   {memberSummaryStats.map((item) => (
-                    <article key={item.label} className="association-dashboard-card">
+                    <article
+                      key={item.label}
+                      className="association-dashboard-card"
+                    >
                       <strong>{item.value}</strong>
                       <span>{item.label}</span>
                     </article>
@@ -9734,7 +12249,10 @@ export default function HomePage() {
               <div>
                 <span className="eyebrow">Timeline</span>
                 <h1>Timeline Campaign Desk</h1>
-                <p>Create ad-style timeline posts for vendors, members, or the association with media and landing links.</p>
+                <p>
+                  Create ad-style timeline posts for vendors, members, or the
+                  association with media and landing links.
+                </p>
               </div>
 
               <div className="association-header-meta">
@@ -9744,7 +12262,13 @@ export default function HomePage() {
                     <span>Total Timeline Posts</span>
                   </article>
                   <article className="association-dashboard-card">
-                    <strong>{timelinePosts.filter((post) => post.status === "Pending Review").length}</strong>
+                    <strong>
+                      {
+                        timelinePosts.filter(
+                          (post) => post.status === "Pending Review",
+                        ).length
+                      }
+                    </strong>
                     <span>Pending Review</span>
                   </article>
                 </div>
@@ -9769,17 +12293,23 @@ export default function HomePage() {
             <div className="association-featured-stack member-featured-stack">
               <MemberCarouselSection
                 title="Active Vendors"
-                items={vendorRecords.filter((vendor) => vendor.registrationStatus === "Active")}
+                items={vendorRecords.filter(
+                  (vendor) => vendor.registrationStatus === "Active",
+                )}
                 tone="tone-gallery"
               />
               <MemberCarouselSection
                 title="Suspended Vendors"
-                items={vendorRecords.filter((vendor) => vendor.registrationStatus === "Suspended")}
+                items={vendorRecords.filter(
+                  (vendor) => vendor.registrationStatus === "Suspended",
+                )}
                 tone="tone-circular"
               />
               <MemberCarouselSection
                 title="Lapsed Vendors"
-                items={vendorRecords.filter((vendor) => vendor.registrationStatus === "Lapsed")}
+                items={vendorRecords.filter(
+                  (vendor) => vendor.registrationStatus === "Lapsed",
+                )}
                 tone="tone-advertisement"
               />
             </div>
@@ -9825,13 +12355,19 @@ export default function HomePage() {
               <div>
                 <span className="eyebrow">Vendor Arena</span>
                 <h1>Vendor Registration and Access Desk</h1>
-                <p>Track vendor lifecycle, payment standing, and new onboarding submissions in one workspace.</p>
+                <p>
+                  Track vendor lifecycle, payment standing, and new onboarding
+                  submissions in one workspace.
+                </p>
               </div>
 
               <div className="association-header-meta">
                 <div className="association-dashboard-grid">
                   {vendorSummaryStats.map((item) => (
-                    <article key={item.label} className="association-dashboard-card">
+                    <article
+                      key={item.label}
+                      className="association-dashboard-card"
+                    >
                       <strong>{item.value}</strong>
                       <span>{item.label}</span>
                     </article>
@@ -9839,14 +12375,17 @@ export default function HomePage() {
                 </div>
               </div>
             </section>
-            </section>
+          </section>
         ) : activeSection === "Vendor Registration" ? (
           <section className="association-workspace">
             <section className="association-header">
               <div>
                 <span className="eyebrow">Vendor Registration</span>
                 <h1>Register a New Vendor</h1>
-                <p>Use this admin-only screen to onboard a new vendor and create their base commercial record.</p>
+                <p>
+                  Use this admin-only screen to onboard a new vendor and create
+                  their base commercial record.
+                </p>
               </div>
 
               <div className="association-header-meta">
@@ -9894,7 +12433,10 @@ export default function HomePage() {
                 <article className="association-empty-state">
                   <span className="mini-label">Admin Access Required</span>
                   <h2>Only admins can register vendors.</h2>
-                  <p>Switch to an admin login to create vendor accounts and manage onboarding details.</p>
+                  <p>
+                    Switch to an admin login to create vendor accounts and
+                    manage onboarding details.
+                  </p>
                 </article>
               )}
             </section>
@@ -9905,7 +12447,10 @@ export default function HomePage() {
               <div>
                 <span className="eyebrow">Vendor Arena</span>
                 <h1>Category</h1>
-                <p>Manage the main vendor categories used throughout registration and vendor discovery.</p>
+                <p>
+                  Manage the main vendor categories used throughout registration
+                  and vendor discovery.
+                </p>
               </div>
 
               <div className="association-header-meta">
@@ -9916,7 +12461,10 @@ export default function HomePage() {
                   </article>
                   <article className="association-dashboard-card">
                     <strong>
-                      {Object.values(vendorSubCategoryRecords).reduce((sum, items) => sum + items.length, 0)}
+                      {Object.values(vendorSubCategoryRecords).reduce(
+                        (sum, items) => sum + items.length,
+                        0,
+                      )}
                     </strong>
                     <span>Mapped Sub Categories</span>
                   </article>
@@ -9944,7 +12492,10 @@ export default function HomePage() {
               <div>
                 <span className="eyebrow">Vendor Arena</span>
                 <h1>Sub Category</h1>
-                <p>Select a main category, fetch its sub categories, and maintain the list with full CRUD actions.</p>
+                <p>
+                  Select a main category, fetch its sub categories, and maintain
+                  the list with full CRUD actions.
+                </p>
               </div>
 
               <div className="association-header-meta">
@@ -9954,7 +12505,15 @@ export default function HomePage() {
                     <span>Selected Category</span>
                   </article>
                   <article className="association-dashboard-card">
-                    <strong>{selectedVendorParentCategory ? (vendorSubCategoryRecords[selectedVendorParentCategory] ?? []).length : 0}</strong>
+                    <strong>
+                      {selectedVendorParentCategory
+                        ? (
+                            vendorSubCategoryRecords[
+                              selectedVendorParentCategory
+                            ] ?? []
+                          ).length
+                        : 0}
+                    </strong>
                     <span>Visible Sub Categories</span>
                   </article>
                 </div>
@@ -9983,7 +12542,10 @@ export default function HomePage() {
               <div>
                 <span className="eyebrow">Vendor Arena</span>
                 <h1>Vendor Status</h1>
-                <p>Review all vendor registration requests together and approve or reject them from one admin desk.</p>
+                <p>
+                  Review all vendor registration requests together and approve
+                  or reject them from one admin desk.
+                </p>
               </div>
 
               <div className="association-header-meta">
@@ -10014,8 +12576,12 @@ export default function HomePage() {
                 onReviewFieldChange={updateVendorApprovalForm}
                 onReviewFileChange={updateVendorApprovalFile}
                 onApplyBulkDecision={applyBulkVendorRequestDecision}
-                onApproveOne={(vendorId) => applySingleVendorDecision(vendorId, "APPROVED")}
-                onRejectOne={(vendorId) => applySingleVendorDecision(vendorId, "CANCELLED")}
+                onApproveOne={(vendorId) =>
+                  applySingleVendorDecision(vendorId, "APPROVED")
+                }
+                onRejectOne={(vendorId) =>
+                  applySingleVendorDecision(vendorId, "CANCELLED")
+                }
                 planOptions={vendorPlanOptions}
                 paymentModeOptions={vendorPaymentModeOptions}
                 approvalError={vendorApprovalError}
@@ -10028,7 +12594,10 @@ export default function HomePage() {
               <div>
                 <span className="eyebrow">Vendor Arena</span>
                 <h1>App Banner</h1>
-                <p>Create paid advertisement banners with media, contact details, social media links, and brochure support.</p>
+                <p>
+                  Create paid advertisement banners with media, contact details,
+                  social media links, and brochure support.
+                </p>
               </div>
 
               <div className="association-header-meta">
@@ -10038,7 +12607,13 @@ export default function HomePage() {
                     <span>Total Banner Requests</span>
                   </article>
                   <article className="association-dashboard-card">
-                    <strong>{appBanners.filter((item) => item.status === "Pending Review").length}</strong>
+                    <strong>
+                      {
+                        appBanners.filter(
+                          (item) => item.status === "Pending Review",
+                        ).length
+                      }
+                    </strong>
                     <span>Pending Review</span>
                   </article>
                 </div>
@@ -10096,7 +12671,10 @@ export default function HomePage() {
               <div>
                 <span className="eyebrow">Events Arena</span>
                 <h1>Association Events Desk</h1>
-                <p>Track past, current, and coming events while preparing new programs and event masters.</p>
+                <p>
+                  Track past, current, and coming events while preparing new
+                  programs and event masters.
+                </p>
               </div>
 
               <div className="association-header-meta">
@@ -10127,7 +12705,10 @@ export default function HomePage() {
               <div>
                 <span className="eyebrow">Admin Arena</span>
                 <h1>{activeAdminAccessSection}</h1>
-                <p>Open the selected access area here and configure permissions in the main workspace.</p>
+                <p>
+                  Open the selected access area here and configure permissions
+                  in the main workspace.
+                </p>
               </div>
 
               <div className="association-header-meta">
@@ -10165,7 +12746,10 @@ export default function HomePage() {
                       <label key={permission.key} className="admin-access-card">
                         <div>
                           <strong>{permission.label}</strong>
-                          <p>Enable or disable this permission for the Flutter app experience.</p>
+                          <p>
+                            Enable or disable this permission for the Flutter
+                            app experience.
+                          </p>
                         </div>
                         <input
                           type="checkbox"
@@ -10177,7 +12761,10 @@ export default function HomePage() {
                   </div>
 
                   <div className="profile-action-row">
-                    <button className="primary-link admin-action-button" type="button">
+                    <button
+                      className="primary-link admin-action-button"
+                      type="button"
+                    >
                       Save App Access
                     </button>
                   </div>
@@ -10208,6 +12795,8 @@ export default function HomePage() {
                   onSelectAllContentMembers={selectAllContentMembers}
                   onClearContentMemberSelection={clearContentMemberSelection}
                   onUpdateContentPost={updateContentPost}
+                  onToggleAdminRole={toggleMemberAdminRole}
+                  updatingAdminUserIds={updatingAdminUserIds}
                 />
               ) : activeAdminAccessSection === "Vendor Access" ? (
                 <AdminVendorAccessPanel
@@ -10276,8 +12865,13 @@ export default function HomePage() {
               ) : (
                 <article className="association-empty-state">
                   <span className="mini-label">{activeAdminAccessSection}</span>
-                  <h2>{activeAdminAccessSection} configuration will open here.</h2>
-                  <p>This keeps the sidebar focused on navigation while the real controls open in the main area.</p>
+                  <h2>
+                    {activeAdminAccessSection} configuration will open here.
+                  </h2>
+                  <p>
+                    This keeps the sidebar focused on navigation while the real
+                    controls open in the main area.
+                  </p>
                 </article>
               )}
             </section>
@@ -10289,20 +12883,27 @@ export default function HomePage() {
                 <span className="eyebrow">Admin Welcome Page</span>
                 <h1>Welcome back, Association 1 Admin.</h1>
                 <p>
-                  This is the post-login home for an admin user. From here we can grow the
-                  member, association, vendor, and communication flows without mixing multiple
-                  associations.
+                  This is the post-login home for an admin user. From here we
+                  can grow the member, association, vendor, and communication
+                  flows without mixing multiple associations.
                 </p>
               </div>
 
               <div className="hero-spotlight">
                 <span className="spotlight-label">Today&apos;s focus</span>
-                <strong>Onboarding, circular publishing, and vendor visibility.</strong>
-                <p>All activity here stays inside the Association 1 tenant scope.</p>
+                <strong>
+                  Onboarding, circular publishing, and vendor visibility.
+                </strong>
+                <p>
+                  All activity here stays inside the Association 1 tenant scope.
+                </p>
               </div>
 
               <div className="hero-inline-actions">
-                <Link className="secondary-link" href="/parent/associations/new">
+                <Link
+                  className="secondary-link"
+                  href="/parent/associations/new"
+                >
                   Add New Association
                 </Link>
                 <Link className="secondary-link" href="#">
@@ -10312,8 +12913,16 @@ export default function HomePage() {
             </section>
 
             <div className="welcome-stack">
-              <CarouselSection title="Gallery Pictures" items={galleryItems} tone="tone-gallery" />
-              <CarouselSection title="Circulars" items={circularItems} tone="tone-circular" />
+              <CarouselSection
+                title="Gallery Pictures"
+                items={galleryItems}
+                tone="tone-gallery"
+              />
+              <CarouselSection
+                title="Circulars"
+                items={circularItems}
+                tone="tone-circular"
+              />
               <CarouselSection
                 title="Advertisements"
                 items={advertisementItems}
@@ -10325,7 +12934,12 @@ export default function HomePage() {
       </section>
 
       {isMemberFormOpen ? (
-        <div className="member-form-overlay" role="dialog" aria-modal="true" aria-label="Membership form">
+        <div
+          className="member-form-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Membership form"
+        >
           <div className="member-form-dialog">
             <MemberMembershipForm
               fields={membershipFormFields}
