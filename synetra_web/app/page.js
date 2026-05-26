@@ -1400,9 +1400,35 @@ function getVendorAccessStatus(linkedUser, vendorStatus) {
   return "Pending Approval";
 }
 
+function splitPhoneNumber(value) {
+  const normalizedValue = String(value || "").trim();
+  const match = normalizedValue.match(/^(\+\d+)\s*(.*)$/);
+
+  if (!match) {
+    return {
+      code: "+91",
+      number: normalizedValue,
+    };
+  }
+
+  return {
+    code: match[1] || "+91",
+    number: (match[2] || "").trim(),
+  };
+}
+
 function mapApiVendorToUi(vendor) {
   const vendorStatus = vendor.status ?? "PENDING";
-  const linkedUser = vendor.user ?? null;
+  const linkedUsers = Array.isArray(vendor.users)
+    ? [...vendor.users].sort(
+        (left, right) =>
+          new Date(left.createdAt).getTime() -
+          new Date(right.createdAt).getTime(),
+      )
+    : vendor.user
+      ? [vendor.user]
+      : [];
+  const linkedUser = linkedUsers[0] ?? null;
   const name = vendor.name || vendor.companyName || "Vendor";
 
   return {
@@ -1459,6 +1485,14 @@ function mapApiVendorToUi(vendor) {
     notes: vendor.notes || "",
     approvalStatus: linkedUser?.approvalStatus ?? "",
     accessUserId: linkedUser?.id ?? "",
+    linkedUsers,
+    loginEmails:
+      vendor.loginEmails ||
+      linkedUsers.map((user) => user.email).filter(Boolean),
+    primaryLoginEmail:
+      vendor.primaryLoginEmail || linkedUsers[0]?.email || vendor.email || "",
+    secondaryLoginEmail:
+      vendor.secondaryLoginEmail || linkedUsers[1]?.email || "",
   };
 }
 
@@ -1502,6 +1536,66 @@ function buildVendorApprovalForm(vendor) {
       "Payment Description",
     ),
     googleLocation: readVendorNoteValue(vendor?.notes, "Google Location"),
+    paymentDueDate:
+      vendor?.paymentDue && vendor.paymentDue !== "--" ? vendor.paymentDue : "",
+  };
+}
+
+function buildVendorRegistrationForm(vendor) {
+  const phoneParts = splitPhoneNumber(vendor?.phone);
+  const whatsappParts = splitPhoneNumber(vendor?.whatsapp);
+
+  return {
+    id: vendor?.id || "",
+    company: vendor?.company || "",
+    category: vendor?.category || "",
+    subCategory: vendor?.vendorType || "",
+    contactPerson: vendor?.contactPerson || "",
+    phoneCode: phoneParts.code || "+91",
+    whatsappCode: whatsappParts.code || "+91",
+    whatsapp: whatsappParts.number || "",
+    country: readVendorNoteValue(vendor?.notes, "Country") || "India",
+    state: readVendorNoteValue(vendor?.notes, "State") || "",
+    membershipPlan: vendor?.membershipPlan || "",
+    paymentAmount:
+      vendor?.paymentAmount && vendor.paymentAmount !== "--"
+        ? vendor.paymentAmount
+        : "",
+    address: vendor?.address || "",
+    city: vendor?.city || "",
+    phone: phoneParts.number || "",
+    email: vendor?.email || "",
+    primaryLoginEmail: vendor?.primaryLoginEmail || vendor?.email || "",
+    secondaryLoginEmail: vendor?.secondaryLoginEmail || "",
+    website: readVendorNoteValue(vendor?.notes, "Website") || "",
+    facebookUrl: vendor?.facebookUrl || "",
+    instagramUrl: vendor?.instagramUrl || "",
+    youtubeUrl: vendor?.youtubeUrl || "",
+    linkedinUrl: vendor?.linkedinUrl || "",
+    xUrl: vendor?.xUrl || "",
+    workDescription:
+      readVendorNoteValue(vendor?.notes, "Work Description") || "",
+    zipcode: readVendorNoteValue(vendor?.notes, "Zipcode") || "",
+    planName: readVendorNoteValue(vendor?.notes, "Plan Name") || "",
+    openingTime: readVendorNoteValue(vendor?.notes, "Opening Time") || "",
+    closingTime: readVendorNoteValue(vendor?.notes, "Closing Time") || "",
+    gstNumber: readVendorNoteValue(vendor?.notes, "GST Number") || "",
+    isRestaurant: readVendorNoteValue(vendor?.notes, "Is Restaurant") === "Yes",
+    paymentMode:
+      readVendorNoteValue(vendor?.notes, "Payment Mode") || "Online/NEFT/IMPS",
+    bankName: readVendorNoteValue(vendor?.notes, "Bank Name") || "",
+    transactionId: readVendorNoteValue(vendor?.notes, "Transaction ID") || "",
+    paymentDescription:
+      readVendorNoteValue(vendor?.notes, "Payment Description") || "",
+    googleLocation: readVendorNoteValue(vendor?.notes, "Google Location") || "",
+    companyLogo: null,
+    idProof: null,
+    locationProof: null,
+    companyBrochure: null,
+    profilePhoto: null,
+    visitingCard: null,
+    onboardingStartAt: vendor?.onboardingStartDate || "",
+    onboardingEndAt: vendor?.onboardingEndDate || "",
     paymentDueDate:
       vendor?.paymentDue && vendor.paymentDue !== "--" ? vendor.paymentDue : "",
   };
@@ -2260,7 +2354,47 @@ const INDIA_STATE_CITY_OPTIONS = {
   Karnataka: ["Bengaluru", "Mysuru", "Mangaluru", "Hubballi", "Belagavi"],
   Kerala: ["Thiruvananthapuram", "Kochi", "Kozhikode", "Thrissur", "Kollam"],
   "Madhya Pradesh": ["Bhopal", "Indore", "Jabalpur", "Gwalior", "Ujjain"],
-  Maharashtra: ["Mumbai", "Pune", "Nagpur", "Nashik", "Aurangabad"],
+  Maharashtra: [
+    "Mumbai",
+    "Pune",
+    "Nagpur",
+    "Nashik",
+    "Chhatrapati Sambhajinagar",
+    "Thane",
+    "Navi Mumbai",
+    "Kalyan-Dombivli",
+    "Mira-Bhayandar",
+    "Vasai-Virar",
+    "Palghar",
+    "Bhiwandi",
+    "Ulhasnagar",
+    "Panvel",
+    "Amravati",
+    "Akola",
+    "Yavatmal",
+    "Chandrapur",
+    "Wardha",
+    "Gondia",
+    "Bhandara",
+    "Jalgaon",
+    "Dhule",
+    "Nandurbar",
+    "Ahmednagar",
+    "Solapur",
+    "Kolhapur",
+    "Sangli",
+    "Satara",
+    "Ratnagiri",
+    "Sindhudurg",
+    "Raigad",
+    "Latur",
+    "Osmanabad",
+    "Nanded",
+    "Parbhani",
+    "Beed",
+    "Jalna",
+    "Hingoli",
+  ],
   Manipur: ["Imphal", "Thoubal", "Bishnupur", "Churachandpur", "Ukhrul"],
   Meghalaya: ["Shillong", "Tura", "Jowai", "Nongpoh", "Baghmara"],
   Mizoram: ["Aizawl", "Lunglei", "Champhai", "Serchhip", "Kolasib"],
@@ -5114,12 +5248,14 @@ function VendorStatusGrid({ items }) {
   );
 }
 
-function VendorRegistrationTable({ items }) {
+function VendorRegistrationTable({ items, onEdit }) {
   return (
     <section className="member-table-panel">
       <div className="panel-topline">
         <h2>Vendor Registration Status</h2>
-        <span className="mini-label">Active, Suspended, Lapsed</span>
+        <span className="mini-label">
+          Active, Suspended, Lapsed, and login IDs
+        </span>
       </div>
 
       <div className="member-table-wrap">
@@ -5131,9 +5267,11 @@ function VendorRegistrationTable({ items }) {
               <th>Category</th>
               <th>City</th>
               <th>Type</th>
+              <th>Vendor Logins</th>
               <th>Registration Period</th>
               <th>Status</th>
               <th>Contact</th>
+              <th>Action</th>
             </tr>
           </thead>
           <tbody>
@@ -5144,6 +5282,14 @@ function VendorRegistrationTable({ items }) {
                 <td>{vendor.category}</td>
                 <td>{vendor.city}</td>
                 <td>{vendor.vendorType}</td>
+                <td>
+                  <div className="member-table-contact">
+                    <span>{vendor.primaryLoginEmail || "--"}</span>
+                    <span>
+                      {vendor.secondaryLoginEmail || "No secondary login"}
+                    </span>
+                  </div>
+                </td>
                 <td>{vendor.onboardingPeriod}</td>
                 <td>
                   <span className="access-status-chip">
@@ -5155,6 +5301,15 @@ function VendorRegistrationTable({ items }) {
                     <a href={`mailto:${vendor.email}`}>{vendor.email}</a>
                     <span>{vendor.phone}</span>
                   </div>
+                </td>
+                <td>
+                  <button
+                    className="secondary-link secondary-button"
+                    type="button"
+                    onClick={() => onEdit(vendor)}
+                  >
+                    Edit
+                  </button>
                 </td>
               </tr>
             ))}
@@ -5254,12 +5409,13 @@ function VendorRegistrationForm({
   newCategory,
   onNewCategoryChange,
   onAddCategory,
+  onReset,
   onSubmit,
 }) {
   return (
     <section className="member-table-panel">
       <div className="panel-topline">
-        <h2>Add / Update Vendor</h2>
+        <h2>{formData.id ? "Update Vendor" : "Add / Update Vendor"}</h2>
         <span className="mini-label">Admin Vendor Desk</span>
       </div>
 
@@ -5353,6 +5509,26 @@ function VendorRegistrationForm({
             type="email"
             value={formData.email}
             onChange={(event) => onChange("email", event.target.value)}
+          />
+        </label>
+        <label className="profile-field">
+          <span>Primary Login ID *</span>
+          <input
+            type="email"
+            value={formData.primaryLoginEmail}
+            onChange={(event) =>
+              onChange("primaryLoginEmail", event.target.value)
+            }
+          />
+        </label>
+        <label className="profile-field">
+          <span>Secondary Login ID</span>
+          <input
+            type="email"
+            value={formData.secondaryLoginEmail}
+            onChange={(event) =>
+              onChange("secondaryLoginEmail", event.target.value)
+            }
           />
         </label>
         <label className="profile-field">
@@ -5520,11 +5696,18 @@ function VendorRegistrationForm({
 
       <div className="profile-action-row">
         <button
+          className="secondary-link secondary-button"
+          type="button"
+          onClick={onReset}
+        >
+          {formData.id ? "Cancel Edit" : "Reset"}
+        </button>
+        <button
           className="primary-link admin-action-button"
           type="button"
           onClick={onSubmit}
         >
-          Save Vendor
+          {formData.id ? "Update Vendor" : "Save Vendor"}
         </button>
       </div>
     </section>
@@ -6247,6 +6430,8 @@ function VendorArenaContent({
   onFilterChange,
   onNewCategoryChange,
   onAddCategory,
+  onReset,
+  onEditVendor,
   onSubmit,
 }) {
   const filteredItems = items.filter((vendor) => {
@@ -6316,7 +6501,7 @@ function VendorArenaContent({
         </div>
 
         <VendorStatusGrid items={filteredItems} />
-        <VendorRegistrationTable items={filteredItems} />
+        <VendorRegistrationTable items={filteredItems} onEdit={onEditVendor} />
       </section>
     );
   }
@@ -6347,6 +6532,7 @@ function VendorArenaContent({
         onFileChange={onFileChange}
         onNewCategoryChange={onNewCategoryChange}
         onAddCategory={onAddCategory}
+        onReset={onReset}
         onSubmit={onSubmit}
       />
     </section>
@@ -8483,50 +8669,9 @@ export default function HomePage() {
       ]),
     ),
   );
-  const [vendorRegistrationForm, setVendorRegistrationForm] = useState({
-    company: "",
-    category: "",
-    subCategory: "",
-    contactPerson: "",
-    phoneCode: "+91",
-    whatsappCode: "+91",
-    whatsapp: "",
-    country: "India",
-    state: "",
-    membershipPlan: "",
-    paymentAmount: "",
-    address: "",
-    city: "",
-    phone: "",
-    email: "",
-    website: "",
-    facebookUrl: "",
-    instagramUrl: "",
-    youtubeUrl: "",
-    linkedinUrl: "",
-    xUrl: "",
-    workDescription: "",
-    zipcode: "",
-    planName: "",
-    openingTime: "",
-    closingTime: "",
-    gstNumber: "",
-    isRestaurant: false,
-    paymentMode: "Online/NEFT/IMPS",
-    bankName: "",
-    transactionId: "",
-    paymentDescription: "",
-    googleLocation: "",
-    companyLogo: null,
-    idProof: null,
-    locationProof: null,
-    companyBrochure: null,
-    profilePhoto: null,
-    visitingCard: null,
-    onboardingStartAt: "",
-    onboardingEndAt: "",
-    paymentDueDate: "",
-  });
+  const [vendorRegistrationForm, setVendorRegistrationForm] = useState(
+    buildVendorRegistrationForm(null),
+  );
   const [vendorCategories, setVendorCategories] = useState(
     initialVendorCategories,
   );
@@ -8548,9 +8693,13 @@ export default function HomePage() {
   const vendorSubCategoryOptions =
     vendorSubCategoryRecords[vendorRegistrationForm.category] ?? [];
   const vendorStateOptions =
-    vendorStateOptionsByCountry[vendorRegistrationForm.country] ?? [];
+    vendorRegistrationForm.country === "India"
+      ? INDIA_STATES
+      : (vendorStateOptionsByCountry[vendorRegistrationForm.country] ?? []);
   const vendorCityOptions =
-    vendorCityOptionsByState[vendorRegistrationForm.state] ?? [];
+    vendorRegistrationForm.country === "India"
+      ? getIndianCities(vendorRegistrationForm.state)
+      : (vendorCityOptionsByState[vendorRegistrationForm.state] ?? []);
   const [eventForm, setEventForm] = useState({
     ...defaultEventForm,
     id: "",
@@ -10115,50 +10264,10 @@ export default function HomePage() {
     }));
   };
   const resetVendorRegistrationForm = () => {
-    setVendorRegistrationForm({
-      company: "",
-      category: "",
-      subCategory: "",
-      contactPerson: "",
-      phoneCode: "+91",
-      whatsappCode: "+91",
-      whatsapp: "",
-      country: "India",
-      state: "",
-      membershipPlan: "",
-      paymentAmount: "",
-      address: "",
-      city: "",
-      phone: "",
-      email: "",
-      website: "",
-      facebookUrl: "",
-      instagramUrl: "",
-      youtubeUrl: "",
-      linkedinUrl: "",
-      xUrl: "",
-      workDescription: "",
-      zipcode: "",
-      planName: "",
-      openingTime: "",
-      closingTime: "",
-      gstNumber: "",
-      isRestaurant: false,
-      paymentMode: "Online/NEFT/IMPS",
-      bankName: "",
-      transactionId: "",
-      paymentDescription: "",
-      googleLocation: "",
-      companyLogo: null,
-      idProof: null,
-      locationProof: null,
-      companyBrochure: null,
-      profilePhoto: null,
-      visitingCard: null,
-      onboardingStartAt: "",
-      onboardingEndAt: "",
-      paymentDueDate: "",
-    });
+    setVendorRegistrationForm(buildVendorRegistrationForm(null));
+  };
+  const openVendorRegistrationEditor = (vendor) => {
+    setVendorRegistrationForm(buildVendorRegistrationForm(vendor));
   };
   const updateVendorFilter = (field, value) => {
     setVendorFilters((current) => ({
@@ -10343,6 +10452,7 @@ export default function HomePage() {
         !vendorRegistrationForm.contactPerson.trim() ||
         !vendorRegistrationForm.phone.trim() ||
         !vendorRegistrationForm.email.trim() ||
+        !vendorRegistrationForm.primaryLoginEmail.trim() ||
         !vendorRegistrationForm.category.trim() ||
         !vendorRegistrationForm.subCategory.trim() ||
         !vendorRegistrationForm.address.trim()
@@ -10350,8 +10460,22 @@ export default function HomePage() {
         return;
       }
 
-      const response = await fetch(`${apiBaseUrl}/vendors`, {
-        method: "POST",
+      if (
+        vendorRegistrationForm.secondaryLoginEmail.trim() &&
+        vendorRegistrationForm.secondaryLoginEmail.trim().toLowerCase() ===
+          vendorRegistrationForm.primaryLoginEmail.trim().toLowerCase()
+      ) {
+        return;
+      }
+
+      const isEditingVendor = Boolean(vendorRegistrationForm.id);
+      const endpoint = isEditingVendor
+        ? `${apiBaseUrl}/vendors/${vendorRegistrationForm.id}`
+        : `${apiBaseUrl}/vendors`;
+      const method = isEditingVendor ? "PATCH" : "POST";
+
+      const response = await fetch(endpoint, {
+        method,
         headers: {
           "Content-Type": "application/json",
         },
@@ -10368,6 +10492,12 @@ export default function HomePage() {
           phone:
             `${vendorRegistrationForm.phoneCode} ${vendorRegistrationForm.phone.trim()}`.trim(),
           email: vendorRegistrationForm.email.trim(),
+          primaryLoginEmail: vendorRegistrationForm.primaryLoginEmail
+            .trim()
+            .toLowerCase(),
+          secondaryLoginEmail:
+            vendorRegistrationForm.secondaryLoginEmail.trim().toLowerCase() ||
+            undefined,
           whatsapp:
             `${vendorRegistrationForm.whatsappCode} ${vendorRegistrationForm.whatsapp.trim()}`.trim(),
           facebookUrl: vendorRegistrationForm.facebookUrl.trim(),
@@ -12347,6 +12477,8 @@ export default function HomePage() {
                 onFilterChange={updateVendorFilter}
                 onNewCategoryChange={setNewVendorCategory}
                 onAddCategory={addVendorCategory}
+                onReset={resetVendorRegistrationForm}
+                onEditVendor={openVendorRegistrationEditor}
                 onSubmit={saveVendorRecord}
               />
             </div>
@@ -12412,23 +12544,30 @@ export default function HomePage() {
 
             <section className="association-content">
               {isAssociationAdmin ? (
-                <VendorRegistrationForm
-                  formData={vendorRegistrationForm}
-                  onChange={updateVendorRegistrationForm}
-                  categories={vendorCategories}
-                  subCategories={vendorSubCategoryOptions}
-                  countryOptions={vendorCountryOptions}
-                  stateOptions={vendorStateOptions}
-                  cityOptions={vendorCityOptions}
-                  phoneCodeOptions={vendorPhoneCodeOptions}
-                  planOptions={vendorPlanOptions}
-                  paymentModeOptions={vendorPaymentModeOptions}
-                  newCategory={newVendorCategory}
-                  onFileChange={updateVendorRegistrationFile}
-                  onNewCategoryChange={setNewVendorCategory}
-                  onAddCategory={addVendorCategory}
-                  onSubmit={saveVendorRecord}
-                />
+                <>
+                  <VendorRegistrationForm
+                    formData={vendorRegistrationForm}
+                    onChange={updateVendorRegistrationForm}
+                    categories={vendorCategories}
+                    subCategories={vendorSubCategoryOptions}
+                    countryOptions={vendorCountryOptions}
+                    stateOptions={vendorStateOptions}
+                    cityOptions={vendorCityOptions}
+                    phoneCodeOptions={vendorPhoneCodeOptions}
+                    planOptions={vendorPlanOptions}
+                    paymentModeOptions={vendorPaymentModeOptions}
+                    newCategory={newVendorCategory}
+                    onFileChange={updateVendorRegistrationFile}
+                    onNewCategoryChange={setNewVendorCategory}
+                    onAddCategory={addVendorCategory}
+                    onReset={resetVendorRegistrationForm}
+                    onSubmit={saveVendorRecord}
+                  />
+                  <VendorRegistrationTable
+                    items={vendorRecords}
+                    onEdit={openVendorRegistrationEditor}
+                  />
+                </>
               ) : (
                 <article className="association-empty-state">
                   <span className="mini-label">Admin Access Required</span>

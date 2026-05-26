@@ -962,6 +962,7 @@ class AuthSession {
     final viewerRole = switch (user['viewerRole']?.toString()) {
       'admin' => AppViewerRole.admin,
       'member' => AppViewerRole.member,
+      'vendor' => AppViewerRole.vendor,
       _ => AppViewerRole.viewOnly,
     };
 
@@ -1044,6 +1045,7 @@ class SessionReportItem {
     final viewerRole = switch (json['viewerRole']?.toString()) {
       'admin' => AppViewerRole.admin,
       'member' => AppViewerRole.member,
+      'vendor' => AppViewerRole.vendor,
       _ => AppViewerRole.viewOnly,
     };
 
@@ -1066,10 +1068,7 @@ class SessionReportItem {
 }
 
 class SessionReportData {
-  const SessionReportData({
-    required this.summary,
-    required this.sessions,
-  });
+  const SessionReportData({required this.summary, required this.sessions});
 
   final SessionReportSummary summary;
   final List<SessionReportItem> sessions;

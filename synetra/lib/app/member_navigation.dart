@@ -4,10 +4,10 @@ class MemberArenaNavigation {
   const MemberArenaNavigation._();
 
   static MemberArenaSection defaultSection(AppViewerRole role) =>
-      MemberArenaSection.media;
+      role.isVendor ? MemberArenaSection.allMembers : MemberArenaSection.media;
 
   static List<MemberArenaSection> visibleSections(AppViewerRole role) => [
-    MemberArenaSection.media,
+    if (role.isAdmin || role.isMember) MemberArenaSection.media,
     MemberArenaSection.allMembers,
     MemberArenaSection.primaryMembers,
     MemberArenaSection.associateMembers,
@@ -20,6 +20,9 @@ class MemberArenaNavigation {
     AppViewerRole role,
     MemberArenaSection section,
   ) {
+    if (role.isVendor && section == MemberArenaSection.media) {
+      return MemberArenaSection.allMembers;
+    }
     if (!role.isAdmin && section == MemberArenaSection.master) {
       return MemberArenaSection.allMembers;
     }

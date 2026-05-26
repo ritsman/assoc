@@ -254,7 +254,14 @@ class AdminArenaPanel extends ConsumerStatefulWidget {
 }
 
 class VendorArenaPanel extends ConsumerStatefulWidget {
-  const VendorArenaPanel({super.key});
+  const VendorArenaPanel({
+    super.key,
+    required this.viewerRole,
+    required this.onOpenProfile,
+  });
+
+  final AppViewerRole viewerRole;
+  final VoidCallback onOpenProfile;
 
   @override
   ConsumerState<VendorArenaPanel> createState() => _VendorArenaPanelState();
@@ -279,6 +286,9 @@ class _VendorArenaPanelState extends ConsumerState<VendorArenaPanel> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.viewerRole.isVendor) {
+      return _VendorSelfServicePanel(onOpenProfile: widget.onOpenProfile);
+    }
     final vendorsAsync = ref.watch(vendorDirectoryProvider);
     return vendorsAsync.when(
       loading: () => const _LoadingState(),
@@ -604,6 +614,204 @@ class _VendorArenaPanelState extends ConsumerState<VendorArenaPanel> {
           ],
         );
       },
+    );
+  }
+}
+
+class _VendorSelfServicePanel extends StatelessWidget {
+  const _VendorSelfServicePanel({required this.onOpenProfile});
+
+  final VoidCallback onOpenProfile;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(0, 6, 0, 28),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFFF97316), Color(0xFFDC2626)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(30),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x26171717),
+                  blurRadius: 24,
+                  offset: Offset(0, 14),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: const Icon(
+                    Icons.storefront_rounded,
+                    color: Colors.white,
+                    size: 28,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                const Text(
+                  'Manage your vendor profile',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
+                    height: 1.05,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Your vendor area is now private. Other vendors are hidden here, while you can still use the member arena to discover association members.',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.92),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                FilledButton.icon(
+                  onPressed: onOpenProfile,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: const Color(0xFFB91C1C),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 14,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                  ),
+                  icon: const Icon(Icons.edit_outlined),
+                  label: const Text('Update vendor profile'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(22),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: const Color(0xFFE5E7EB)),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x0A0F172A),
+                  blurRadius: 18,
+                  offset: Offset(0, 10),
+                ),
+              ],
+            ),
+            child: const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'What changed',
+                  style: TextStyle(
+                    color: Color(0xFF171717),
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                SizedBox(height: 10),
+                _VendorSelfServicePoint(
+                  icon: Icons.visibility_off_rounded,
+                  title: 'Other vendors are hidden',
+                  subtitle:
+                      'This tab no longer exposes the full vendor directory to vendor accounts.',
+                ),
+                SizedBox(height: 10),
+                _VendorSelfServicePoint(
+                  icon: Icons.people_alt_rounded,
+                  title: 'Members remain visible',
+                  subtitle:
+                      'Use the member arena to browse association members and find contacts.',
+                ),
+                SizedBox(height: 10),
+                _VendorSelfServicePoint(
+                  icon: Icons.manage_accounts_rounded,
+                  title: 'Profile updates stay available',
+                  subtitle:
+                      'Open your profile to refresh display name, contact information, and other account details.',
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VendorSelfServicePoint extends StatelessWidget {
+  const _VendorSelfServicePoint({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          margin: const EdgeInsets.only(top: 2),
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFEDD5),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Icon(icon, color: const Color(0xFFEA580C), size: 20),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  color: Color(0xFF171717),
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: const TextStyle(
+                  color: Color(0xFF6B7280),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  height: 1.45,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1016,14 +1224,15 @@ class _DashboardArenaGrid extends StatelessWidget {
         colors: const [Color(0xFF4338CA), Color(0xFF7C3AED)],
         onTap: onOpenAssociationGallery,
       ),
+      if (!viewerRole.isMember)
+        (
+          label: 'Member',
+          icon: Icons.people_alt_rounded,
+          colors: const [Color(0xFF065F46), Color(0xFF10B981)],
+          onTap: onOpenMemberArena,
+        ),
       (
-        label: 'Member',
-        icon: Icons.people_alt_rounded,
-        colors: const [Color(0xFF065F46), Color(0xFF10B981)],
-        onTap: onOpenMemberArena,
-      ),
-      (
-        label: 'Vendor',
+        label: viewerRole.isVendor ? 'My Vendor' : 'Vendor',
         icon: Icons.storefront_rounded,
         colors: const [Color(0xFF9A3412), Color(0xFFF59E0B)],
         onTap: onOpenVendorArena,
@@ -1205,38 +1414,52 @@ class _DashboardAssociationHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final resolvedAssociationName =
+        associationName.trim().isEmpty ? 'NIMA' : associationName.trim();
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFFF8FAFC), Color(0xFFE8ECFF)],
+          colors: [Colors.white, Color(0xFFFFF2F2)],
         ),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFE3E7F3)),
+        border: Border.all(color: const Color(0xFFF0DCDD)),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x120F172A),
+            color: Color(0x12000000),
             blurRadius: 18,
             offset: Offset(0, 8),
           ),
         ],
       ),
-      child: const Center(
-        child: Text(
-          'NIMA',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: Color(0xFF243C8F),
-            fontSize: 28,
-            fontWeight: FontWeight.w900,
-            fontStyle: FontStyle.italic,
-            letterSpacing: 1.8,
-            height: 1,
+      child: Column(
+        children: [
+          const _NimaBrandLockup(wordmarkWidth: 190, compact: true),
+          const SizedBox(height: 14),
+          Text(
+            resolvedAssociationName,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: _nimaInk,
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              height: 1.2,
+            ),
           ),
-        ),
+          const SizedBox(height: 6),
+          const Text(
+            'Official member dashboard',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: _nimaMuted,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -7706,94 +7929,93 @@ class _AdminSessionReportPanel extends ConsumerWidget {
               const SizedBox(height: 16),
               Text(
                 'Active means seen within the last ${summary.activeWindowMinutes} minutes.',
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Color(0xFF6B7280),
-                ),
+                style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
               ),
               const SizedBox(height: 16),
-              ...report.sessions.take(8).map(
-                (session) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: const Color(0xFFE5E7EB)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
+              ...report.sessions
+                  .take(8)
+                  .map(
+                    (session) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: const Color(0xFFE5E7EB)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(
-                              child: Text(
-                                session.displayLabel,
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    session.displayLabel,
+                                    style: const TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF171717),
+                                    ),
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color:
+                                        session.isActiveNow
+                                            ? const Color(0xFFE7F8EE)
+                                            : const Color(0xFFF3F4F6),
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Text(
+                                    session.isActiveNow ? 'Active now' : 'Idle',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color:
+                                          session.isActiveNow
+                                              ? const Color(0xFF0F9F58)
+                                              : const Color(0xFF6B7280),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              '${session.email} • ${session.viewerRole.label}',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: Color(0xFF6B7280),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Last seen: ${session.lastSeenAt.length >= 16 ? session.lastSeenAt.substring(0, 16).replaceFirst('T', ' ') : session.lastSeenAt}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF4B5563),
+                              ),
+                            ),
+                            if (session.deviceInfo.trim().isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                'Device: ${session.deviceInfo}',
                                 style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w700,
-                                  color: Color(0xFF171717),
-                                ),
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color:
-                                    session.isActiveNow
-                                        ? const Color(0xFFE7F8EE)
-                                        : const Color(0xFFF3F4F6),
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                              child: Text(
-                                session.isActiveNow ? 'Active now' : 'Idle',
-                                style: TextStyle(
                                   fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  color:
-                                      session.isActiveNow
-                                          ? const Color(0xFF0F9F58)
-                                          : const Color(0xFF6B7280),
+                                  color: Color(0xFF4B5563),
                                 ),
                               ),
-                            ),
+                            ],
                           ],
                         ),
-                        const SizedBox(height: 6),
-                        Text(
-                          '${session.email} • ${session.viewerRole.label}',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: Color(0xFF6B7280),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Last seen: ${session.lastSeenAt.length >= 16 ? session.lastSeenAt.substring(0, 16).replaceFirst('T', ' ') : session.lastSeenAt}',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Color(0xFF4B5563),
-                          ),
-                        ),
-                        if (session.deviceInfo.trim().isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            'Device: ${session.deviceInfo}',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Color(0xFF4B5563),
-                            ),
-                          ),
-                        ],
-                      ],
+                      ),
                     ),
                   ),
-                ),
-              ),
             ],
           ),
         );
@@ -7832,10 +8054,7 @@ class _SessionMetricChip extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             label,
-            style: const TextStyle(
-              fontSize: 12,
-              color: Color(0xFF6B7280),
-            ),
+            style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
           ),
         ],
       ),

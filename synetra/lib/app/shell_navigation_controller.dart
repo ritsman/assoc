@@ -90,7 +90,10 @@ class ShellNavigationController extends ChangeNotifier {
       return false;
     }
 
-    return _state.selectedArena == AppArena.admin ||
+    return !AppRoleVisibility.visibleArenas(
+          viewerRole,
+        ).contains(_state.selectedArena) ||
+        _state.selectedArena == AppArena.admin ||
         (_state.selectedArena == AppArena.member &&
             MemberArenaNavigation.normalizeSection(
                   viewerRole,
@@ -118,14 +121,26 @@ class ShellNavigationController extends ChangeNotifier {
 
     var nextState = _state;
 
-    if (nextState.selectedArena == AppArena.admin) {
+    if (!AppRoleVisibility.visibleArenas(
+      viewerRole,
+    ).contains(nextState.selectedArena)) {
       nextState = nextState.copyWith(
-        selectedArena: AppArena.member,
+        selectedArena:
+            viewerRole.isVendor ? AppArena.vendor : AppArena.dashboard,
         isDrawerOpen: false,
       );
     }
 
-    if (nextState.selectedArena == AppArena.member) {
+    if (nextState.selectedArena == AppArena.admin) {
+      nextState = nextState.copyWith(
+        selectedArena:
+            viewerRole.isVendor ? AppArena.vendor : AppArena.dashboard,
+        isDrawerOpen: false,
+      );
+    }
+
+    if (nextState.selectedArena == AppArena.member &&
+        AppRoleVisibility.canSeeMemberArena(viewerRole)) {
       nextState = nextState.copyWith(
         memberArenaSection: MemberArenaNavigation.normalizeSection(
           viewerRole,
@@ -134,7 +149,8 @@ class ShellNavigationController extends ChangeNotifier {
       );
     }
 
-    if (nextState.selectedArena == AppArena.association) {
+    if (nextState.selectedArena == AppArena.association &&
+        AppRoleVisibility.canSeeAssociationArena(viewerRole)) {
       nextState = nextState.copyWith(
         associationArenaSection: AssociationArenaNavigation.normalizeSection(
           viewerRole,
@@ -143,7 +159,8 @@ class ShellNavigationController extends ChangeNotifier {
       );
     }
 
-    if (nextState.selectedArena == AppArena.events) {
+    if (nextState.selectedArena == AppArena.events &&
+        AppRoleVisibility.canSeeEventsArena(viewerRole)) {
       nextState = nextState.copyWith(
         eventsArenaSection: EventsArenaNavigation.normalizeSection(
           viewerRole,
@@ -160,8 +177,7 @@ class ShellNavigationController extends ChangeNotifier {
   }
 
   void selectArena(AppViewerRole viewerRole, AppArena arena) {
-    if (!AppRoleVisibility.canSeeAdminArena(viewerRole) &&
-        arena == AppArena.admin) {
+    if (!AppRoleVisibility.visibleArenas(viewerRole).contains(arena)) {
       return;
     }
 
@@ -294,11 +310,7 @@ class ShellNavigationController extends ChangeNotifier {
         _state.associationArenaSection,
       );
       if (backSection != null) {
-        _setState(
-          _state.copyWith(
-            associationArenaSection: backSection,
-          ),
-        );
+        _setState(_state.copyWith(associationArenaSection: backSection));
         return false;
       }
       _setState(_state.copyWith(selectedArena: AppArena.dashboard));

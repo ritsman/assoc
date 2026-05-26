@@ -35,6 +35,10 @@ function resolveViewerRole(user) {
     return "admin";
   }
 
+  if (user.isVendor) {
+    return "vendor";
+  }
+
   if (user.isMember) {
     return "member";
   }
@@ -63,7 +67,10 @@ function serializeSession(user, session = null) {
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
-      displayName: [user.firstName, user.lastName].filter(Boolean).join(" ").trim(),
+      displayName: [user.firstName, user.lastName]
+        .filter(Boolean)
+        .join(" ")
+        .trim(),
       associationId: user.associationId,
       memberId: user.memberId,
       viewerRole: resolveViewerRole(user),
@@ -94,7 +101,10 @@ router.post("/login", async (req, res) => {
     },
   });
 
-  if (!user || !(await verifyPassword(parsed.data.password, user.passwordHash))) {
+  if (
+    !user ||
+    !(await verifyPassword(parsed.data.password, user.passwordHash))
+  ) {
     return res.status(401).json({ error: "Invalid username or password" });
   }
 
@@ -105,6 +115,12 @@ router.post("/login", async (req, res) => {
   if (user.isMember && user.approvalStatus !== "APPROVED") {
     return res.status(403).json({
       error: "Your member profile is not approved yet",
+    });
+  }
+
+  if (user.isVendor && user.approvalStatus !== "APPROVED") {
+    return res.status(403).json({
+      error: "Your vendor profile is not approved yet",
     });
   }
 
@@ -171,7 +187,10 @@ router.post("/change-password", async (req, res) => {
     },
   });
 
-  if (!user || !(await verifyPassword(parsed.data.currentPassword, user.passwordHash))) {
+  if (
+    !user ||
+    !(await verifyPassword(parsed.data.currentPassword, user.passwordHash))
+  ) {
     return res.status(401).json({ error: "Current password is incorrect" });
   }
 

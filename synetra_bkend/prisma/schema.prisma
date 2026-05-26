@@ -237,7 +237,7 @@ model User {
   id             String         @id @default(cuid())
   associationId  String?
   memberId       String?        @unique
-  vendorId       String?        @unique
+  vendorId       String?
   firstName      String
   lastName       String
   email          String         @unique
@@ -264,6 +264,7 @@ model User {
   @@index([associationId])
   @@index([approvalStatus])
   @@index([isAdmin, isMember, isVendor])
+  @@index([vendorId])
 }
 
 model UserSession {
@@ -316,7 +317,7 @@ model Vendor {
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
   association       Association   @relation(fields: [associationId], references: [id], onDelete: Cascade)
-  user              User?
+  users             User[]
   timelinePosts     TimelinePost[]
   appBanners        AppBanner[]
 

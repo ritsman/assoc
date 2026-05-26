@@ -12,6 +12,14 @@ const optionalDateField = z.preprocess(
   z.coerce.date().nullable().optional(),
 );
 
+const optionalEmailField = z.preprocess(
+  (value) =>
+    value === "" || value === null || typeof value === "undefined"
+      ? undefined
+      : String(value).trim().toLowerCase(),
+  z.string().email().optional(),
+);
+
 const accessStatusSchema = z.object({
   accessStatus: z.enum(["PENDING", "APPROVED", "SUSPENDED", "CANCELLED"]),
 });
@@ -22,6 +30,8 @@ const vendorSchema = z.object({
   companyName: z.string().min(1),
   contactPerson: z.string().optional(),
   email: z.string().email(),
+  primaryLoginEmail: optionalEmailField,
+  secondaryLoginEmail: optionalEmailField,
   phone: z.string().optional(),
   whatsapp: z.string().optional(),
   address: z.string().optional(),
@@ -63,7 +73,12 @@ function isDuplicateVendorEmailError(error) {
 }
 
 function buildVendorUserPayload(vendor) {
-  const contactName = (vendor.contactPerson || vendor.name || vendor.companyName || "").trim();
+  const contactName = (
+    vendor.contactPerson ||
+    vendor.name ||
+    vendor.companyName ||
+    ""
+  ).trim();
   const [firstName, ...restNameParts] = contactName.split(" ").filter(Boolean);
 
   return {
@@ -74,6 +89,13 @@ function buildVendorUserPayload(vendor) {
     email: vendor.email,
     phone: vendor.phone,
     isVendor: true,
+  };
+}
+
+function buildVendorUserPayloadForEmail(vendor, email) {
+  return {
+    ...buildVendorUserPayload(vendor),
+    email,
   };
 }
 
@@ -121,6 +143,164 @@ function buildAccessUpdate(accessStatus) {
   }
 }
 
+function buildLoginEmails(payload) {
+  const emails = [
+    payload.primaryLoginEmail || payload.email,
+    payload.secondaryLoginEmail,
+  ]
+    .map((value) =>
+      String(value || "")
+        .trim()
+        .toLowerCase(),
+    )
+    .filter(Boolean);
+
+  if (emails.length === 0) {
+    throw new Error("At least one vendor login email is required.");
+  }
+
+  if (new Set(emails).size !== emails.length) {
+    throw new Error(
+      "Primary and secondary vendor login emails must be different.",
+    );
+  }
+
+  if (emails.length > 2) {
+    throw new Error("Only two vendor login emails are allowed per vendor.");
+  }
+
+  return emails;
+}
+
+function accessStatusForVendorStatus(status) {
+  switch (status) {
+    case VendorStatus.ACTIVE:
+      return "APPROVED";
+    case VendorStatus.SUSPENDED:
+      return "SUSPENDED";
+    case VendorStatus.LAPSED:
+      return "CANCELLED";
+    case VendorStatus.PENDING:
+    default:
+      return "PENDING";
+  }
+}
+
+function extractVendorData(payload, associationId) {
+  const {
+    primaryLoginEmail: _primaryLoginEmail,
+    secondaryLoginEmail: _secondaryLoginEmail,
+    ...vendorData
+  } = payload;
+
+  return {
+    ...vendorData,
+    ...(associationId ? { associationId } : {}),
+  };
+}
+
+const vendorInclude = {
+  association: true,
+  users: true,
+};
+
+function serializeVendorUser(user) {
+  const { passwordHash, ...safeUser } = user;
+  return safeUser;
+}
+
+async function syncVendorUsers(tx, vendor, loginEmails) {
+  if (loginEmails.length > 2) {
+    throw new Error("Only two vendor login emails are allowed per vendor.");
+  }
+
+  const existingVendorUsers = await tx.user.findMany({
+    where: { vendorId: vendor.id },
+    orderBy: { createdAt: "asc" },
+  });
+
+  const usersByEmail = new Map(
+    existingVendorUsers.map((user) => [user.email.toLowerCase(), user]),
+  );
+  const discoveredUsers = await tx.user.findMany({
+    where: {
+      OR: loginEmails.map((email) => ({
+        email: {
+          equals: email,
+          mode: "insensitive",
+        },
+      })),
+    },
+  });
+
+  for (const user of discoveredUsers) {
+    usersByEmail.set(user.email.toLowerCase(), user);
+  }
+
+  const accessUpdate = buildAccessUpdate(
+    accessStatusForVendorStatus(vendor.status),
+  ).user;
+  const desiredEmails = new Set(loginEmails);
+
+  for (const email of loginEmails) {
+    const existingUser = usersByEmail.get(email);
+
+    if (existingUser?.vendorId && existingUser.vendorId !== vendor.id) {
+      throw new Error(
+        `The login email ${email} is already linked to another vendor account.`,
+      );
+    }
+
+    if (existingUser && (existingUser.isAdmin || existingUser.isMember)) {
+      throw new Error(
+        `The login email ${email} already belongs to a member or admin account.`,
+      );
+    }
+
+    const userPayload = buildVendorUserPayloadForEmail(vendor, email);
+
+    if (existingUser) {
+      await tx.user.update({
+        where: { id: existingUser.id },
+        data: {
+          ...userPayload,
+          ...accessUpdate,
+          isActive: accessUpdate.isActive ?? true,
+        },
+      });
+    } else {
+      await tx.user.create({
+        data: {
+          ...userPayload,
+          passwordHash: buildPendingPasswordHash(),
+          ...accessUpdate,
+          isActive: accessUpdate.isActive ?? true,
+        },
+      });
+    }
+  }
+
+  for (const user of existingVendorUsers) {
+    if (desiredEmails.has(user.email.toLowerCase())) {
+      continue;
+    }
+
+    if (user.isAdmin || user.isMember) {
+      await tx.user.update({
+        where: { id: user.id },
+        data: {
+          vendorId: null,
+          isVendor: false,
+        },
+      });
+    } else {
+      await tx.user.delete({
+        where: { id: user.id },
+      });
+    }
+  }
+}
+
 async function ensureAssociation(associationId) {
   if (associationId) {
     return associationId;
@@ -155,8 +335,16 @@ function formatRangeDate(date) {
 }
 
 function serializeVendor(vendor) {
+  const users = [...(vendor.users ?? [])].sort(
+    (left, right) =>
+      new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime(),
+  );
   return {
     ...vendor,
+    users: users.map(serializeVendorUser),
+    loginEmails: users.map((user) => user.email),
+    primaryLoginEmail: users[0]?.email ?? "",
+    secondaryLoginEmail: users[1]?.email ?? "",
     onboardingStartAt: formatRangeDate(vendor.onboardingStartAt),
     onboardingEndAt: formatRangeDate(vendor.onboardingEndAt),
     paymentDueDate: formatRangeDate(vendor.paymentDueDate),
@@ -170,10 +358,7 @@ router.get("/", async (req, res) => {
     where: {
       ...(associationId ? { associationId: String(associationId) } : {}),
     },
-    include: {
-      association: true,
-      user: true,
-    },
+    include: vendorInclude,
     orderBy: { createdAt: "desc" },
   });
 
@@ -191,67 +376,24 @@ router.post("/", async (req, res) => {
   }
 
   const associationId = await ensureAssociation(parsed.data.associationId);
+  const loginEmails = buildLoginEmails(parsed.data);
 
   try {
     const vendor = await prisma.$transaction(async (tx) => {
       const createdVendor = await tx.vendor.create({
         data: {
-          ...parsed.data,
-          associationId,
+          ...extractVendorData(parsed.data, associationId),
           paymentStatus: parsed.data.paymentStatus ?? PaymentStatus.PENDING,
           status: parsed.data.status ?? VendorStatus.PENDING,
         },
-        include: {
-          association: true,
-          user: true,
-        },
+        include: vendorInclude,
       });
 
-      const existingUser = await tx.user.findUnique({
-        where: { email: createdVendor.email },
-      });
-
-      if (existingUser?.vendorId && existingUser.vendorId !== createdVendor.id) {
-        throw new Error("This email is already linked to another vendor account");
-      }
-
-      if (existingUser) {
-        await tx.user.update({
-          where: { id: existingUser.id },
-          data: {
-            ...buildVendorUserPayload(createdVendor),
-            approvalStatus:
-              existingUser.approvalStatus === ApprovalStatus.REJECTED
-                ? ApprovalStatus.PENDING
-                : undefined,
-            approvedAt:
-              existingUser.approvalStatus === ApprovalStatus.REJECTED
-                ? null
-                : undefined,
-            rejectedAt:
-              existingUser.approvalStatus === ApprovalStatus.REJECTED
-                ? null
-                : undefined,
-            isActive: true,
-          },
-        });
-      } else {
-        await tx.user.create({
-          data: {
-            ...buildVendorUserPayload(createdVendor),
-            passwordHash: buildPendingPasswordHash(),
-            approvalStatus: ApprovalStatus.PENDING,
-            isActive: true,
-          },
-        });
-      }
+      await syncVendorUsers(tx, createdVendor, loginEmails);
 
       return tx.vendor.findUnique({
         where: { id: createdVendor.id },
-        include: {
-          association: true,
-          user: true,
-        },
+        include: vendorInclude,
       });
     });
 
@@ -263,7 +405,13 @@ router.post("/", async (req, res) => {
       });
     }
 
-    if (error instanceof Error && error.message.includes("linked to another vendor")) {
+    if (
+      error instanceof Error &&
+      (error.message.includes("linked to another vendor") ||
+        error.message.includes("Only two vendor login emails") ||
+        error.message.includes("vendor login emails") ||
+        error.message.includes("already belongs to a member or admin"))
+    ) {
       return res.status(409).json({
         error: error.message,
       });
@@ -285,7 +433,7 @@ router.patch("/:id", async (req, res) => {
 
   const existingVendor = await prisma.vendor.findUnique({
     where: { id: req.params.id },
-    include: { user: true },
+    include: vendorInclude,
   });
 
   if (!existingVendor) {
@@ -293,30 +441,36 @@ router.patch("/:id", async (req, res) => {
   }
 
   try {
+    const sortedExistingUsers = [...(existingVendor.users ?? [])].sort(
+      (left, right) =>
+        new Date(left.createdAt).getTime() -
+        new Date(right.createdAt).getTime(),
+    );
+    const loginEmails = buildLoginEmails({
+      ...existingVendor,
+      primaryLoginEmail:
+        typeof parsed.data.primaryLoginEmail === "undefined"
+          ? sortedExistingUsers[0]?.email || existingVendor.email
+          : parsed.data.primaryLoginEmail,
+      secondaryLoginEmail:
+        typeof parsed.data.secondaryLoginEmail === "undefined"
+          ? sortedExistingUsers[1]?.email || ""
+          : parsed.data.secondaryLoginEmail,
+      email: parsed.data.email ?? existingVendor.email,
+    });
+
     const updatedVendor = await prisma.$transaction(async (tx) => {
       const nextVendor = await tx.vendor.update({
         where: { id: req.params.id },
-        data: parsed.data,
-        include: {
-          association: true,
-          user: true,
-        },
+        data: extractVendorData(parsed.data),
+        include: vendorInclude,
       });
 
-      const linkedUser = nextVendor.user;
-      if (linkedUser) {
-        await tx.user.update({
-          where: { id: linkedUser.id },
-          data: buildVendorUserPayload(nextVendor),
-        });
-      }
+      await syncVendorUsers(tx, nextVendor, loginEmails);
 
       return tx.vendor.findUnique({
         where: { id: req.params.id },
-        include: {
-          association: true,
-          user: true,
-        },
+        include: vendorInclude,
       });
     });
 
@@ -325,6 +479,18 @@ router.patch("/:id", async (req, res) => {
     if (isDuplicateVendorEmailError(error)) {
       return res.status(409).json({
         error: "A vendor with this email already exists in the association",
+      });
+    }
+
+    if (
+      error instanceof Error &&
+      (error.message.includes("linked to another vendor") ||
+        error.message.includes("Only two vendor login emails") ||
+        error.message.includes("vendor login emails") ||
+        error.message.includes("already belongs to a member or admin"))
+    ) {
+      return res.status(409).json({
+        error: error.message,
       });
     }
 
@@ -344,14 +510,16 @@ router.patch("/:id/access", async (req, res) => {
 
   const vendor = await prisma.vendor.findUnique({
     where: { id: req.params.id },
-    include: { user: true },
+    include: vendorInclude,
   });
 
   if (!vendor) {
     return res.status(404).json({ error: "Vendor not found" });
   }
 
-  const { user: userData, vendorStatus } = buildAccessUpdate(parsed.data.accessStatus);
+  const { user: userData, vendorStatus } = buildAccessUpdate(
+    parsed.data.accessStatus,
+  );
 
   const updatedVendor = await prisma.$transaction(async (tx) => {
     const nextVendor = await tx.vendor.update({
@@ -359,25 +527,19 @@ router.patch("/:id/access", async (req, res) => {
       data: {
         status: vendorStatus,
       },
-      include: {
-        association: true,
-        user: true,
-      },
+      include: vendorInclude,
     });
 
-    if (nextVendor.user) {
-      await tx.user.update({
-        where: { id: nextVendor.user.id },
+    if ((nextVendor.users ?? []).length > 0) {
+      await tx.user.updateMany({
+        where: { vendorId: nextVendor.id },
         data: userData,
       });
     }
 
     return tx.vendor.findUnique({
       where: { id: req.params.id },
-      include: {
-        association: true,
-        user: true,
-      },
+      include: vendorInclude,
     });
   });
 
@@ -387,7 +549,7 @@ router.patch("/:id/access", async (req, res) => {
 router.delete("/:id", async (req, res) => {
   const existingVendor = await prisma.vendor.findUnique({
     where: { id: req.params.id },
-    include: { user: true },
+    include: vendorInclude,
   });
 
   if (!existingVendor) {
@@ -395,10 +557,10 @@ router.delete("/:id", async (req, res) => {
   }
 
   await prisma.$transaction(async (tx) => {
-    if (existingVendor.user) {
-      if (existingVendor.user.isAdmin || existingVendor.user.isMember) {
+    for (const linkedUser of existingVendor.users ?? []) {
+      if (linkedUser.isAdmin || linkedUser.isMember) {
         await tx.user.update({
-          where: { id: existingVendor.user.id },
+          where: { id: linkedUser.id },
           data: {
             vendorId: null,
             isVendor: false,
@@ -406,7 +568,7 @@ router.delete("/:id", async (req, res) => {
         });
       } else {
         await tx.user.delete({
-          where: { id: existingVendor.user.id },
+          where: { id: linkedUser.id },
         });
       }
     }

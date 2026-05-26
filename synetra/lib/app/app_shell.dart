@@ -1,21 +1,24 @@
 part of '../main.dart';
 
-const _synetraLogoAsset = 'assets/branding/synetra_logo.png';
-const _dummyAdminEmail = 'admin@synetra.app';
-const _dummyAdminPassword = 'Synetra@123';
-const _dummyMemberUsername = 'shreesaient14@gmail.com';
-const _dummyMemberPassword = 'Nima@123';
+const _nimaBrandRed = Color(0xFFEB1C24);
+const _nimaBrandRedDark = Color(0xFFCB1720);
+const _nimaInk = Color(0xFF1E1E1E);
+const _nimaMuted = Color(0xFF666666);
+const _nimaSoftSurface = Color(0xFFFFF7F7);
 
-enum AppViewerRole { admin, member, viewOnly }
+enum AppViewerRole { admin, member, vendor, viewOnly }
 
 extension AppViewerRoleLabel on AppViewerRole {
   String get label => switch (this) {
     AppViewerRole.admin => 'Admin',
     AppViewerRole.member => 'Member',
+    AppViewerRole.vendor => 'Vendor',
     AppViewerRole.viewOnly => 'View only',
   };
 
   bool get isAdmin => this == AppViewerRole.admin;
+  bool get isMember => this == AppViewerRole.member;
+  bool get isVendor => this == AppViewerRole.vendor;
 }
 
 enum AppArena {
@@ -124,21 +127,18 @@ class SynetraApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const brandOrange = Color(0xFFF57C00);
-    const brandPurple = Color(0xFF6D28D9);
-
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Synetra Admin',
+      title: 'NIMA',
       theme: ThemeData(
         useMaterial3: true,
         scaffoldBackgroundColor: Colors.white,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: brandPurple,
+          seedColor: _nimaBrandRed,
           brightness: Brightness.light,
         ).copyWith(
-          primary: brandPurple,
-          secondary: brandOrange,
+          primary: _nimaBrandRed,
+          secondary: _nimaBrandRedDark,
           surface: Colors.white,
         ),
         textTheme: const TextTheme(
@@ -215,13 +215,8 @@ class _SynetraLaunchScreenState extends ConsumerState<SynetraLaunchScreen> {
       child:
           !_showLogin || sessionRestoreAsync.isLoading
               ? const _SynetraSplashExperience()
-              : isAuthenticated &&
-                  appLock.requiresUnlock &&
-                  !appLock.isUnlocked
-              ? _SessionUnlockScreen(
-                username: session.username,
-                viewerRole: session.viewerRole,
-              )
+              : isAuthenticated && appLock.requiresUnlock && !appLock.isUnlocked
+              ? const _SynetraLoginScreen(forceUnlock: true)
               : isAuthenticated
               ? const SynetraAdminShell()
               : const _SynetraLoginScreen(),
@@ -235,105 +230,67 @@ class _SynetraSplashExperience extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFF),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment.topCenter,
-            radius: 1.15,
-            colors: [Color(0xFFFFFFFF), Color(0xFFEAF2FF)],
-          ),
-        ),
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(28),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(22),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(36),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x1A0F172A),
-                        blurRadius: 40,
-                        offset: Offset(0, 20),
-                      ),
-                    ],
-                  ),
-                  child: Image.asset(
-                    _synetraLogoAsset,
-                    width: 240,
-                    fit: BoxFit.contain,
-                  ),
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: Column(
+          children: [
+            Container(height: 28, color: _nimaBrandRed),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(28, 24, 28, 18),
+                child: Column(
+                  children: [
+                    const Spacer(flex: 2),
+                    const _NimaBrandLockup(wordmarkWidth: 260),
+                    const SizedBox(height: 56),
+                    const _NimaLoadingDots(),
+                    const Spacer(flex: 3),
+                    const _NimaPoweredByFooter(),
+                  ],
                 ),
-                const SizedBox(height: 28),
-                const Text(
-                  'Synetra',
-                  style: TextStyle(
-                    fontSize: 34,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF0B2D7A),
-                    letterSpacing: -0.6,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                const Text(
-                  'Enhancing synergy networks',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Color(0xFF64748B),
-                    height: 1.5,
-                  ),
-                ),
-                const SizedBox(height: 28),
-                const SizedBox(
-                  width: 28,
-                  height: 28,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.4,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      Color(0xFF0B5ED7),
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _SessionUnlockScreen extends ConsumerStatefulWidget {
-  const _SessionUnlockScreen({
-    required this.username,
-    required this.viewerRole,
-  });
+class _SynetraLoginScreen extends ConsumerStatefulWidget {
+  const _SynetraLoginScreen({this.forceUnlock = false});
 
-  final String username;
-  final AppViewerRole viewerRole;
+  final bool forceUnlock;
 
   @override
-  ConsumerState<_SessionUnlockScreen> createState() =>
-      _SessionUnlockScreenState();
+  ConsumerState<_SynetraLoginScreen> createState() =>
+      _SynetraLoginScreenState();
 }
 
-class _SessionUnlockScreenState extends ConsumerState<_SessionUnlockScreen> {
+class _SynetraLoginScreenState extends ConsumerState<_SynetraLoginScreen> {
+  final TextEditingController _usernameController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _pinController = TextEditingController();
-  String? _errorText;
+  bool _showPassword = false;
+  bool _isSubmitting = false;
   bool _isUnlocking = false;
   bool _didAttemptBiometric = false;
+  String? _errorText;
+
+  bool get _showUnlockFlow {
+    final session = ref.read(sessionProvider);
+    final appLock = ref.read(appLockProvider);
+    return widget.forceUnlock ||
+        (session.isAuthenticated &&
+            appLock.requiresUnlock &&
+            !appLock.isUnlocked);
+  }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final appLock = ref.read(appLockProvider);
-    if (appLock.biometricEnabled && !_didAttemptBiometric) {
+    if (_showUnlockFlow && appLock.biometricEnabled && !_didAttemptBiometric) {
       _didAttemptBiometric = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _unlockWithBiometrics();
@@ -343,8 +300,60 @@ class _SessionUnlockScreenState extends ConsumerState<_SessionUnlockScreen> {
 
   @override
   void dispose() {
+    _usernameController.dispose();
+    _passwordController.dispose();
     _pinController.dispose();
     super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final username = _usernameController.text.trim();
+    final password = _passwordController.text;
+    if (username.isEmpty || password.isEmpty) {
+      setState(() {
+        _errorText = 'Enter your username and password to continue.';
+      });
+      return;
+    }
+
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _isSubmitting = true;
+      _errorText = null;
+    });
+
+    try {
+      final authSession = await ref
+          .read(apiClientProvider)
+          .authenticate(username: username, password: password);
+
+      if (!mounted) {
+        return;
+      }
+
+      ref.read(sessionProvider.notifier).signIn(authSession);
+    } catch (error) {
+      setState(() {
+        _errorText = _friendlyAuthError(error);
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
+  }
+
+  String _friendlyAuthError(Object error) {
+    final message = error.toString();
+    if (message.contains('403')) {
+      return 'This member account is not approved for login yet.';
+    }
+    if (message.contains('401')) {
+      return 'Invalid username or password.';
+    }
+    return 'Sign in failed. Check the backend connection and try again.';
   }
 
   Future<void> _unlockWithBiometrics() async {
@@ -403,428 +412,233 @@ class _SessionUnlockScreenState extends ConsumerState<_SessionUnlockScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final session = ref.watch(sessionProvider);
     final appLock = ref.watch(appLockProvider);
+    final showUnlockFlow =
+        widget.forceUnlock ||
+        (session.isAuthenticated &&
+            appLock.requiresUnlock &&
+            !appLock.isUnlocked);
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFF),
+      backgroundColor: Colors.white,
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(32),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Color(0x140F172A),
-                      blurRadius: 34,
-                      offset: Offset(0, 18),
-                    ),
-                  ],
+        child: Column(
+          children: [
+            Container(height: 24, color: _nimaBrandRed),
+            Expanded(
+              child: DecoratedBox(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Colors.white, _nimaSoftSurface],
+                  ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Center(
+                child: Center(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 18),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 430),
                       child: Column(
                         children: [
-                          const _SynetraLogoBadge(size: 92),
-                          const SizedBox(height: 18),
-                          Text(
-                            'Unlock Synetra',
-                            style: Theme.of(context).textTheme.headlineSmall,
+                          const _NimaBrandLockup(wordmarkWidth: 240),
+                          const SizedBox(height: 28),
+                          _NimaEntryCard(
+                            child:
+                                showUnlockFlow
+                                    ? _buildUnlockPanel(
+                                      context,
+                                      session: session,
+                                      appLock: appLock,
+                                    )
+                                    : _buildLoginPanel(context),
                           ),
-                          const SizedBox(height: 8),
-                          Text(
-                            widget.username.trim().isEmpty
-                                ? 'Resume your ${widget.viewerRole.label.toLowerCase()} session.'
-                                : 'Resume ${widget.username.trim()}',
-                            textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.bodyMedium,
-                          ),
+                          const SizedBox(height: 24),
+                          const _NimaPoweredByFooter(compact: true),
                         ],
                       ),
                     ),
-                    if (appLock.biometricEnabled) ...[
-                      const SizedBox(height: 24),
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton.icon(
-                          onPressed: _isUnlocking ? null : _unlockWithBiometrics,
-                          icon: const Icon(Icons.fingerprint_rounded),
-                          label: const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 14),
-                            child: Text('Unlock with biometrics'),
-                          ),
-                        ),
-                      ),
-                    ],
-                    if (appLock.hasPin) ...[
-                      const SizedBox(height: 20),
-                      TextField(
-                        controller: _pinController,
-                        keyboardType: TextInputType.number,
-                        obscureText: true,
-                        maxLength: 6,
-                        onSubmitted: (_) => _unlockWithPin(),
-                        decoration: const InputDecoration(
-                          labelText: 'App PIN',
-                          prefixIcon: Icon(Icons.pin_outlined),
-                          counterText: '',
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          onPressed: _isUnlocking ? null : _unlockWithPin,
-                          icon: const Icon(Icons.lock_open_rounded),
-                          label: const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 14),
-                            child: Text('Unlock with PIN'),
-                          ),
-                        ),
-                      ),
-                    ],
-                    if (_errorText != null) ...[
-                      const SizedBox(height: 16),
-                      Text(
-                        _errorText!,
-                        style: const TextStyle(
-                          color: Color(0xFFDC2626),
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 22),
-                    TextButton(
-                      onPressed: () {
-                        ref.read(sessionProvider.notifier).signOut();
-                      },
-                      child: const Text('Use another account'),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SynetraLoginScreen extends ConsumerStatefulWidget {
-  const _SynetraLoginScreen();
-
-  @override
-  ConsumerState<_SynetraLoginScreen> createState() =>
-      _SynetraLoginScreenState();
-}
-
-class _SynetraLoginScreenState extends ConsumerState<_SynetraLoginScreen> {
-  final TextEditingController _usernameController = TextEditingController(
-    text: _dummyMemberUsername,
-  );
-  final TextEditingController _passwordController = TextEditingController(
-    text: _dummyMemberPassword,
-  );
-  bool _showPassword = false;
-  bool _isSubmitting = false;
-  String? _errorText;
-
-  @override
-  void dispose() {
-    _usernameController.dispose();
-    _passwordController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _submit() async {
-    final username = _usernameController.text.trim();
-    final password = _passwordController.text;
-    if (username.isEmpty || password.isEmpty) {
-      setState(() {
-        _errorText = 'Enter your username and password to continue.';
-      });
-      return;
-    }
-
-    FocusScope.of(context).unfocus();
-    setState(() {
-      _isSubmitting = true;
-      _errorText = null;
-    });
-
-    try {
-      final authSession = await ref
-          .read(apiClientProvider)
-          .authenticate(username: username, password: password);
-
-      if (!mounted) {
-        return;
-      }
-
-      ref
-          .read(sessionProvider.notifier)
-          .signIn(authSession);
-    } catch (error) {
-      setState(() {
-        _errorText = _friendlyAuthError(error);
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSubmitting = false;
-        });
-      }
-    }
-  }
-
-  String _friendlyAuthError(Object error) {
-    final message = error.toString();
-    if (message.contains('403')) {
-      return 'This member account is not approved for login yet.';
-    }
-    if (message.contains('401')) {
-      return 'Invalid username or password.';
-    }
-    return 'Sign in failed. Check the backend connection and try again.';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFF),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFFF8FAFF), Color(0xFFFFFFFF)],
-          ),
-        ),
-        child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 420),
-                child: Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(32),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x140F172A),
-                        blurRadius: 34,
-                        offset: Offset(0, 18),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Center(
-                        child: Column(
-                          children: [
-                            const _SynetraLogoBadge(size: 92),
-                            const SizedBox(height: 18),
-                            Text(
-                              'Welcome back',
-                              style: Theme.of(context).textTheme.headlineSmall,
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Use one admin suggestion or one member suggestion below to review the connected app quickly.',
-                              textAlign: TextAlign.center,
-                              style: Theme.of(context).textTheme.bodyMedium,
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      const _LoginHintCard(),
-                      const SizedBox(height: 20),
-                      TextField(
-                        controller: _usernameController,
-                        keyboardType: TextInputType.emailAddress,
-                        decoration: const InputDecoration(
-                          labelText: 'Username',
-                          prefixIcon: Icon(Icons.person_outline_rounded),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      TextField(
-                        controller: _passwordController,
-                        obscureText: !_showPassword,
-                        onSubmitted: (_) => _submit(),
-                        decoration: InputDecoration(
-                          labelText: 'Password',
-                          prefixIcon: const Icon(Icons.lock_outline_rounded),
-                          suffixIcon: IconButton(
-                            onPressed: () {
-                              setState(() {
-                                _showPassword = !_showPassword;
-                              });
-                            },
-                            icon: Icon(
-                              _showPassword
-                                  ? Icons.visibility_off_rounded
-                                  : Icons.visibility_rounded,
-                            ),
-                          ),
-                        ),
-                      ),
-                      if (_errorText != null) ...[
-                        const SizedBox(height: 14),
-                        Text(
-                          _errorText!,
-                          style: const TextStyle(
-                            color: Color(0xFFDC2626),
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 22),
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton.icon(
-                          onPressed: _isSubmitting ? null : _submit,
-                          icon: const Icon(Icons.login_rounded),
-                          label: Padding(
-                            padding: EdgeInsets.symmetric(vertical: 14),
-                            child: Text(
-                              _isSubmitting ? 'Signing in...' : 'Login',
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
                   ),
                 ),
               ),
             ),
-          ),
+          ],
         ),
       ),
     );
   }
-}
 
-class _LoginHintCard extends StatelessWidget {
-  const _LoginHintCard();
+  Widget _buildUnlockPanel(
+    BuildContext context, {
+    required AppSessionState session,
+    required AppLockState appLock,
+  }) {
+    final resumeLabel =
+        session.username.trim().isEmpty
+            ? 'Resume your ${session.viewerRole.label.toLowerCase()} session securely.'
+            : 'Continue as ${session.username.trim()} without signing in again.';
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8F5FF),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFE9D5FF)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Login Suggestions',
-            style: TextStyle(
-              color: Color(0xFF6D28D9),
-              fontSize: 14,
-              fontWeight: FontWeight.w800,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Quick unlock',
+          style: TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.w800,
+            color: _nimaInk,
+            height: 1.05,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          resumeLabel,
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: _nimaMuted, height: 1.55),
+        ),
+        if (appLock.biometricEnabled) ...[
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              style: _nimaFilledButtonStyle(),
+              onPressed: _isUnlocking ? null : _unlockWithBiometrics,
+              icon: const Icon(Icons.fingerprint_rounded),
+              label: const Padding(
+                padding: EdgeInsets.symmetric(vertical: 14),
+                child: Text('Unlock with biometrics'),
+              ),
             ),
           ),
-          const SizedBox(height: 10),
-          _LoginSuggestionTile(
-            title: 'Admin',
-            username: _dummyAdminEmail,
-            password: _dummyAdminPassword,
-            subtitle: 'Use this to review admin arena approvals.',
+        ],
+        if (appLock.hasPin) ...[
+          const SizedBox(height: 18),
+          TextField(
+            controller: _pinController,
+            keyboardType: TextInputType.number,
+            obscureText: true,
+            maxLength: 6,
+            onSubmitted: (_) => _unlockWithPin(),
+            decoration: _nimaInputDecoration(
+              labelText: 'Enter PIN',
+              prefixIcon: Icons.pin_outlined,
+            ),
           ),
-          const SizedBox(height: 10),
-          _LoginSuggestionTile(
-            title: 'Member',
-            username: _dummyMemberUsername,
-            password: _dummyMemberPassword,
-            subtitle: 'Approved member account from the backend import.',
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              style: _nimaOutlinedButtonStyle(),
+              onPressed: _isUnlocking ? null : _unlockWithPin,
+              icon: const Icon(Icons.lock_open_rounded),
+              label: const Padding(
+                padding: EdgeInsets.symmetric(vertical: 14),
+                child: Text('Enter PIN'),
+              ),
+            ),
           ),
         ],
-      ),
+        if (_errorText != null) ...[
+          const SizedBox(height: 16),
+          Text(
+            _errorText!,
+            style: const TextStyle(
+              color: Color(0xFFDC2626),
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+        const SizedBox(height: 20),
+        TextButton(
+          onPressed: () {
+            ref.read(sessionProvider.notifier).signOut();
+          },
+          style: TextButton.styleFrom(foregroundColor: _nimaBrandRedDark),
+          child: const Text('Use another account'),
+        ),
+      ],
     );
   }
-}
 
-class _LoginSuggestionTile extends StatelessWidget {
-  const _LoginSuggestionTile({
-    required this.title,
-    required this.username,
-    required this.password,
-    required this.subtitle,
-  });
-
-  final String title;
-  final String username;
-  final String password;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE9D5FF)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(
-              color: Color(0xFF171717),
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
+  Widget _buildLoginPanel(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Member login',
+          style: TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.w800,
+            color: _nimaInk,
+            height: 1.05,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          'Sign in with your registered backend credentials to access the correct admin, member, or vendor view for your account.',
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: _nimaMuted, height: 1.55),
+        ),
+        const SizedBox(height: 22),
+        TextField(
+          controller: _usernameController,
+          keyboardType: TextInputType.emailAddress,
+          decoration: _nimaInputDecoration(
+            labelText: 'Username',
+            prefixIcon: Icons.person_outline_rounded,
+          ),
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _passwordController,
+          obscureText: !_showPassword,
+          onSubmitted: (_) => _submit(),
+          decoration: _nimaInputDecoration(
+            labelText: 'Password',
+            prefixIcon: Icons.lock_outline_rounded,
+            suffixIcon: IconButton(
+              onPressed: () {
+                setState(() {
+                  _showPassword = !_showPassword;
+                });
+              },
+              icon: Icon(
+                _showPassword
+                    ? Icons.visibility_off_rounded
+                    : Icons.visibility_rounded,
+              ),
             ),
           ),
-          const SizedBox(height: 8),
+        ),
+        if (_errorText != null) ...[
+          const SizedBox(height: 14),
           Text(
-            'Username: $username',
+            _errorText!,
             style: const TextStyle(
-              color: Color(0xFF171717),
+              color: Color(0xFFDC2626),
               fontSize: 13,
               fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Password: $password',
-            style: const TextStyle(
-              color: Color(0xFF171717),
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            subtitle,
-            style: const TextStyle(
-              color: Color(0xFF6B7280),
-              fontSize: 12,
-              height: 1.35,
             ),
           ),
         ],
-      ),
+        const SizedBox(height: 22),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            style: _nimaFilledButtonStyle(),
+            onPressed: _isSubmitting ? null : _submit,
+            icon: const Icon(Icons.login_rounded),
+            label: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              child: Text(_isSubmitting ? 'Signing in...' : 'Login'),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -907,6 +721,8 @@ class _SynetraAdminShellState extends ConsumerState<SynetraAdminShell> {
       aboutMe:
           viewerRole.isAdmin
               ? 'Managing association operations, member access, and event coordination in this review build.'
+              : viewerRole.isVendor
+              ? 'Vendor partner keeping profile details, catalogue information, and association updates current in this review build.'
               : 'Association member exploring updates, directory details, and upcoming events in this review build.',
     );
   }
@@ -1473,7 +1289,11 @@ class _AdminDashboardViewState extends State<_AdminDashboardView> {
                         else if (widget.selectedArena == AppArena.timeline)
                           const TimelinePanel()
                         else if (widget.selectedArena == AppArena.vendor)
-                          const VendorArenaPanel()
+                          VendorArenaPanel(
+                            viewerRole: widget.viewerRole,
+                            onOpenProfile:
+                                () => widget.onArenaSelected(AppArena.profile),
+                          )
                         else if (widget.selectedArena == AppArena.profile)
                           _ProfileArenaView(
                             viewerRole: widget.viewerRole,
@@ -1890,7 +1710,12 @@ class _AdminDrawer extends StatelessWidget {
 String _displayNameFromUsername(String username, AppViewerRole viewerRole) {
   final trimmed = username.trim();
   if (trimmed.isEmpty) {
-    return viewerRole.isAdmin ? 'Admin User' : 'Member User';
+    return switch (viewerRole) {
+      AppViewerRole.admin => 'Admin User',
+      AppViewerRole.member => 'Member User',
+      AppViewerRole.vendor => 'Vendor User',
+      AppViewerRole.viewOnly => 'User',
+    };
   }
 
   final localPart = trimmed.contains('@') ? trimmed.split('@').first : trimmed;
@@ -2076,9 +1901,9 @@ class _ProfileArenaViewState extends ConsumerState<_ProfileArenaView> {
     final pin = _pinController.text.trim();
     final confirmPin = _confirmPinController.text.trim();
     if (pin.length < 4 || pin.length > 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Use a 4 to 6 digit PIN.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Use a 4 to 6 digit PIN.')));
       return;
     }
     if (pin != confirmPin) {
@@ -2173,6 +1998,8 @@ class _ProfileArenaViewState extends ConsumerState<_ProfileArenaView> {
                         Text(
                           widget.viewerRole.isAdmin
                               ? 'Admin profile'
+                              : widget.viewerRole.isVendor
+                              ? 'Vendor profile'
                               : 'Member profile',
                           style: const TextStyle(
                             fontSize: 13,
@@ -2395,7 +2222,8 @@ class _ProfileArenaViewState extends ConsumerState<_ProfileArenaView> {
                 obscureText: true,
                 maxLength: 6,
                 decoration: InputDecoration(
-                  labelText: appLock.hasPin ? 'Change app PIN' : 'Create app PIN',
+                  labelText:
+                      appLock.hasPin ? 'Change app PIN' : 'Create app PIN',
                   prefixIcon: const Icon(Icons.pin_outlined),
                   counterText: '',
                 ),
@@ -2442,7 +2270,9 @@ class _ProfileArenaViewState extends ConsumerState<_ProfileArenaView> {
                   if (appLock.requiresUnlock)
                     OutlinedButton.icon(
                       onPressed: () {
-                        ref.read(appLockProvider.notifier).lockForCurrentSession();
+                        ref
+                            .read(appLockProvider.notifier)
+                            .lockForCurrentSession();
                       },
                       icon: const Icon(Icons.lock_rounded),
                       label: const Text('Lock now'),
@@ -2509,6 +2339,17 @@ class _HeroSection extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (isDashboard) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.94),
+                borderRadius: BorderRadius.circular(22),
+              ),
+              child: const _NimaBrandLockup(wordmarkWidth: 122, compact: true),
+            ),
+            const SizedBox(height: 14),
+          ],
           Text(
             isDashboard
                 ? AppArena.dashboard.label
@@ -2753,34 +2594,268 @@ class _SynetraLogoBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final image = ClipRRect(
-      borderRadius: BorderRadius.circular(size * 0.28),
-      child: Image.asset(
-        _synetraLogoAsset,
-        width: size,
-        height: size,
-        fit: BoxFit.cover,
-      ),
-    );
-
     return Container(
       width: size,
       height: size,
-      padding: const EdgeInsets.all(2),
+      padding: EdgeInsets.all(size * 0.14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(size * 0.32),
+        border: Border.all(color: const Color(0xFFF5D0D2)),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x26000000),
+            color: Color(0x14000000),
             blurRadius: 16,
             offset: Offset(0, 8),
           ),
         ],
       ),
-      child: image,
+      child: FittedBox(
+        fit: BoxFit.contain,
+        child: SizedBox(width: size * 0.86, child: const _NimaWordmark()),
+      ),
     );
   }
+}
+
+class _NimaEntryCard extends StatelessWidget {
+  const _NimaEntryCard({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: const Color(0xFFF0DCDD)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x12000000),
+            blurRadius: 24,
+            offset: Offset(0, 14),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+}
+
+class _NimaBrandLockup extends StatelessWidget {
+  const _NimaBrandLockup({this.wordmarkWidth = 240, this.compact = false});
+
+  final double wordmarkWidth;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        SizedBox(width: wordmarkWidth, child: const _NimaWordmark()),
+        SizedBox(height: compact ? 10 : 14),
+        Text(
+          "Nashik Industries &\nManufacturers' Association",
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: _nimaBrandRed,
+            fontSize: compact ? 18 : 22,
+            fontWeight: FontWeight.w800,
+            height: 1.18,
+            letterSpacing: 0.2,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _NimaPoweredByFooter extends StatelessWidget {
+  const _NimaPoweredByFooter({this.compact = false});
+
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(
+          'Powered by Synetra',
+          style: TextStyle(
+            color: const Color(0xFF4B5563),
+            fontSize: compact ? 14 : 16,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'v1.0.0',
+          style: TextStyle(
+            color: const Color(0xFF6B7280),
+            fontSize: compact ? 12 : 14,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _NimaLoadingDots extends StatelessWidget {
+  const _NimaLoadingDots();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: const [
+        _NimaDot(),
+        SizedBox(width: 10),
+        _NimaDot(),
+        SizedBox(width: 10),
+        _NimaDot(),
+      ],
+    );
+  }
+}
+
+class _NimaDot extends StatelessWidget {
+  const _NimaDot();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 10,
+      height: 10,
+      decoration: const BoxDecoration(
+        color: _nimaBrandRed,
+        shape: BoxShape.circle,
+      ),
+    );
+  }
+}
+
+class _NimaWordmark extends StatelessWidget {
+  const _NimaWordmark();
+
+  @override
+  Widget build(BuildContext context) {
+    return const AspectRatio(
+      aspectRatio: 4.8,
+      child: CustomPaint(painter: _NimaWordmarkPainter()),
+    );
+  }
+}
+
+class _NimaWordmarkPainter extends CustomPainter {
+  const _NimaWordmarkPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint =
+        Paint()
+          ..color = _nimaBrandRed
+          ..style = PaintingStyle.fill;
+    final h = size.height;
+    final gap = size.width * 0.035;
+    final segmentWidth = (size.width - gap * 3) / 4;
+
+    void rect(double x, double y, double width, double height) {
+      canvas.drawRect(Rect.fromLTWH(x, y, width, height), paint);
+    }
+
+    final nX = 0.0;
+    rect(nX, h * 0.22, segmentWidth * 0.24, h * 0.58);
+    rect(nX + segmentWidth * 0.78, h * 0.22, segmentWidth * 0.22, h * 0.58);
+    final nPath =
+        Path()
+          ..moveTo(nX + segmentWidth * 0.22, h * 0.8)
+          ..lineTo(nX + segmentWidth * 0.78, h * 0.8)
+          ..lineTo(nX + segmentWidth * 0.22, h * 0.22)
+          ..close();
+    canvas.drawPath(nPath, paint);
+
+    final iX = segmentWidth + gap;
+    rect(iX + segmentWidth * 0.38, 0, segmentWidth * 0.24, h * 0.18);
+    rect(iX + segmentWidth * 0.38, h * 0.22, segmentWidth * 0.24, h * 0.58);
+
+    final mX = (segmentWidth + gap) * 2;
+    rect(mX, h * 0.22, segmentWidth * 0.18, h * 0.58);
+    rect(mX + segmentWidth * 0.82, h * 0.22, segmentWidth * 0.18, h * 0.58);
+    final mLeft =
+        Path()
+          ..moveTo(mX + segmentWidth * 0.18, h * 0.8)
+          ..lineTo(mX + segmentWidth * 0.5, h * 0.22)
+          ..lineTo(mX + segmentWidth * 0.5, h * 0.8)
+          ..close();
+    final mRight =
+        Path()
+          ..moveTo(mX + segmentWidth * 0.5, h * 0.8)
+          ..lineTo(mX + segmentWidth * 0.5, h * 0.22)
+          ..lineTo(mX + segmentWidth * 0.82, h * 0.8)
+          ..close();
+    canvas.drawPath(mLeft, paint);
+    canvas.drawPath(mRight, paint);
+
+    final aX = (segmentWidth + gap) * 3;
+    rect(aX + segmentWidth * 0.1, h * 0.7, segmentWidth * 0.72, h * 0.1);
+    rect(aX + segmentWidth * 0.26, h * 0.54, segmentWidth * 0.42, h * 0.08);
+    final aTop =
+        Path()
+          ..moveTo(aX, h * 0.5)
+          ..lineTo(aX + segmentWidth * 0.46, h * 0.22)
+          ..lineTo(aX + segmentWidth * 0.92, h * 0.5)
+          ..close();
+    canvas.drawPath(aTop, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+InputDecoration _nimaInputDecoration({
+  required String labelText,
+  required IconData prefixIcon,
+  Widget? suffixIcon,
+}) {
+  OutlineInputBorder border(Color color) => OutlineInputBorder(
+    borderRadius: BorderRadius.circular(18),
+    borderSide: BorderSide(color: color),
+  );
+
+  return InputDecoration(
+    labelText: labelText,
+    prefixIcon: Icon(prefixIcon, color: _nimaBrandRedDark),
+    suffixIcon: suffixIcon,
+    filled: true,
+    fillColor: const Color(0xFFFFFBFB),
+    labelStyle: const TextStyle(color: _nimaMuted, fontWeight: FontWeight.w600),
+    enabledBorder: border(const Color(0xFFEBC7C9)),
+    focusedBorder: border(_nimaBrandRed),
+    border: border(const Color(0xFFEBC7C9)),
+  );
+}
+
+ButtonStyle _nimaFilledButtonStyle() {
+  return FilledButton.styleFrom(
+    backgroundColor: _nimaBrandRed,
+    foregroundColor: Colors.white,
+    textStyle: const TextStyle(fontWeight: FontWeight.w700),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+  );
+}
+
+ButtonStyle _nimaOutlinedButtonStyle() {
+  return OutlinedButton.styleFrom(
+    foregroundColor: _nimaBrandRedDark,
+    side: const BorderSide(color: Color(0xFFE1B6B9)),
+    textStyle: const TextStyle(fontWeight: FontWeight.w700),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+  );
 }
 
 class _TopBarIconButton extends StatelessWidget {

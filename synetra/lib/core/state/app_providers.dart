@@ -214,7 +214,8 @@ class SessionController extends Notifier<AppSessionState> {
         return refreshedToken != null;
       }
 
-      final authSession = await ref.read(apiClientProvider).fetchCurrentSession();
+      final authSession =
+          await ref.read(apiClientProvider).fetchCurrentSession();
       syncSession(authSession);
       return true;
     } catch (_) {
@@ -307,10 +308,13 @@ final initialAppLockStateProvider = Provider<AppLockState>((ref) {
 });
 
 final apiClientProvider = Provider<SynetraApiClient>((ref) {
-  final authToken = ref.watch(sessionProvider.select((session) => session.authToken));
+  final authToken = ref.watch(
+    sessionProvider.select((session) => session.authToken),
+  );
   return SynetraApiClient(
     authToken: authToken,
-    refreshAuthToken: () => ref.read(sessionProvider.notifier).refreshAccessToken(),
+    refreshAuthToken:
+        () => ref.read(sessionProvider.notifier).refreshAccessToken(),
   );
 });
 
@@ -325,7 +329,8 @@ class AppLockController extends Notifier<AppLockState> {
   Future<bool> enableBiometrics() async {
     final localAuth = ref.read(localAuthenticationProvider);
     final canUseBiometrics =
-        await localAuth.canCheckBiometrics || await localAuth.isDeviceSupported();
+        await localAuth.canCheckBiometrics ||
+        await localAuth.isDeviceSupported();
     if (!canUseBiometrics) {
       return false;
     }
@@ -355,7 +360,8 @@ class AppLockController extends Notifier<AppLockState> {
 
   Future<bool> verifyPin(String pin) async {
     final secureStorage = ref.read(secureStorageProvider);
-    final savedPin = await secureStorage.read(key: _AppLockStorageKeys.pin) ?? '';
+    final savedPin =
+        await secureStorage.read(key: _AppLockStorageKeys.pin) ?? '';
     if (savedPin == pin && pin.isNotEmpty) {
       state = state.copyWith(isUnlocked: true);
       return true;
@@ -366,7 +372,7 @@ class AppLockController extends Notifier<AppLockState> {
   Future<bool> unlockWithBiometrics() async {
     final localAuth = ref.read(localAuthenticationProvider);
     final didAuthenticate = await localAuth.authenticate(
-      localizedReason: 'Unlock Synetra',
+      localizedReason: 'Unlock NIMA',
       options: const AuthenticationOptions(
         biometricOnly: true,
         stickyAuth: true,
