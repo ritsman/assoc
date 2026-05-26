@@ -6,6 +6,11 @@ import {
   isDefaultMemberPasswordHash,
   verifyPassword,
 } from "../lib/auth.js";
+import {
+  createUserSession,
+  requireAuthenticatedSession,
+  revokeSessionById,
+} from "../lib/session-auth.js";
 
 const router = Router();
 
@@ -32,8 +37,18 @@ function resolveViewerRole(user) {
   return "viewOnly";
 }
 
-function serializeSession(user) {
+function serializeSession(user, session = null) {
   return {
+    ...(session
+      ? {
+          auth: {
+            ...(session.token ? { token: session.token } : {}),
+            sessionId: session.session.id,
+            expiresAt: session.session.expiresAt,
+            lastSeenAt: session.session.lastSeenAt,
+          },
+        }
+      : {}),
     user: {
       id: user.id,
       email: user.email,
@@ -84,7 +99,23 @@ router.post("/login", async (req, res) => {
     });
   }
 
-  return res.json(serializeSession(user));
+  const session = await createUserSession({ userId: user.id, req });
+
+  return res.json(serializeSession(user, session));
+});
+
+router.get("/me", requireAuthenticatedSession, async (req, res) => {
+  return res.json(
+    serializeSession(req.auth.user, {
+      token: req.auth.token,
+      session: req.auth.session,
+    }),
+  );
+});
+
+router.post("/logout", requireAuthenticatedSession, async (req, res) => {
+  await revokeSessionById(req.auth.session.id);
+  return res.json({ ok: true });
 });
 
 router.post("/change-password", async (req, res) => {

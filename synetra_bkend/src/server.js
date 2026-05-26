@@ -13,6 +13,7 @@ import appBannersRouter from "./routes/app-banners.js";
 import authRouter from "./routes/auth.js";
 import usersRouter from "./routes/users.js";
 import vendorsRouter from "./routes/vendors.js";
+import { attachSessionContext } from "./lib/session-auth.js";
 
 const app = express();
 const port = Number(process.env.PORT || 8083);
@@ -58,6 +59,7 @@ app.use(
 app.use("/uploads", express.static(uploadsDirPath));
 app.use(express.json({ limit: "25mb" }));
 app.use(express.urlencoded({ extended: true, limit: "25mb" }));
+app.use("/api", attachSessionContext);
 
 app.get("/api/health", (_req, res) => {
   res.json({

@@ -259,10 +259,28 @@ model User {
   vendor         Vendor?        @relation(fields: [vendorId], references: [id], onDelete: SetNull)
   approvedBy     User?          @relation("UserApprovals", fields: [approvedById], references: [id], onDelete: SetNull)
   approvedUsers  User[]         @relation("UserApprovals")
+  sessions       UserSession[]
 
   @@index([associationId])
   @@index([approvalStatus])
   @@index([isAdmin, isMember, isVendor])
+}
+
+model UserSession {
+  id         String   @id @default(cuid())
+  userId      String
+  tokenHash   String   @unique
+  deviceInfo  String?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([expiresAt, revokedAt])
 }
 
 model Vendor {
