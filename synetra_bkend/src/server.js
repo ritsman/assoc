@@ -13,6 +13,7 @@ import appBannersRouter from "./routes/app-banners.js";
 import authRouter from "./routes/auth.js";
 import usersRouter from "./routes/users.js";
 import vendorsRouter from "./routes/vendors.js";
+import { ensureBootstrapAdmin } from "./lib/bootstrap-admin.js";
 import { attachSessionContext } from "./lib/session-auth.js";
 
 const app = express();
@@ -20,10 +21,9 @@ const port = Number(process.env.PORT || 8083);
 const currentFilePath = fileURLToPath(import.meta.url);
 const currentDirPath = path.dirname(currentFilePath);
 const uploadsDirPath = path.resolve(currentDirPath, "../uploads");
-const configuredOrigins =
-  process.env.CORS_ORIGIN?.split(",")
-    .map((origin) => origin.trim())
-    .filter(Boolean) || ["*"];
+const configuredOrigins = process.env.CORS_ORIGIN?.split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean) || ["*"];
 
 app.set("trust proxy", true);
 
@@ -79,6 +79,15 @@ app.use("/api/app-banners", appBannersRouter);
 app.use("/api/users", usersRouter);
 app.use("/api/vendors", vendorsRouter);
 
-app.listen(port, () => {
-  console.log(`Synetra backend listening on port ${port}`);
+async function startServer() {
+  await ensureBootstrapAdmin();
+
+  app.listen(port, () => {
+    console.log(`Synetra backend listening on port ${port}`);
+  });
+}
+
+startServer().catch((error) => {
+  console.error("Failed to start Synetra backend", error);
+  process.exit(1);
 });

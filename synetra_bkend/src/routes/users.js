@@ -3,7 +3,10 @@ import prismaPkg from "@prisma/client";
 import { z } from "zod";
 import { buildDefaultMemberPasswordHash } from "../lib/auth.js";
 import { prisma } from "../lib/prisma.js";
-import { requireAdminUser, requireAuthenticatedSession } from "../lib/session-auth.js";
+import {
+  requireAdminUser,
+  requireAuthenticatedSession,
+} from "../lib/session-auth.js";
 
 const router = Router();
 const { ApprovalStatus, MemberStatus } = prismaPkg;
@@ -72,24 +75,29 @@ function resolveViewerRole(user) {
   return "viewOnly";
 }
 
-router.get("/", async (req, res) => {
-  const { associationId, role } = req.query;
+router.get(
+  "/",
+  requireAuthenticatedSession,
+  requireAdminUser,
+  async (req, res) => {
+    const { associationId, role } = req.query;
 
-  const users = await prisma.user.findMany({
-    where: {
-      ...(associationId ? { associationId: String(associationId) } : {}),
-      ...(role === "member" ? { isMember: true } : {}),
-      ...(role === "vendor" ? { isVendor: true } : {}),
-    },
-    include: {
-      member: true,
-      vendor: true,
-    },
-    orderBy: { createdAt: "desc" },
-  });
+    const users = await prisma.user.findMany({
+      where: {
+        ...(associationId ? { associationId: String(associationId) } : {}),
+        ...(role === "member" ? { isMember: true } : {}),
+        ...(role === "vendor" ? { isVendor: true } : {}),
+      },
+      include: {
+        member: true,
+        vendor: true,
+      },
+      orderBy: { createdAt: "desc" },
+    });
 
-  res.json({ users });
-});
+    res.json({ users });
+  },
+);
 
 router.get(
   "/session-report",
@@ -101,7 +109,9 @@ router.get(
       Math.min(120, Number(req.query.activeWindowMinutes || 5)),
     );
     const now = new Date();
-    const activeSince = new Date(now.getTime() - activeWindowMinutes * 60 * 1000);
+    const activeSince = new Date(
+      now.getTime() - activeWindowMinutes * 60 * 1000,
+    );
     const associationId = req.auth.user.associationId || undefined;
 
     const sessions = await prisma.userSession.findMany({
@@ -123,8 +133,12 @@ router.get(
     });
 
     const loggedInUserIds = new Set(sessions.map((session) => session.userId));
-    const activeSessions = sessions.filter((session) => session.lastSeenAt >= activeSince);
-    const activeUserIds = new Set(activeSessions.map((session) => session.userId));
+    const activeSessions = sessions.filter(
+      (session) => session.lastSeenAt >= activeSince,
+    );
+    const activeUserIds = new Set(
+      activeSessions.map((session) => session.userId),
+    );
     const todayStart = new Date(
       Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
     );
@@ -136,7 +150,9 @@ router.get(
         activeUsers: activeUserIds.size,
         totalSessions: sessions.length,
         activeSessions: activeSessions.length,
-        sessionsToday: sessions.filter((session) => session.createdAt >= todayStart).length,
+        sessionsToday: sessions.filter(
+          (session) => session.createdAt >= todayStart,
+        ).length,
       },
       sessions: sessions.map((session) => ({
         sessionId: session.id,
@@ -160,53 +176,60 @@ router.get(
   },
 );
 
-router.patch("/:id/access", async (req, res) => {
-  const parsed = accessStatusSchema.safeParse(req.body);
+router.patch(
+  "/:id/access",
+  requireAuthenticatedSession,
+  requireAdminUser,
+  async (req, res) => {
+    const parsed = accessStatusSchema.safeParse(req.body);
 
-  if (!parsed.success) {
-    return res.status(400).json({
-      error: "Invalid user access payload",
-      details: parsed.error.flatten(),
-    });
-  }
-
-  const user = await prisma.user.findUnique({
-    where: { id: req.params.id },
-  });
-
-  if (!user) {
-    return res.status(404).json({ error: "User not found" });
-  }
-
-  const { user: userData, memberStatus } = buildAccessUpdate(parsed.data.accessStatus);
-
-  const updatedUser = await prisma.$transaction(async (tx) => {
-    const nextUser = await tx.user.update({
-      where: { id: req.params.id },
-      data: {
-        ...userData,
-        ...(parsed.data.accessStatus === "APPROVED" && user.isMember
-          ? { passwordHash: await buildDefaultMemberPasswordHash() }
-          : {}),
-      },
-      include: {
-        member: true,
-      },
-    });
-
-    if (nextUser.memberId) {
-      await tx.member.update({
-        where: { id: nextUser.memberId },
-        data: {
-          membershipStatus: memberStatus,
-        },
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: "Invalid user access payload",
+        details: parsed.error.flatten(),
       });
     }
 
-    return nextUser;
-  });
+    const user = await prisma.user.findUnique({
+      where: { id: req.params.id },
+    });
 
-  return res.json({ user: updatedUser });
-});
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const { user: userData, memberStatus } = buildAccessUpdate(
+      parsed.data.accessStatus,
+    );
+
+    const updatedUser = await prisma.$transaction(async (tx) => {
+      const nextUser = await tx.user.update({
+        where: { id: req.params.id },
+        data: {
+          ...userData,
+          ...(parsed.data.accessStatus === "APPROVED" && user.isMember
+            ? { passwordHash: await buildDefaultMemberPasswordHash() }
+            : {}),
+        },
+        include: {
+          member: true,
+        },
+      });
+
+      if (nextUser.memberId) {
+        await tx.member.update({
+          where: { id: nextUser.memberId },
+          data: {
+            membershipStatus: memberStatus,
+          },
+        });
+      }
+
+      return nextUser;
+    });
+
+    return res.json({ user: updatedUser });
+  },
+);
 
 export default router;
