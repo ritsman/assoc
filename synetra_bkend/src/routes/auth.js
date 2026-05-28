@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import {
   hashPassword,
-  isDefaultMemberPasswordHash,
+  isManagedDefaultPasswordHash,
   verifyPassword,
 } from "../lib/auth.js";
 import {
@@ -74,7 +74,7 @@ function serializeSession(user, session = null) {
       associationId: user.associationId,
       memberId: user.memberId,
       viewerRole: resolveViewerRole(user),
-      mustChangePassword: isDefaultMemberPasswordHash(user.passwordHash),
+      mustChangePassword: isManagedDefaultPasswordHash(user.passwordHash),
       approvalStatus: user.approvalStatus,
       isActive: user.isActive,
     },

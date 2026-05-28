@@ -11,10 +11,13 @@ const scrypt = promisify(scryptCallback);
 export const PENDING_PASSWORD_PREFIX = "pending-password-setup";
 const PASSWORD_SCHEME = "password";
 const DEFAULT_MEMBER_PASSWORD_SCHEME = "default-member";
+const DEFAULT_VENDOR_PASSWORD_SCHEME = "default-vendor";
 export const DEFAULT_MEMBER_PASSWORD =
   process.env.DEFAULT_MEMBER_PASSWORD || "Member@123";
 export const BULK_MEMBER_DEFAULT_PASSWORD =
   process.env.BULK_MEMBER_DEFAULT_PASSWORD || "Nima@123";
+export const DEFAULT_VENDOR_PASSWORD =
+  process.env.DEFAULT_VENDOR_PASSWORD || "Vendor@123";
 const DEFAULT_ACCESS_TOKEN_TTL_MINUTES = Number(
   process.env.AUTH_ACCESS_TOKEN_TTL_MINUTES || 15,
 );
@@ -42,6 +45,12 @@ export async function buildDefaultMemberPasswordHash(
   return hashWithScheme(password, DEFAULT_MEMBER_PASSWORD_SCHEME);
 }
 
+export async function buildDefaultVendorPasswordHash(
+  password = DEFAULT_VENDOR_PASSWORD,
+) {
+  return hashWithScheme(password, DEFAULT_VENDOR_PASSWORD_SCHEME);
+}
+
 export async function verifyPassword(password, storedHash) {
   if (!storedHash || storedHash.startsWith(`${PENDING_PASSWORD_PREFIX}:`)) {
     return false;
@@ -63,6 +72,17 @@ export async function verifyPassword(password, storedHash) {
 
 export function isDefaultMemberPasswordHash(storedHash) {
   return storedHash.startsWith(`${DEFAULT_MEMBER_PASSWORD_SCHEME}$`);
+}
+
+export function isDefaultVendorPasswordHash(storedHash) {
+  return storedHash.startsWith(`${DEFAULT_VENDOR_PASSWORD_SCHEME}$`);
+}
+
+export function isManagedDefaultPasswordHash(storedHash) {
+  return (
+    isDefaultMemberPasswordHash(storedHash) ||
+    isDefaultVendorPasswordHash(storedHash)
+  );
 }
 
 export function createSessionToken() {

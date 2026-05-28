@@ -1,7 +1,7 @@
 import { Router } from "express";
 import prismaPkg from "@prisma/client";
 import { z } from "zod";
-import { buildPendingPasswordHash } from "../lib/auth.js";
+import { buildDefaultVendorPasswordHash } from "../lib/auth.js";
 import { prisma } from "../lib/prisma.js";
 
 const router = Router();
@@ -265,6 +265,9 @@ async function syncVendorUsers(tx, vendor, loginEmails) {
         data: {
           ...userPayload,
           ...accessUpdate,
+          ...(existingUser.passwordHash?.startsWith("pending-password-setup:")
+            ? { passwordHash: await buildDefaultVendorPasswordHash() }
+            : {}),
           isActive: accessUpdate.isActive ?? true,
         },
       });
@@ -272,7 +275,7 @@ async function syncVendorUsers(tx, vendor, loginEmails) {
       await tx.user.create({
         data: {
           ...userPayload,
-          passwordHash: buildPendingPasswordHash(),
+          passwordHash: await buildDefaultVendorPasswordHash(),
           ...accessUpdate,
           isActive: accessUpdate.isActive ?? true,
         },
