@@ -692,7 +692,15 @@ router.patch("/:id/access", async (req, res) => {
 });
 
 router.delete("/:id", async (req, res) => {
-  await prisma.$transaction(async (tx) => {
+  const deleted = await prisma.$transaction(async (tx) => {
+    const member = await tx.member.findUnique({
+      where: { id: req.params.id },
+    });
+
+    if (!member) {
+      return false;
+    }
+
     const linkedUser = await tx.user.findFirst({
       where: { memberId: req.params.id },
     });
@@ -702,7 +710,7 @@ router.delete("/:id", async (req, res) => {
     });
 
     if (!linkedUser) {
-      return;
+      return true;
     }
 
     if (linkedUser.isAdmin || linkedUser.isVendor) {
@@ -713,13 +721,19 @@ router.delete("/:id", async (req, res) => {
           memberId: null,
         },
       });
-      return;
+      return true;
     }
 
     await tx.user.delete({
       where: { id: linkedUser.id },
     });
+
+    return true;
   });
+
+  if (!deleted) {
+    return res.status(404).json({ error: "Member not found" });
+  }
 
   return res.status(204).send();
 });
