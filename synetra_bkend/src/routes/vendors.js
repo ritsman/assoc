@@ -3,6 +3,7 @@ import prismaPkg from "@prisma/client";
 import { z } from "zod";
 import { buildDefaultVendorPasswordHash } from "../lib/auth.js";
 import { prisma } from "../lib/prisma.js";
+import { syncVendorTaxonomyFromVendorInput } from "../lib/vendor-taxonomy.js";
 
 const router = Router();
 const { ApprovalStatus, PaymentStatus, Prisma, VendorStatus } = prismaPkg;
@@ -392,6 +393,12 @@ router.post("/", async (req, res) => {
         include: vendorInclude,
       });
 
+      await syncVendorTaxonomyFromVendorInput(
+        tx,
+        createdVendor.associationId,
+        createdVendor.category,
+        createdVendor.vendorType,
+      );
       await syncVendorUsers(tx, createdVendor, loginEmails);
 
       return tx.vendor.findUnique({
@@ -469,6 +476,12 @@ router.patch("/:id", async (req, res) => {
         include: vendorInclude,
       });
 
+      await syncVendorTaxonomyFromVendorInput(
+        tx,
+        nextVendor.associationId,
+        nextVendor.category,
+        nextVendor.vendorType,
+      );
       await syncVendorUsers(tx, nextVendor, loginEmails);
 
       return tx.vendor.findUnique({

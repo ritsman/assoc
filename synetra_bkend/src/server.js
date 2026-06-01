@@ -15,6 +15,8 @@ import usersRouter from "./routes/users.js";
 import vendorsRouter from "./routes/vendors.js";
 import { ensureBootstrapAdmin } from "./lib/bootstrap-admin.js";
 import { attachSessionContext } from "./lib/session-auth.js";
+import vendorTaxonomyRouter from "./routes/vendor-taxonomy.js";
+import { backfillVendorTaxonomy } from "./lib/vendor-taxonomy.js";
 
 const app = express();
 const port = Number(process.env.PORT || 8083);
@@ -78,9 +80,15 @@ app.use("/api/timeline-posts", timelinePostsRouter);
 app.use("/api/app-banners", appBannersRouter);
 app.use("/api/users", usersRouter);
 app.use("/api/vendors", vendorsRouter);
+app.use("/api/vendor-taxonomy", vendorTaxonomyRouter);
 
 async function startServer() {
   await ensureBootstrapAdmin();
+  try {
+    await backfillVendorTaxonomy();
+  } catch (error) {
+    console.error("Vendor taxonomy backfill skipped", error);
+  }
 
   app.listen(port, () => {
     console.log(`Synetra backend listening on port ${port}`);

@@ -44,6 +44,8 @@ model Association {
   appBanners         AppBanner[]
   eventTypes         AssociationEventType[]
   events             AssociationEvent[]
+  vendorCategories   VendorCategory[]
+  vendorSubCategories VendorSubCategory[]
 }
 
 model AssociationAppAccess {
@@ -324,6 +326,35 @@ model Vendor {
   @@unique([associationId, email])
   @@index([associationId, createdAt])
   @@index([associationId, status])
+}
+
+model VendorCategory {
+  id               String              @id @default(cuid())
+  associationId    String
+  name             String
+  displayOrder     Int                 @default(0)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  association      Association         @relation(fields: [associationId], references: [id], onDelete: Cascade)
+  subCategories    VendorSubCategory[]
+
+  @@unique([associationId, name])
+  @@index([associationId, displayOrder])
+}
+
+model VendorSubCategory {
+  id               String         @id @default(cuid())
+  associationId    String
+  categoryId       String
+  name             String
+  displayOrder     Int            @default(0)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  association      Association    @relation(fields: [associationId], references: [id], onDelete: Cascade)
+  category         VendorCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([categoryId, name])
+  @@index([associationId, categoryId, displayOrder])
 }
 
 model TimelinePost {

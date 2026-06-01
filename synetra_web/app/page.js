@@ -1601,6 +1601,111 @@ function buildVendorRegistrationForm(vendor) {
   };
 }
 
+function isLikelyEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
+function isLikelyUrl(value) {
+  if (!value.trim()) {
+    return true;
+  }
+
+  try {
+    const parsed = new URL(value.trim());
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function getVendorRegistrationValidationError(formData, subCategories) {
+  if (!formData.company.trim()) {
+    return "Company name is required before saving a vendor record.";
+  }
+  if (!formData.contactPerson.trim()) {
+    return "Contact person name is required before saving a vendor record.";
+  }
+  if (!formData.phone.trim()) {
+    return "Mobile number is required before saving a vendor record.";
+  }
+  if (!/^\d{10,15}$/.test(formData.phone.trim())) {
+    return "Use a 10 to 15 digit mobile number for the vendor contact.";
+  }
+  if (!formData.email.trim()) {
+    return "Contact email is required before saving a vendor record.";
+  }
+  if (!isLikelyEmail(formData.email)) {
+    return "Enter a valid contact email address for the vendor.";
+  }
+  if (!formData.primaryLoginEmail.trim()) {
+    return "Primary login ID is required for vendor app access.";
+  }
+  if (!isLikelyEmail(formData.primaryLoginEmail)) {
+    return "Enter a valid primary login email address.";
+  }
+  if (
+    formData.secondaryLoginEmail.trim() &&
+    !isLikelyEmail(formData.secondaryLoginEmail)
+  ) {
+    return "Enter a valid secondary login email address or leave it blank.";
+  }
+  if (
+    formData.secondaryLoginEmail.trim() &&
+    formData.secondaryLoginEmail.trim().toLowerCase() ===
+      formData.primaryLoginEmail.trim().toLowerCase()
+  ) {
+    return "Primary and secondary login IDs must be different.";
+  }
+  if (!formData.category.trim()) {
+    return "Select a vendor category before saving.";
+  }
+  if (!formData.subCategory.trim()) {
+    return "Select a vendor sub category before saving.";
+  }
+  if (
+    Array.isArray(subCategories) &&
+    subCategories.length > 0 &&
+    !subCategories.includes(formData.subCategory)
+  ) {
+    return "Choose a sub category from the selected vendor category list.";
+  }
+  if (!formData.address.trim()) {
+    return "Address is required before saving a vendor record.";
+  }
+  if (formData.country === "India" && !formData.state.trim()) {
+    return "Select a state for vendors registered in India.";
+  }
+  if (formData.country === "India" && !formData.city.trim()) {
+    return "Select a city for vendors registered in India.";
+  }
+  if (formData.zipcode.trim() && !/^\d{5,6}$/.test(formData.zipcode.trim())) {
+    return "Use a valid 5 or 6 digit zipcode/pincode.";
+  }
+  if (
+    formData.whatsapp.trim() &&
+    !/^\d{10,15}$/.test(formData.whatsapp.trim())
+  ) {
+    return "Use a 10 to 15 digit WhatsApp number or leave it blank.";
+  }
+
+  const urlFields = [
+    ["website", formData.website],
+    ["Facebook page", formData.facebookUrl],
+    ["Instagram page", formData.instagramUrl],
+    ["YouTube channel", formData.youtubeUrl],
+    ["LinkedIn page", formData.linkedinUrl],
+    ["X / Twitter page", formData.xUrl],
+  ];
+
+  for (const [label, value] of urlFields) {
+    if (!isLikelyUrl(value)) {
+      return `${label} must begin with http:// or https://`;
+    }
+  }
+
+  return "";
+}
+
 function getVendorApprovalValidationError(reviewForm) {
   if (!reviewForm.planName.trim()) {
     return "Plan name is required before approving a vendor registration.";
@@ -1954,6 +2059,44 @@ const vendorSubCategoryMap = {
     "Brand Activation",
   ],
 };
+const initialVendorCategoryIdMap = {};
+const initialVendorSubCategoryIdMap = {};
+
+function hydrateVendorTaxonomy(categories) {
+  const nextCategories = [];
+  const nextSubCategoryMap = {};
+  const nextCategoryIdMap = {};
+  const nextSubCategoryIdMap = {};
+
+  for (const category of Array.isArray(categories) ? categories : []) {
+    if (!category?.name) {
+      continue;
+    }
+
+    nextCategories.push(category.name);
+    nextCategoryIdMap[category.name] = category.id;
+    nextSubCategoryMap[category.name] = [];
+    nextSubCategoryIdMap[category.name] = {};
+
+    for (const subCategory of Array.isArray(category.subCategories)
+      ? category.subCategories
+      : []) {
+      if (!subCategory?.name) {
+        continue;
+      }
+
+      nextSubCategoryMap[category.name].push(subCategory.name);
+      nextSubCategoryIdMap[category.name][subCategory.name] = subCategory.id;
+    }
+  }
+
+  return {
+    categories: nextCategories,
+    subCategoryMap: nextSubCategoryMap,
+    categoryIdMap: nextCategoryIdMap,
+    subCategoryIdMap: nextSubCategoryIdMap,
+  };
+}
 const vendorCountryOptions = ["India", "United Arab Emirates", "Singapore"];
 const vendorStateOptionsByCountry = {
   India: ["Gujarat", "Maharashtra", "Karnataka", "Delhi"],
@@ -5411,6 +5554,9 @@ function VendorRegistrationForm({
   onAddCategory,
   onReset,
   onSubmit,
+  errorMessage,
+  successMessage,
+  isSaving,
 }) {
   return (
     <section className="member-table-panel">
@@ -5695,10 +5841,24 @@ function VendorRegistrationForm({
       </div>
 
       <div className="profile-action-row">
+        {errorMessage ? (
+          <p className="form-helper-error">{errorMessage}</p>
+        ) : successMessage ? (
+          <p className="form-helper success-text">{successMessage}</p>
+        ) : (
+          <p className="form-helper">
+            Save the vendor only after the login IDs, category, location, and
+            contact details are complete.
+          </p>
+        )}
+      </div>
+
+      <div className="profile-action-row">
         <button
           className="secondary-link secondary-button"
           type="button"
           onClick={onReset}
+          disabled={isSaving}
         >
           {formData.id ? "Cancel Edit" : "Reset"}
         </button>
@@ -5706,8 +5866,13 @@ function VendorRegistrationForm({
           className="primary-link admin-action-button"
           type="button"
           onClick={onSubmit}
+          disabled={isSaving}
         >
-          {formData.id ? "Update Vendor" : "Save Vendor"}
+          {isSaving
+            ? "Saving..."
+            : formData.id
+              ? "Update Vendor"
+              : "Save Vendor"}
         </button>
       </div>
     </section>
@@ -5719,6 +5884,8 @@ function VendorCategoryPanel({
   subCategoryMap,
   draftValue,
   editingValue,
+  errorMessage,
+  successMessage,
   onDraftChange,
   onStartEdit,
   onCancelEdit,
@@ -5746,6 +5913,12 @@ function VendorCategoryPanel({
             Create and maintain the main vendor categories used by registration
             and sub-category mapping.
           </p>
+          {errorMessage ? (
+            <p className="form-error-message">{errorMessage}</p>
+          ) : null}
+          {successMessage ? (
+            <p className="form-success-message">{successMessage}</p>
+          ) : null}
         </article>
 
         {editingValue !== null ? (
@@ -5836,6 +6009,8 @@ function VendorSubCategoryPanel({
   selectedCategory,
   editingValue,
   draftValue,
+  errorMessage,
+  successMessage,
   onSelectCategory,
   onStartEdit,
   onDraftChange,
@@ -5880,6 +6055,12 @@ function VendorSubCategoryPanel({
               </select>
             </label>
           </div>
+          {errorMessage ? (
+            <p className="form-error-message">{errorMessage}</p>
+          ) : null}
+          {successMessage ? (
+            <p className="form-success-message">{successMessage}</p>
+          ) : null}
         </article>
 
         {editingValue !== null ? (
@@ -6433,6 +6614,9 @@ function VendorArenaContent({
   onReset,
   onEditVendor,
   onSubmit,
+  errorMessage,
+  successMessage,
+  isSaving,
 }) {
   const filteredItems = items.filter((vendor) => {
     const matchesName =
@@ -6534,6 +6718,9 @@ function VendorArenaContent({
         onAddCategory={onAddCategory}
         onReset={onReset}
         onSubmit={onSubmit}
+        errorMessage={errorMessage}
+        successMessage={successMessage}
+        isSaving={isSaving}
       />
     </section>
   );
@@ -8672,11 +8859,22 @@ export default function HomePage() {
   const [vendorRegistrationForm, setVendorRegistrationForm] = useState(
     buildVendorRegistrationForm(null),
   );
+  const [vendorRegistrationError, setVendorRegistrationError] = useState("");
+  const [vendorRegistrationSuccess, setVendorRegistrationSuccess] =
+    useState("");
+  const [isSavingVendorRegistration, setIsSavingVendorRegistration] =
+    useState(false);
   const [vendorCategories, setVendorCategories] = useState(
     initialVendorCategories,
   );
   const [vendorSubCategoryRecords, setVendorSubCategoryRecords] =
     useState(vendorSubCategoryMap);
+  const [vendorCategoryIdMap, setVendorCategoryIdMap] = useState(
+    initialVendorCategoryIdMap,
+  );
+  const [vendorSubCategoryIdMap, setVendorSubCategoryIdMap] = useState(
+    initialVendorSubCategoryIdMap,
+  );
   const [newVendorCategory, setNewVendorCategory] = useState("");
   const [vendorCategoryDraft, setVendorCategoryDraft] = useState("");
   const [editingVendorCategory, setEditingVendorCategory] = useState(null);
@@ -8685,6 +8883,8 @@ export default function HomePage() {
   const [vendorSubCategoryDraft, setVendorSubCategoryDraft] = useState("");
   const [editingVendorSubCategory, setEditingVendorSubCategory] =
     useState(null);
+  const [vendorTaxonomyError, setVendorTaxonomyError] = useState("");
+  const [vendorTaxonomySuccess, setVendorTaxonomySuccess] = useState("");
   const [vendorFilters, setVendorFilters] = useState({
     name: "",
     category: "",
@@ -9067,14 +9267,6 @@ export default function HomePage() {
     }
 
     setVendorRecords(vendors);
-    setVendorCategories([
-      ...new Set(
-        [
-          ...vendors.map((vendor) => vendor.category).filter(Boolean),
-          ...initialVendorCategories,
-        ].sort((left, right) => left.localeCompare(right)),
-      ),
-    ]);
     setVendorAccessEdits({});
   };
 
@@ -9174,6 +9366,7 @@ export default function HomePage() {
 
     loadMembersData();
     void loadEventsArena();
+    void loadVendorTaxonomy();
     void loadVendors();
     void loadTimelinePosts();
     void loadAppBanners();
@@ -10225,6 +10418,8 @@ export default function HomePage() {
     }));
   };
   const updateVendorRegistrationForm = (field, value) => {
+    setVendorRegistrationError("");
+    setVendorRegistrationSuccess("");
     setVendorRegistrationForm((current) => {
       if (field === "category") {
         return {
@@ -10258,15 +10453,21 @@ export default function HomePage() {
     });
   };
   const updateVendorRegistrationFile = (field, file) => {
+    setVendorRegistrationError("");
+    setVendorRegistrationSuccess("");
     setVendorRegistrationForm((current) => ({
       ...current,
       [field]: file,
     }));
   };
   const resetVendorRegistrationForm = () => {
+    setVendorRegistrationError("");
+    setVendorRegistrationSuccess("");
     setVendorRegistrationForm(buildVendorRegistrationForm(null));
   };
   const openVendorRegistrationEditor = (vendor) => {
+    setVendorRegistrationError("");
+    setVendorRegistrationSuccess("");
     setVendorRegistrationForm(buildVendorRegistrationForm(vendor));
   };
   const updateVendorFilter = (field, value) => {
@@ -10275,20 +10476,90 @@ export default function HomePage() {
       [field]: value,
     }));
   };
+  const applyVendorTaxonomyState = (categoriesPayload) => {
+    const hydrated = hydrateVendorTaxonomy(categoriesPayload);
+    setVendorCategories(hydrated.categories);
+    setVendorSubCategoryRecords(hydrated.subCategoryMap);
+    setVendorCategoryIdMap(hydrated.categoryIdMap);
+    setVendorSubCategoryIdMap(hydrated.subCategoryIdMap);
+
+    if (
+      selectedVendorParentCategory &&
+      !hydrated.categories.includes(selectedVendorParentCategory)
+    ) {
+      setSelectedVendorParentCategory("");
+    }
+
+    if (
+      vendorRegistrationForm.category &&
+      !hydrated.categories.includes(vendorRegistrationForm.category)
+    ) {
+      setVendorRegistrationForm((current) => ({
+        ...current,
+        category: "",
+        subCategory: "",
+      }));
+      return;
+    }
+
+    if (
+      vendorRegistrationForm.category &&
+      vendorRegistrationForm.subCategory &&
+      !(
+        hydrated.subCategoryMap[vendorRegistrationForm.category] ?? []
+      ).includes(vendorRegistrationForm.subCategory)
+    ) {
+      setVendorRegistrationForm((current) => ({
+        ...current,
+        subCategory: "",
+      }));
+    }
+  };
+  const loadVendorTaxonomy = async () => {
+    const response = await fetch(`${apiBaseUrl}/vendor-taxonomy/categories`);
+    if (!response.ok) {
+      return false;
+    }
+
+    const payload = await response.json();
+    applyVendorTaxonomyState(payload.categories);
+    return true;
+  };
   const addVendorCategory = () => {
+    setVendorTaxonomyError("");
+    setVendorTaxonomySuccess("");
     const nextCategory = newVendorCategory.trim();
     if (!nextCategory || vendorCategories.includes(nextCategory)) {
       return;
     }
 
-    setVendorCategories((current) => [...current, nextCategory]);
-    setVendorSubCategoryRecords((current) => ({
-      ...current,
-      [nextCategory]: current[nextCategory] ?? [],
-    }));
-    setNewVendorCategory("");
+    void (async () => {
+      const response = await runAuthenticatedFetch(
+        "/vendor-taxonomy/categories",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: nextCategory,
+          }),
+        },
+      );
+
+      if (!response.ok) {
+        setVendorTaxonomyError("Could not add the vendor category right now.");
+        return;
+      }
+
+      await loadVendorTaxonomy();
+      setNewVendorCategory("");
+      setVendorTaxonomySuccess("Vendor category added.");
+    })();
   };
   const openVendorCategoryEditor = (categoryName) => {
+    setVendorTaxonomyError("");
+    setVendorTaxonomySuccess("");
     setEditingVendorCategory(categoryName);
     setVendorCategoryDraft(categoryName || "");
   };
@@ -10297,80 +10568,108 @@ export default function HomePage() {
     setVendorCategoryDraft("");
   };
   const saveVendorCategory = () => {
+    setVendorTaxonomyError("");
+    setVendorTaxonomySuccess("");
     const nextName = vendorCategoryDraft.trim();
     if (!nextName) {
       return;
     }
+    void (async () => {
+      if (editingVendorCategory) {
+        const categoryId = vendorCategoryIdMap[editingVendorCategory];
+        if (!categoryId) {
+          setVendorTaxonomyError(
+            "Could not find that vendor category anymore.",
+          );
+          return;
+        }
 
-    if (editingVendorCategory) {
-      if (
-        nextName !== editingVendorCategory &&
-        vendorCategories.includes(nextName)
-      ) {
-        return;
+        const response = await runAuthenticatedFetch(
+          `/vendor-taxonomy/categories/${categoryId}`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              name: nextName,
+            }),
+          },
+        );
+
+        if (!response.ok) {
+          setVendorTaxonomyError(
+            "Could not update the vendor category right now.",
+          );
+          return;
+        }
+      } else {
+        const response = await runAuthenticatedFetch(
+          "/vendor-taxonomy/categories",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              name: nextName,
+            }),
+          },
+        );
+
+        if (!response.ok) {
+          setVendorTaxonomyError(
+            "Could not add the vendor category right now.",
+          );
+          return;
+        }
       }
 
-      setVendorCategories((current) =>
-        current.map((category) =>
-          category === editingVendorCategory ? nextName : category,
-        ),
+      await loadVendorTaxonomy();
+      cancelVendorCategoryEdit();
+      setVendorTaxonomySuccess(
+        editingVendorCategory
+          ? "Vendor category updated."
+          : "Vendor category added.",
       );
-      setVendorSubCategoryRecords((current) => {
-        const nextRecord = { ...current };
-        const existingSubCategories = nextRecord[editingVendorCategory] ?? [];
-        delete nextRecord[editingVendorCategory];
-        nextRecord[nextName] = existingSubCategories;
-        return nextRecord;
-      });
-      if (selectedVendorParentCategory === editingVendorCategory) {
-        setSelectedVendorParentCategory(nextName);
-      }
-      if (vendorRegistrationForm.category === editingVendorCategory) {
-        setVendorRegistrationForm((current) => ({
-          ...current,
-          category: nextName,
-        }));
-      }
-    } else {
-      if (vendorCategories.includes(nextName)) {
-        return;
-      }
-      setVendorCategories((current) => [...current, nextName]);
-      setVendorSubCategoryRecords((current) => ({
-        ...current,
-        [nextName]: current[nextName] ?? [],
-      }));
-    }
-
-    cancelVendorCategoryEdit();
+    })();
   };
   const deleteVendorCategory = (categoryName) => {
-    setVendorCategories((current) =>
-      current.filter((category) => category !== categoryName),
-    );
-    setVendorSubCategoryRecords((current) => {
-      const nextRecord = { ...current };
-      delete nextRecord[categoryName];
-      return nextRecord;
-    });
-    if (selectedVendorParentCategory === categoryName) {
-      setSelectedVendorParentCategory("");
+    setVendorTaxonomyError("");
+    setVendorTaxonomySuccess("");
+    const categoryId = vendorCategoryIdMap[categoryName];
+    if (!categoryId) {
+      return;
     }
-    if (vendorRegistrationForm.category === categoryName) {
-      setVendorRegistrationForm((current) => ({
-        ...current,
-        category: "",
-        subCategory: "",
-      }));
-    }
-    if (vendorFilters.category === categoryName) {
-      setVendorFilters((current) => ({
-        ...current,
-        category: "",
-      }));
-    }
+
+    void (async () => {
+      const response = await runAuthenticatedFetch(
+        `/vendor-taxonomy/categories/${categoryId}`,
+        {
+          method: "DELETE",
+        },
+      );
+
+      if (!response.ok) {
+        setVendorTaxonomyError(
+          "Could not delete the vendor category right now.",
+        );
+        return;
+      }
+
+      await Promise.all([loadVendorTaxonomy(), loadVendors()]);
+      if (vendorFilters.category === categoryName) {
+        setVendorFilters((current) => ({
+          ...current,
+          category: "",
+        }));
+      }
+      setVendorTaxonomySuccess("Vendor category removed.");
+    })();
   };
   const openVendorSubCategoryEditor = (subCategoryName) => {
+    setVendorTaxonomyError("");
+    setVendorTaxonomySuccess("");
     setEditingVendorSubCategory(subCategoryName);
     setVendorSubCategoryDraft(subCategoryName || "");
   };
@@ -10379,173 +10678,230 @@ export default function HomePage() {
     setVendorSubCategoryDraft("");
   };
   const saveVendorSubCategory = () => {
+    setVendorTaxonomyError("");
+    setVendorTaxonomySuccess("");
     const nextName = vendorSubCategoryDraft.trim();
     if (!selectedVendorParentCategory || !nextName) {
       return;
     }
-
-    const currentItems =
-      vendorSubCategoryRecords[selectedVendorParentCategory] ?? [];
-    if (editingVendorSubCategory) {
-      if (
-        nextName !== editingVendorSubCategory &&
-        currentItems.includes(nextName)
-      ) {
-        return;
-      }
-
-      setVendorSubCategoryRecords((current) => ({
-        ...current,
-        [selectedVendorParentCategory]: (
-          current[selectedVendorParentCategory] ?? []
-        ).map((item) => (item === editingVendorSubCategory ? nextName : item)),
-      }));
-      if (
-        vendorRegistrationForm.category === selectedVendorParentCategory &&
-        vendorRegistrationForm.subCategory === editingVendorSubCategory
-      ) {
-        setVendorRegistrationForm((current) => ({
-          ...current,
-          subCategory: nextName,
-        }));
-      }
-    } else {
-      if (currentItems.includes(nextName)) {
-        return;
-      }
-      setVendorSubCategoryRecords((current) => ({
-        ...current,
-        [selectedVendorParentCategory]: [
-          ...(current[selectedVendorParentCategory] ?? []),
-          nextName,
-        ],
-      }));
-    }
-
-    cancelVendorSubCategoryEdit();
-  };
-  const deleteVendorSubCategory = (subCategoryName) => {
-    if (!selectedVendorParentCategory) {
+    const categoryId = vendorCategoryIdMap[selectedVendorParentCategory];
+    if (!categoryId) {
+      setVendorTaxonomyError("Please select a valid parent category first.");
       return;
     }
 
-    setVendorSubCategoryRecords((current) => ({
-      ...current,
-      [selectedVendorParentCategory]: (
-        current[selectedVendorParentCategory] ?? []
-      ).filter((item) => item !== subCategoryName),
-    }));
-    if (
-      vendorRegistrationForm.category === selectedVendorParentCategory &&
-      vendorRegistrationForm.subCategory === subCategoryName
-    ) {
-      setVendorRegistrationForm((current) => ({
-        ...current,
-        subCategory: "",
-      }));
+    void (async () => {
+      if (editingVendorSubCategory) {
+        const subCategoryId =
+          vendorSubCategoryIdMap[selectedVendorParentCategory]?.[
+            editingVendorSubCategory
+          ];
+        if (!subCategoryId) {
+          setVendorTaxonomyError(
+            "Could not find that vendor sub category anymore.",
+          );
+          return;
+        }
+
+        const response = await runAuthenticatedFetch(
+          `/vendor-taxonomy/sub-categories/${subCategoryId}`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              categoryId,
+              name: nextName,
+            }),
+          },
+        );
+
+        if (!response.ok) {
+          setVendorTaxonomyError(
+            "Could not update the vendor sub category right now.",
+          );
+          return;
+        }
+      } else {
+        const response = await runAuthenticatedFetch(
+          "/vendor-taxonomy/sub-categories",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              categoryId,
+              name: nextName,
+            }),
+          },
+        );
+
+        if (!response.ok) {
+          setVendorTaxonomyError(
+            "Could not add the vendor sub category right now.",
+          );
+          return;
+        }
+      }
+
+      await loadVendorTaxonomy();
+      cancelVendorSubCategoryEdit();
+      setVendorTaxonomySuccess(
+        editingVendorSubCategory
+          ? "Vendor sub category updated."
+          : "Vendor sub category added.",
+      );
+    })();
+  };
+  const deleteVendorSubCategory = (subCategoryName) => {
+    setVendorTaxonomyError("");
+    setVendorTaxonomySuccess("");
+    if (!selectedVendorParentCategory) {
+      return;
     }
+    const subCategoryId =
+      vendorSubCategoryIdMap[selectedVendorParentCategory]?.[subCategoryName];
+    if (!subCategoryId) {
+      return;
+    }
+
+    void (async () => {
+      const response = await runAuthenticatedFetch(
+        `/vendor-taxonomy/sub-categories/${subCategoryId}`,
+        {
+          method: "DELETE",
+        },
+      );
+
+      if (!response.ok) {
+        setVendorTaxonomyError(
+          "Could not delete the vendor sub category right now.",
+        );
+        return;
+      }
+
+      await Promise.all([loadVendorTaxonomy(), loadVendors()]);
+      setVendorTaxonomySuccess("Vendor sub category removed.");
+    })();
   };
   const saveVendorRecord = () => {
     void (async () => {
-      if (
-        !vendorRegistrationForm.company.trim() ||
-        !vendorRegistrationForm.contactPerson.trim() ||
-        !vendorRegistrationForm.phone.trim() ||
-        !vendorRegistrationForm.email.trim() ||
-        !vendorRegistrationForm.primaryLoginEmail.trim() ||
-        !vendorRegistrationForm.category.trim() ||
-        !vendorRegistrationForm.subCategory.trim() ||
-        !vendorRegistrationForm.address.trim()
-      ) {
+      const validationError = getVendorRegistrationValidationError(
+        vendorRegistrationForm,
+        vendorSubCategoryOptions,
+      );
+      if (validationError) {
+        setVendorRegistrationError(validationError);
+        setVendorRegistrationSuccess("");
         return;
       }
 
-      if (
-        vendorRegistrationForm.secondaryLoginEmail.trim() &&
-        vendorRegistrationForm.secondaryLoginEmail.trim().toLowerCase() ===
-          vendorRegistrationForm.primaryLoginEmail.trim().toLowerCase()
-      ) {
-        return;
+      setVendorRegistrationError("");
+      setVendorRegistrationSuccess("");
+      setIsSavingVendorRegistration(true);
+
+      try {
+        const isEditingVendor = Boolean(vendorRegistrationForm.id);
+        const endpoint = isEditingVendor
+          ? `${apiBaseUrl}/vendors/${vendorRegistrationForm.id}`
+          : `${apiBaseUrl}/vendors`;
+        const method = isEditingVendor ? "PATCH" : "POST";
+
+        const response = await fetch(endpoint, {
+          method,
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: vendorRegistrationForm.company.trim(),
+            companyName: vendorRegistrationForm.company.trim(),
+            vendorType: vendorRegistrationForm.subCategory.trim(),
+            category: vendorRegistrationForm.category.trim(),
+            contactPerson: vendorRegistrationForm.contactPerson.trim(),
+            membershipPlan: vendorRegistrationForm.membershipPlan.trim(),
+            paymentAmount: vendorRegistrationForm.paymentAmount.trim(),
+            address: vendorRegistrationForm.address.trim(),
+            city: vendorRegistrationForm.city.trim(),
+            phone:
+              `${vendorRegistrationForm.phoneCode} ${vendorRegistrationForm.phone.trim()}`.trim(),
+            email: vendorRegistrationForm.email.trim(),
+            primaryLoginEmail: vendorRegistrationForm.primaryLoginEmail
+              .trim()
+              .toLowerCase(),
+            secondaryLoginEmail:
+              vendorRegistrationForm.secondaryLoginEmail.trim().toLowerCase() ||
+              undefined,
+            whatsapp:
+              `${vendorRegistrationForm.whatsappCode} ${vendorRegistrationForm.whatsapp.trim()}`.trim(),
+            facebookUrl: vendorRegistrationForm.facebookUrl.trim(),
+            instagramUrl: vendorRegistrationForm.instagramUrl.trim(),
+            youtubeUrl: vendorRegistrationForm.youtubeUrl.trim(),
+            linkedinUrl: vendorRegistrationForm.linkedinUrl.trim(),
+            xUrl: vendorRegistrationForm.xUrl.trim(),
+            onboardingStartAt:
+              vendorRegistrationForm.onboardingStartAt || undefined,
+            onboardingEndAt:
+              vendorRegistrationForm.onboardingEndAt || undefined,
+            paymentDueDate: vendorRegistrationForm.paymentDueDate || undefined,
+            paymentStatus: "PENDING",
+            status: "PENDING",
+            badge:
+              vendorRegistrationForm.subCategory.trim() ||
+              vendorRegistrationForm.category.trim() ||
+              "Vendor",
+            notes: [
+              vendorRegistrationForm.country
+                ? `Country: ${vendorRegistrationForm.country}`
+                : "",
+              vendorRegistrationForm.state
+                ? `State: ${vendorRegistrationForm.state}`
+                : "",
+              vendorRegistrationForm.zipcode
+                ? `Zipcode: ${vendorRegistrationForm.zipcode}`
+                : "",
+              vendorRegistrationForm.website
+                ? `Website: ${vendorRegistrationForm.website.trim()}`
+                : "",
+              vendorRegistrationForm.workDescription
+                ? `Work Description: ${vendorRegistrationForm.workDescription.trim()}`
+                : "",
+              vendorRegistrationForm.companyLogo?.name
+                ? `Company Logo: ${vendorRegistrationForm.companyLogo.name}`
+                : "",
+            ]
+              .filter(Boolean)
+              .join("\n"),
+          }),
+        });
+
+        if (!response.ok) {
+          let message = "Unable to save the vendor record right now.";
+          try {
+            const payload = await response.json();
+            if (payload?.error) {
+              message = payload.error;
+            }
+          } catch {}
+          setVendorRegistrationError(message);
+          return;
+        }
+
+        await loadVendors();
+        resetVendorRegistrationForm();
+        setVendorRegistrationSuccess(
+          isEditingVendor
+            ? "Vendor record updated successfully."
+            : "Vendor saved successfully. You can now review it in Vendor Status.",
+        );
+      } catch {
+        setVendorRegistrationError(
+          "Could not reach the vendor registration service right now.",
+        );
+      } finally {
+        setIsSavingVendorRegistration(false);
       }
-
-      const isEditingVendor = Boolean(vendorRegistrationForm.id);
-      const endpoint = isEditingVendor
-        ? `${apiBaseUrl}/vendors/${vendorRegistrationForm.id}`
-        : `${apiBaseUrl}/vendors`;
-      const method = isEditingVendor ? "PATCH" : "POST";
-
-      const response = await fetch(endpoint, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name: vendorRegistrationForm.company.trim(),
-          companyName: vendorRegistrationForm.company.trim(),
-          vendorType: vendorRegistrationForm.subCategory.trim(),
-          category: vendorRegistrationForm.category.trim(),
-          contactPerson: vendorRegistrationForm.contactPerson.trim(),
-          membershipPlan: vendorRegistrationForm.membershipPlan.trim(),
-          paymentAmount: vendorRegistrationForm.paymentAmount.trim(),
-          address: vendorRegistrationForm.address.trim(),
-          city: vendorRegistrationForm.city.trim(),
-          phone:
-            `${vendorRegistrationForm.phoneCode} ${vendorRegistrationForm.phone.trim()}`.trim(),
-          email: vendorRegistrationForm.email.trim(),
-          primaryLoginEmail: vendorRegistrationForm.primaryLoginEmail
-            .trim()
-            .toLowerCase(),
-          secondaryLoginEmail:
-            vendorRegistrationForm.secondaryLoginEmail.trim().toLowerCase() ||
-            undefined,
-          whatsapp:
-            `${vendorRegistrationForm.whatsappCode} ${vendorRegistrationForm.whatsapp.trim()}`.trim(),
-          facebookUrl: vendorRegistrationForm.facebookUrl.trim(),
-          instagramUrl: vendorRegistrationForm.instagramUrl.trim(),
-          youtubeUrl: vendorRegistrationForm.youtubeUrl.trim(),
-          linkedinUrl: vendorRegistrationForm.linkedinUrl.trim(),
-          xUrl: vendorRegistrationForm.xUrl.trim(),
-          onboardingStartAt:
-            vendorRegistrationForm.onboardingStartAt || undefined,
-          onboardingEndAt: vendorRegistrationForm.onboardingEndAt || undefined,
-          paymentDueDate: vendorRegistrationForm.paymentDueDate || undefined,
-          paymentStatus: "PENDING",
-          status: "PENDING",
-          badge:
-            vendorRegistrationForm.subCategory.trim() ||
-            vendorRegistrationForm.category.trim() ||
-            "Vendor",
-          notes: [
-            vendorRegistrationForm.country
-              ? `Country: ${vendorRegistrationForm.country}`
-              : "",
-            vendorRegistrationForm.state
-              ? `State: ${vendorRegistrationForm.state}`
-              : "",
-            vendorRegistrationForm.zipcode
-              ? `Zipcode: ${vendorRegistrationForm.zipcode}`
-              : "",
-            vendorRegistrationForm.website
-              ? `Website: ${vendorRegistrationForm.website.trim()}`
-              : "",
-            vendorRegistrationForm.workDescription
-              ? `Work Description: ${vendorRegistrationForm.workDescription.trim()}`
-              : "",
-            vendorRegistrationForm.companyLogo?.name
-              ? `Company Logo: ${vendorRegistrationForm.companyLogo.name}`
-              : "",
-          ]
-            .filter(Boolean)
-            .join("\n"),
-        }),
-      });
-
-      if (!response.ok) {
-        return;
-      }
-
-      await loadVendors();
-      resetVendorRegistrationForm();
     })();
   };
   const applyVendorAccessStatusLocally = (vendorIds, nextStatusLabel) => {
@@ -12480,6 +12836,9 @@ export default function HomePage() {
                 onReset={resetVendorRegistrationForm}
                 onEditVendor={openVendorRegistrationEditor}
                 onSubmit={saveVendorRecord}
+                errorMessage={vendorRegistrationError}
+                successMessage={vendorRegistrationSuccess}
+                isSaving={isSavingVendorRegistration}
               />
             </div>
 
@@ -12562,6 +12921,9 @@ export default function HomePage() {
                     onAddCategory={addVendorCategory}
                     onReset={resetVendorRegistrationForm}
                     onSubmit={saveVendorRecord}
+                    errorMessage={vendorRegistrationError}
+                    successMessage={vendorRegistrationSuccess}
+                    isSaving={isSavingVendorRegistration}
                   />
                   <VendorRegistrationTable
                     items={vendorRecords}
@@ -12617,6 +12979,8 @@ export default function HomePage() {
                 subCategoryMap={vendorSubCategoryRecords}
                 draftValue={vendorCategoryDraft}
                 editingValue={editingVendorCategory}
+                errorMessage={vendorTaxonomyError}
+                successMessage={vendorTaxonomySuccess}
                 onDraftChange={setVendorCategoryDraft}
                 onStartEdit={openVendorCategoryEditor}
                 onCancelEdit={cancelVendorCategoryEdit}
@@ -12666,6 +13030,8 @@ export default function HomePage() {
                 selectedCategory={selectedVendorParentCategory}
                 editingValue={editingVendorSubCategory}
                 draftValue={vendorSubCategoryDraft}
+                errorMessage={vendorTaxonomyError}
+                successMessage={vendorTaxonomySuccess}
                 onSelectCategory={setSelectedVendorParentCategory}
                 onStartEdit={openVendorSubCategoryEditor}
                 onDraftChange={setVendorSubCategoryDraft}
