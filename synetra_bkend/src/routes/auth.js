@@ -12,6 +12,7 @@ import {
   requireAuthenticatedSession,
   revokeSessionById,
 } from "../lib/session-auth.js";
+import { getAssociationAppAccess } from "../lib/app-access.js";
 
 const router = Router();
 
@@ -112,7 +113,14 @@ router.post("/login", async (req, res) => {
     return res.status(403).json({ error: "This account is inactive" });
   }
 
-  if (user.isMember && user.approvalStatus !== "APPROVED") {
+  const appAccess = await getAssociationAppAccess(user.associationId);
+  const requiresMemberApproval = appAccess?.approveMembersLogin !== false;
+
+  if (
+    user.isMember &&
+    requiresMemberApproval &&
+    user.approvalStatus !== "APPROVED"
+  ) {
     return res.status(403).json({
       error: "Your member profile is not approved yet",
     });

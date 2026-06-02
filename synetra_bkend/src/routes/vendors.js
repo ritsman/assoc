@@ -2,6 +2,7 @@ import { Router } from "express";
 import prismaPkg from "@prisma/client";
 import { z } from "zod";
 import { buildDefaultVendorPasswordHash } from "../lib/auth.js";
+import { ensureAssociationAppAccess } from "../lib/app-access.js";
 import { prisma } from "../lib/prisma.js";
 import { syncVendorTaxonomyFromVendorInput } from "../lib/vendor-taxonomy.js";
 
@@ -380,6 +381,7 @@ router.post("/", async (req, res) => {
   }
 
   const associationId = await ensureAssociation(parsed.data.associationId);
+  const appAccess = await ensureAssociationAppAccess(associationId);
   const loginEmails = buildLoginEmails(parsed.data);
 
   try {
@@ -388,7 +390,11 @@ router.post("/", async (req, res) => {
         data: {
           ...extractVendorData(parsed.data, associationId),
           paymentStatus: parsed.data.paymentStatus ?? PaymentStatus.PENDING,
-          status: parsed.data.status ?? VendorStatus.PENDING,
+          status:
+              parsed.data.status ??
+              (appAccess.approveRegistrationRequest === false
+                  ? VendorStatus.ACTIVE
+                  : VendorStatus.PENDING),
         },
         include: vendorInclude,
       });

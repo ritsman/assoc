@@ -9,6 +9,7 @@ import {
   buildPublicThumbnailUrl,
   resolvePublicAssetUrl,
 } from "../lib/public-url.js";
+import { ensureAssociationAppAccess } from "../lib/app-access.js";
 import { prisma } from "../lib/prisma.js";
 
 const router = Router();
@@ -230,22 +231,6 @@ function serializeAppAccess(appAccess) {
     disableAdminFunctionsFromApp: appAccess.disableAdminFunctionsFromApp,
     updatedAt: appAccess.updatedAt,
   };
-}
-
-async function ensureAssociationAppAccess(associationId) {
-  const existingAppAccess = await prisma.associationAppAccess.findUnique({
-    where: { associationId },
-  });
-
-  if (existingAppAccess) {
-    return existingAppAccess;
-  }
-
-  return prisma.associationAppAccess.create({
-    data: {
-      associationId,
-    },
-  });
 }
 
 async function ensureCurrentAssociationBase() {

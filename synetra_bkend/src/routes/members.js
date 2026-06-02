@@ -14,6 +14,7 @@ import {
   buildPublicThumbnailUrl,
   resolvePublicAssetUrl,
 } from "../lib/public-url.js";
+import { ensureAssociationAppAccess } from "../lib/app-access.js";
 import { prisma } from "../lib/prisma.js";
 
 const router = Router();
@@ -297,6 +298,17 @@ router.post("/", async (req, res) => {
   }
 
   const associationId = await ensureAssociation(parsed.data.associationId);
+  const appAccess = await ensureAssociationAppAccess(associationId);
+  const initialApprovalStatus =
+    appAccess.approveRegistrationRequest === false
+      ? ApprovalStatus.APPROVED
+      : ApprovalStatus.PENDING;
+  const initialMembershipStatus =
+    appAccess.approveMembership === false
+      ? MemberStatus.ACTIVE
+      : (parsed.data.membershipStatus ?? MemberStatus.PENDING);
+  const initialApprovedAt =
+    initialApprovalStatus === ApprovalStatus.APPROVED ? new Date() : null;
 
   try {
     const member = await prisma.$transaction(async (tx) => {
@@ -304,7 +316,7 @@ router.post("/", async (req, res) => {
         data: {
           ...parsed.data,
           associationId,
-          membershipStatus: parsed.data.membershipStatus ?? MemberStatus.PENDING,
+          membershipStatus: initialMembershipStatus,
         },
         include: {
           association: true,
@@ -322,12 +334,14 @@ router.post("/", async (req, res) => {
           data: {
             ...buildMemberUserPayload(createdMember),
             approvalStatus:
-              existingUser.approvalStatus === ApprovalStatus.REJECTED
-                ? ApprovalStatus.PENDING
+              existingUser.approvalStatus === ApprovalStatus.REJECTED ||
+                  existingUser.approvalStatus !== initialApprovalStatus
+                ? initialApprovalStatus
                 : undefined,
             approvedAt:
-              existingUser.approvalStatus === ApprovalStatus.REJECTED
-                ? null
+              existingUser.approvalStatus === ApprovalStatus.REJECTED ||
+                  initialApprovalStatus === ApprovalStatus.APPROVED
+                ? initialApprovedAt
                 : undefined,
             rejectedAt:
               existingUser.approvalStatus === ApprovalStatus.REJECTED
@@ -340,7 +354,8 @@ router.post("/", async (req, res) => {
           data: {
             ...buildMemberUserPayload(createdMember),
             passwordHash: buildPendingPasswordHash(),
-            approvalStatus: ApprovalStatus.PENDING,
+            approvalStatus: initialApprovalStatus,
+            approvedAt: initialApprovedAt,
           },
         });
       }
