@@ -35,6 +35,7 @@ const optionalDateField = z.preprocess(
 const accessStatusSchema = z.object({
   accessStatus: z.enum(["PENDING", "APPROVED", "SUSPENDED", "CANCELLED"]),
 });
+const memberViewQuerySchema = z.enum(["legacy", "directory", "admin"]);
 
 const memberSchema = z.object({
   associationId: z.string().min(1).optional(),
@@ -297,21 +298,163 @@ async function normalizeMemberRecord(member) {
   });
 }
 
+function serializeMemberUser(user) {
+  if (!user) {
+    return null;
+  }
+
+  const { passwordHash, ...safeUser } = user;
+  return safeUser;
+}
+
+function serializeMemberAssociation(association) {
+  if (!association) {
+    return null;
+  }
+
+  return association;
+}
+
 function serializeMember(req, member) {
   return {
     ...member,
+    association: serializeMemberAssociation(member.association),
+    user: serializeMemberUser(member.user),
     photoUrl: resolvePublicAssetUrl(req, member.photoUrl),
     thumbnailUrl: buildPublicThumbnailUrl(req, member.photoUrl),
   };
 }
 
+function serializeMemberDirectoryItem(req, member) {
+  return {
+    id: member.id,
+    associationId: member.associationId,
+    firstName: member.firstName,
+    lastName: member.lastName,
+    email: member.email,
+    phone: member.phone,
+    address: member.address,
+    gst: member.gst,
+    photoUrl: resolvePublicAssetUrl(req, member.photoUrl),
+    thumbnailUrl: buildPublicThumbnailUrl(req, member.photoUrl),
+    companyName: member.companyName,
+    roleTitle: member.roleTitle,
+    committeePost: member.committeePost,
+    committeeTenureStart: member.committeeTenureStart,
+    committeeTenureEnd: member.committeeTenureEnd,
+    memberBio: member.memberBio,
+    membershipDetails: member.membershipDetails,
+    membershipStartDate: member.membershipStartDate,
+    membershipEndDate: member.membershipEndDate,
+    paymentAmount: member.paymentAmount,
+    paymentStatus: member.paymentStatus,
+  };
+}
+
+function serializeMemberAdminItem(req, member) {
+  return {
+    id: member.id,
+    associationId: member.associationId,
+    firstName: member.firstName,
+    lastName: member.lastName,
+    email: member.email,
+    phone: member.phone,
+    photoUrl: resolvePublicAssetUrl(req, member.photoUrl),
+    thumbnailUrl: buildPublicThumbnailUrl(req, member.photoUrl),
+    companyName: member.companyName,
+    roleTitle: member.roleTitle,
+    user: member.user
+      ? {
+          approvalStatus: member.user.approvalStatus,
+          isActive: member.user.isActive,
+        }
+      : null,
+  };
+}
+
 router.get("/", async (req, res) => {
   const { associationId } = req.query;
+  const parsedView = memberViewQuerySchema.safeParse(req.query.view);
+  const view = parsedView.success ? parsedView.data : "legacy";
+  const where = {
+    ...(associationId ? { associationId: String(associationId) } : {}),
+  };
+
+  if (view === "directory") {
+    const members = await prisma.member.findMany({
+      where,
+      select: {
+        id: true,
+        associationId: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        phone: true,
+        address: true,
+        gst: true,
+        photoUrl: true,
+        companyName: true,
+        roleTitle: true,
+        committeePost: true,
+        committeeTenureStart: true,
+        committeeTenureEnd: true,
+        memberBio: true,
+        membershipDetails: true,
+        membershipStartDate: true,
+        membershipEndDate: true,
+        paymentAmount: true,
+        paymentStatus: true,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const normalizedMembers = await Promise.all(
+      members.map(normalizeMemberRecord),
+    );
+
+    return res.json({
+      members: normalizedMembers.map((member) =>
+        serializeMemberDirectoryItem(req, member),
+      ),
+    });
+  }
+
+  if (view === "admin") {
+    const members = await prisma.member.findMany({
+      where,
+      select: {
+        id: true,
+        associationId: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        phone: true,
+        photoUrl: true,
+        companyName: true,
+        roleTitle: true,
+        user: {
+          select: {
+            approvalStatus: true,
+            isActive: true,
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const normalizedMembers = await Promise.all(
+      members.map(normalizeMemberRecord),
+    );
+
+    return res.json({
+      members: normalizedMembers.map((member) =>
+        serializeMemberAdminItem(req, member),
+      ),
+    });
+  }
 
   const members = await prisma.member.findMany({
-    where: {
-      ...(associationId ? { associationId: String(associationId) } : {}),
-    },
+    where,
     include: {
       association: true,
       user: true,
@@ -323,7 +466,7 @@ router.get("/", async (req, res) => {
     members.map(normalizeMemberRecord),
   );
 
-  res.json({
+  return res.json({
     members: normalizedMembers.map((member) => serializeMember(req, member)),
   });
 });
