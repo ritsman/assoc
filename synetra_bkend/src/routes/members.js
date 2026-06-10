@@ -14,6 +14,11 @@ import {
   buildPublicThumbnailUrl,
   resolvePublicAssetUrl,
 } from "../lib/public-url.js";
+import {
+  deleteLocalAssetIfPresent,
+  isInlineDataImageUrl,
+  persistInlineImageDataUrl,
+} from "../lib/inline-image-assets.js";
 import { ensureAssociationAppAccess } from "../lib/app-access.js";
 import { prisma } from "../lib/prisma.js";
 
@@ -21,6 +26,7 @@ const router = Router();
 const { ApprovalStatus, MemberStatus, PaymentStatus, Prisma } = prismaPkg;
 const currentDirPath = path.dirname(new URL(import.meta.url).pathname);
 const bulkMemberUploadsDirPath = path.resolve(currentDirPath, "../../uploads/member-imports");
+const memberPhotoUploadsDirPath = path.resolve(currentDirPath, "../../uploads/member-photos");
 const optionalDateField = z.preprocess(
   (value) => (value === "" ? null : value),
   z.coerce.date().nullable().optional(),
@@ -262,6 +268,35 @@ async function ensureAssociation(associationId) {
   return defaultAssociation.id;
 }
 
+function normalizeMemberPhotoValue(photoUrl, fallbackBaseName) {
+  return persistInlineImageDataUrl({
+    dataUrl: photoUrl,
+    uploadsDirPath: memberPhotoUploadsDirPath,
+    publicPathPrefix: "uploads/member-photos",
+    fallbackBaseName,
+  });
+}
+
+async function normalizeMemberRecord(member) {
+  if (!member?.id || !isInlineDataImageUrl(member.photoUrl)) {
+    return member;
+  }
+
+  const nextPhotoUrl = normalizeMemberPhotoValue(member.photoUrl, member.id);
+  if (nextPhotoUrl === member.photoUrl) {
+    return member;
+  }
+
+  return prisma.member.update({
+    where: { id: member.id },
+    data: { photoUrl: nextPhotoUrl },
+    include: {
+      association: true,
+      user: true,
+    },
+  });
+}
+
 function serializeMember(req, member) {
   return {
     ...member,
@@ -284,7 +319,13 @@ router.get("/", async (req, res) => {
     orderBy: { createdAt: "desc" },
   });
 
-  res.json({ members: members.map((member) => serializeMember(req, member)) });
+  const normalizedMembers = await Promise.all(
+    members.map(normalizeMemberRecord),
+  );
+
+  res.json({
+    members: normalizedMembers.map((member) => serializeMember(req, member)),
+  });
 });
 
 router.post("/", async (req, res) => {
@@ -315,6 +356,10 @@ router.post("/", async (req, res) => {
       const createdMember = await tx.member.create({
         data: {
           ...parsed.data,
+          photoUrl: normalizeMemberPhotoValue(
+            parsed.data.photoUrl,
+            parsed.data.email || "member-photo",
+          ),
           associationId,
           membershipStatus: initialMembershipStatus,
         },
@@ -576,6 +621,10 @@ router.patch("/:id", async (req, res) => {
         where: { id: req.params.id },
         data: {
           ...parsed.data,
+          photoUrl: normalizeMemberPhotoValue(
+            parsed.data.photoUrl,
+            req.params.id,
+          ),
           ...(associationId ? { associationId } : {}),
         },
         include: {
@@ -622,6 +671,10 @@ router.patch("/:id", async (req, res) => {
         },
       });
     });
+
+    if (member.photoUrl !== existingMember.photoUrl) {
+      deleteLocalAssetIfPresent(existingMember.photoUrl, "uploads/member-photos");
+    }
 
     return res.json({ member: serializeMember(req, member) });
   } catch (error) {

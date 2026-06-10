@@ -9,6 +9,10 @@ import {
   buildPublicThumbnailUrl,
   resolvePublicAssetUrl,
 } from "../lib/public-url.js";
+import {
+  isInlineDataImageUrl,
+  persistInlineImageDataUrl,
+} from "../lib/inline-image-assets.js";
 import { prisma } from "../lib/prisma.js";
 
 const router = Router();
@@ -18,6 +22,10 @@ const currentDirPath = path.dirname(currentFilePath);
 const memberPostUploadsDirPath = path.resolve(
   currentDirPath,
   "../../uploads/member-posts",
+);
+const memberPhotoUploadsDirPath = path.resolve(
+  currentDirPath,
+  "../../uploads/member-photos",
 );
 
 const optionalDateField = z.preprocess(
@@ -76,6 +84,39 @@ const moderationSchema = z.object({
   displayEnd: optionalDateField,
 });
 
+async function normalizeNestedMemberPhoto(member) {
+  if (!member?.id || !isInlineDataImageUrl(member.photoUrl)) {
+    return member;
+  }
+
+  const nextPhotoUrl = persistInlineImageDataUrl({
+    dataUrl: member.photoUrl,
+    uploadsDirPath: memberPhotoUploadsDirPath,
+    publicPathPrefix: "uploads/member-photos",
+    fallbackBaseName: member.id,
+  });
+
+  if (nextPhotoUrl === member.photoUrl) {
+    return member;
+  }
+
+  return prisma.member.update({
+    where: { id: member.id },
+    data: { photoUrl: nextPhotoUrl },
+  });
+}
+
+async function normalizeMemberPostRecord(post) {
+  if (!post?.member) {
+    return post;
+  }
+
+  return {
+    ...post,
+    member: await normalizeNestedMemberPhoto(post.member),
+  };
+}
+
 function serializeMemberPost(req, post) {
   const memberName =
     `${post.member.firstName ?? ""} ${post.member.lastName ?? ""}`.trim();
@@ -125,7 +166,11 @@ router.get("/", async (req, res) => {
     orderBy: { createdAt: "desc" },
   });
 
-  return res.json({ posts: posts.map((post) => serializeMemberPost(req, post)) });
+  const normalizedPosts = await Promise.all(posts.map(normalizeMemberPostRecord));
+
+  return res.json({
+    posts: normalizedPosts.map((post) => serializeMemberPost(req, post)),
+  });
 });
 
 router.post("/", memberPostUpload.single("imageFile"), async (req, res) => {
@@ -166,7 +211,9 @@ router.post("/", memberPostUpload.single("imageFile"), async (req, res) => {
     },
   });
 
-  return res.status(201).json({ post: serializeMemberPost(req, post) });
+  return res.status(201).json({
+    post: serializeMemberPost(req, await normalizeMemberPostRecord(post)),
+  });
 });
 
 router.patch("/:id/moderation", async (req, res) => {
@@ -202,7 +249,9 @@ router.patch("/:id/moderation", async (req, res) => {
     },
   });
 
-  return res.json({ post: serializeMemberPost(req, post) });
+  return res.json({
+    post: serializeMemberPost(req, await normalizeMemberPostRecord(post)),
+  });
 });
 
 export default router;

@@ -9,6 +9,11 @@ import {
   buildPublicThumbnailUrl,
   resolvePublicAssetUrl,
 } from "../lib/public-url.js";
+import {
+  deleteLocalAssetIfPresent,
+  isInlineDataImageUrl,
+  persistInlineImageDataUrl,
+} from "../lib/inline-image-assets.js";
 import { ensureAssociationAppAccess } from "../lib/app-access.js";
 import { prisma } from "../lib/prisma.js";
 
@@ -17,6 +22,8 @@ const currentFilePath = fileURLToPath(import.meta.url);
 const currentDirPath = path.dirname(currentFilePath);
 const circularUploadsDirPath = path.resolve(currentDirPath, "../../uploads/circulars");
 const galleryUploadsDirPath = path.resolve(currentDirPath, "../../uploads/gallery");
+const associationUploadsDirPath = path.resolve(currentDirPath, "../../uploads/associations");
+const memberPhotoUploadsDirPath = path.resolve(currentDirPath, "../../uploads/member-photos");
 
 function buildSafeUploadName(file, fallbackBaseName) {
   const safeBaseName = path
@@ -147,22 +154,157 @@ function buildGalleryHeadline(fileName) {
   return baseName || "Gallery Image";
 }
 
-function deleteLocalGalleryAssetIfPresent(imageUrl) {
-  if (!imageUrl || !imageUrl.includes("/uploads/gallery/")) {
-    return;
+function normalizeAssociationImageValue(imageUrl, fallbackBaseName) {
+  return persistInlineImageDataUrl({
+    dataUrl: imageUrl,
+    uploadsDirPath: associationUploadsDirPath,
+    publicPathPrefix: "uploads/associations",
+    fallbackBaseName,
+  });
+}
+
+function normalizeGalleryImageValue(imageUrl, fallbackBaseName = "gallery") {
+  return persistInlineImageDataUrl({
+    dataUrl: imageUrl,
+    uploadsDirPath: galleryUploadsDirPath,
+    publicPathPrefix: "uploads/gallery",
+    fallbackBaseName,
+  });
+}
+
+async function normalizeGalleryItemRecord(galleryItem) {
+  if (!galleryItem?.id || !isInlineDataImageUrl(galleryItem.imageUrl)) {
+    return galleryItem;
   }
 
-  try {
-    const url = new URL(imageUrl);
-    const relativeStoragePath = url.pathname.replace(/^\/+/, "");
-    const filePath = path.resolve(currentDirPath, "../../", relativeStoragePath);
-
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-    }
-  } catch (_error) {
-    // Ignore cleanup errors so gallery deletes still succeed.
+  const nextImageUrl = normalizeGalleryImageValue(
+    galleryItem.imageUrl,
+    galleryItem.id,
+  );
+  if (nextImageUrl === galleryItem.imageUrl) {
+    return galleryItem;
   }
+
+  return prisma.associationGalleryItem.update({
+    where: { id: galleryItem.id },
+    data: { imageUrl: nextImageUrl },
+  });
+}
+
+async function normalizeCommitteeMemberRecord(member) {
+  if (!member?.id || !isInlineDataImageUrl(member.photoUrl)) {
+    return member;
+  }
+
+  const nextPhotoUrl = persistInlineImageDataUrl({
+    dataUrl: member.photoUrl,
+    uploadsDirPath: memberPhotoUploadsDirPath,
+    publicPathPrefix: "uploads/member-photos",
+    fallbackBaseName: member.id,
+  });
+
+  if (nextPhotoUrl === member.photoUrl) {
+    return member;
+  }
+
+  return prisma.member.update({
+    where: { id: member.id },
+    data: { photoUrl: nextPhotoUrl },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      companyName: true,
+      roleTitle: true,
+      committeePost: true,
+      committeeTenureStart: true,
+      committeeTenureEnd: true,
+      memberBio: true,
+      membershipDetails: true,
+      email: true,
+      phone: true,
+      photoUrl: true,
+    },
+  });
+}
+
+async function normalizeAboutContentRecord(associationId, aboutContent) {
+  if (!aboutContent?.id) {
+    return aboutContent;
+  }
+
+  const nextValues = {
+    headOfficeImage: normalizeAssociationImageValue(
+      aboutContent.headOfficeImage,
+      `${associationId}-head-office`,
+    ),
+    galleryImageOne: normalizeAssociationImageValue(
+      aboutContent.galleryImageOne,
+      `${associationId}-gallery-1`,
+    ),
+    galleryImageTwo: normalizeAssociationImageValue(
+      aboutContent.galleryImageTwo,
+      `${associationId}-gallery-2`,
+    ),
+  };
+
+  if (
+    nextValues.headOfficeImage === aboutContent.headOfficeImage &&
+    nextValues.galleryImageOne === aboutContent.galleryImageOne &&
+    nextValues.galleryImageTwo === aboutContent.galleryImageTwo
+  ) {
+    return aboutContent;
+  }
+
+  return prisma.associationAboutContent.update({
+    where: { associationId },
+    data: nextValues,
+  });
+}
+
+async function normalizeAssociationRecord(association) {
+  if (!association?.id) {
+    return association;
+  }
+
+  let nextAssociation = association;
+  const nextLogoUrl = normalizeAssociationImageValue(
+    association.logoUrl,
+    `${association.id}-logo`,
+  );
+
+  if (nextLogoUrl !== association.logoUrl) {
+    nextAssociation = {
+      ...nextAssociation,
+      logoUrl: (
+        await prisma.association.update({
+          where: { id: association.id },
+          data: { logoUrl: nextLogoUrl },
+        })
+      ).logoUrl,
+    };
+  }
+
+  if (nextAssociation.aboutContent) {
+    nextAssociation = {
+      ...nextAssociation,
+      aboutContent: await normalizeAboutContentRecord(
+        nextAssociation.id,
+        nextAssociation.aboutContent,
+      ),
+    };
+  }
+
+  if (Array.isArray(nextAssociation.galleryItems)) {
+    nextAssociation = {
+      ...nextAssociation,
+      galleryItems: await Promise.all(
+        nextAssociation.galleryItems.map(normalizeGalleryItemRecord),
+      ),
+    };
+  }
+
+  return nextAssociation;
 }
 
 function serializeCircularDocument(req, circularDocument) {
@@ -343,11 +485,21 @@ router.get("/", async (req, res) => {
     orderBy: { createdAt: "desc" },
   });
 
-  res.json({ associations: associations.map((association) => serializeAssociation(req, association)) });
+  const normalizedAssociations = await Promise.all(
+    associations.map(normalizeAssociationRecord),
+  );
+
+  res.json({
+    associations: normalizedAssociations.map((association) =>
+      serializeAssociation(req, association),
+    ),
+  });
 });
 
 router.get("/current", async (req, res) => {
-  const association = await ensureCurrentAssociation();
+  const association = await normalizeAssociationRecord(
+    await ensureCurrentAssociation(),
+  );
   res.json({ association: serializeAssociation(req, association) });
 });
 
@@ -433,6 +585,13 @@ router.get("/current/dashboard-summary", async (req, res) => {
     }
   }
 
+  const normalizedGalleryItems = await Promise.all(
+    latestGalleryItems.map(normalizeGalleryItemRecord),
+  );
+  const normalizedCommitteeMembers = await Promise.all(
+    committeeMembers.map(normalizeCommitteeMemberRecord),
+  );
+
   res.json({
     summary: {
       associationName: association.name,
@@ -440,13 +599,13 @@ router.get("/current/dashboard-summary", async (req, res) => {
       totalCities: citySet.size,
       totalGuests,
       totalVendors,
-      galleryItems: latestGalleryItems
+      galleryItems: normalizedGalleryItems
         .map((item) => serializeGalleryItem(req, item))
         .reverse(),
       upcomingEvents: upcomingEvents.map((event) =>
         serializeDashboardEvent(req, event),
       ),
-      committeeMembers: committeeMembers.map((member) =>
+      committeeMembers: normalizedCommitteeMembers.map((member) =>
         serializeDashboardCommitteeMember(req, member),
       ),
     },
@@ -567,7 +726,10 @@ router.patch("/:id", async (req, res) => {
         slug: parsed.data.slug,
         sector: parsed.data.sector,
         description: parsed.data.description,
-        logoUrl: parsed.data.logoUrl,
+        logoUrl: normalizeAssociationImageValue(
+          parsed.data.logoUrl,
+          `${req.params.id}-logo`,
+        ),
         primaryColor: parsed.data.primaryColor,
         appName: parsed.data.appName,
         domain: parsed.data.domain,
@@ -627,7 +789,12 @@ router.patch("/:id", async (req, res) => {
     });
   });
 
-  return res.json({ association: updatedAssociation });
+  return res.json({
+    association: serializeAssociation(
+      req,
+      await normalizeAssociationRecord(updatedAssociation),
+    ),
+  });
 });
 
 router.patch("/:id/about", async (req, res) => {
@@ -651,19 +818,35 @@ router.patch("/:id/about", async (req, res) => {
     return res.status(404).json({ error: "Association not found" });
   }
 
+  const normalizedAboutPayload = {
+    ...parsed.data,
+    headOfficeImage: normalizeAssociationImageValue(
+      parsed.data.headOfficeImage,
+      `${req.params.id}-head-office`,
+    ),
+    galleryImageOne: normalizeAssociationImageValue(
+      parsed.data.galleryImageOne,
+      `${req.params.id}-gallery-1`,
+    ),
+    galleryImageTwo: normalizeAssociationImageValue(
+      parsed.data.galleryImageTwo,
+      `${req.params.id}-gallery-2`,
+    ),
+  };
+
   const aboutContent = association.aboutContent
     ? await prisma.associationAboutContent.update({
         where: { associationId: req.params.id },
-        data: parsed.data,
+        data: normalizedAboutPayload,
       })
     : await prisma.associationAboutContent.create({
         data: {
           associationId: req.params.id,
-          ...parsed.data,
+          ...normalizedAboutPayload,
         },
       });
 
-  return res.json({ aboutContent });
+  return res.json({ aboutContent: serializeAboutContent(req, aboutContent) });
 });
 
 router.get("/:id/gallery", async (req, res) => {
@@ -680,7 +863,13 @@ router.get("/:id/gallery", async (req, res) => {
     return res.status(404).json({ error: "Association not found" });
   }
 
-  return res.json({ galleryItems: association.galleryItems });
+  const galleryItems = await Promise.all(
+    association.galleryItems.map(normalizeGalleryItemRecord),
+  );
+
+  return res.json({
+    galleryItems: galleryItems.map((item) => serializeGalleryItem(req, item)),
+  });
 });
 
 router.post("/:id/gallery", async (req, res) => {
@@ -707,7 +896,10 @@ router.post("/:id/gallery", async (req, res) => {
   const galleryItem = await prisma.associationGalleryItem.create({
     data: {
       associationId: req.params.id,
-      imageUrl: parsed.data.imageUrl,
+      imageUrl: normalizeGalleryImageValue(
+        parsed.data.imageUrl,
+        `${req.params.id}-gallery`,
+      ),
       headline: parsed.data.headline,
       tagline: parsed.data.tagline,
       description: parsed.data.description,
@@ -715,7 +907,7 @@ router.post("/:id/gallery", async (req, res) => {
     },
   });
 
-  return res.status(201).json({ galleryItem });
+  return res.status(201).json({ galleryItem: serializeGalleryItem(req, galleryItem) });
 });
 
 router.post("/:id/gallery/uploads", galleryUpload.array("files", 30), async (req, res) => {
@@ -778,14 +970,21 @@ router.patch("/:id/gallery/:galleryItemId", async (req, res) => {
   const updatedGalleryItem = await prisma.associationGalleryItem.update({
     where: { id: req.params.galleryItemId },
     data: {
-      imageUrl: parsed.data.imageUrl,
+      imageUrl: normalizeGalleryImageValue(
+        parsed.data.imageUrl,
+        req.params.galleryItemId,
+      ),
       headline: parsed.data.headline,
       tagline: parsed.data.tagline,
       description: parsed.data.description,
     },
   });
 
-  return res.json({ galleryItem: updatedGalleryItem });
+  if (updatedGalleryItem.imageUrl !== galleryItem.imageUrl) {
+    deleteLocalAssetIfPresent(galleryItem.imageUrl, "uploads/gallery");
+  }
+
+  return res.json({ galleryItem: serializeGalleryItem(req, updatedGalleryItem) });
 });
 
 router.delete("/:id/gallery/:galleryItemId", async (req, res) => {
@@ -804,7 +1003,7 @@ router.delete("/:id/gallery/:galleryItemId", async (req, res) => {
     where: { id: req.params.galleryItemId },
   });
 
-  deleteLocalGalleryAssetIfPresent(galleryItem.imageUrl);
+  deleteLocalAssetIfPresent(galleryItem.imageUrl, "uploads/gallery");
 
   return res.status(204).send();
 });
