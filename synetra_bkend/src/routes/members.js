@@ -7,6 +7,7 @@ import xlsx from "xlsx";
 import { z } from "zod";
 import {
   BULK_MEMBER_DEFAULT_PASSWORD,
+  PENDING_PASSWORD_PREFIX,
   buildDefaultMemberPasswordHash,
   buildPendingPasswordHash,
 } from "../lib/auth.js";
@@ -242,6 +243,11 @@ function buildAccessUpdate(accessStatus) {
         memberStatus: MemberStatus.PENDING,
       };
   }
+}
+
+function hasPendingPasswordHash(passwordHash) {
+  return typeof passwordHash === "string" &&
+    passwordHash.startsWith(`${PENDING_PASSWORD_PREFIX}:`);
 }
 
 async function ensureAssociation(associationId) {
@@ -493,6 +499,10 @@ router.post("/", async (req, res) => {
       : (parsed.data.membershipStatus ?? MemberStatus.PENDING);
   const initialApprovedAt =
     initialApprovalStatus === ApprovalStatus.APPROVED ? new Date() : null;
+  const initialPasswordHash =
+    initialApprovalStatus === ApprovalStatus.APPROVED
+      ? await buildDefaultMemberPasswordHash()
+      : buildPendingPasswordHash();
 
   try {
     const member = await prisma.$transaction(async (tx) => {
@@ -517,6 +527,11 @@ router.post("/", async (req, res) => {
       });
 
       if (existingUser) {
+        const shouldAssignDefaultPassword =
+          initialApprovalStatus === ApprovalStatus.APPROVED &&
+          (existingUser.approvalStatus !== ApprovalStatus.APPROVED ||
+            hasPendingPasswordHash(existingUser.passwordHash));
+
         await tx.user.update({
           where: { id: existingUser.id },
           data: {
@@ -535,13 +550,16 @@ router.post("/", async (req, res) => {
               existingUser.approvalStatus === ApprovalStatus.REJECTED
                 ? null
                 : undefined,
+            ...(shouldAssignDefaultPassword
+              ? { passwordHash: initialPasswordHash }
+              : {}),
           },
         });
       } else {
         await tx.user.create({
           data: {
             ...buildMemberUserPayload(createdMember),
-            passwordHash: buildPendingPasswordHash(),
+            passwordHash: initialPasswordHash,
             approvalStatus: initialApprovalStatus,
             approvedAt: initialApprovedAt,
           },
