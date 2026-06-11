@@ -32,17 +32,30 @@ export function getRequestDeviceInfo(req) {
 export async function createUserSession({ userId, req }) {
   const token = createSessionToken();
   const refreshToken = createSessionToken();
-  const session = await prisma.userSession.create({
-    data: {
-      userId,
-      tokenHash: hashSessionToken(token),
-      refreshTokenHash: hashSessionToken(refreshToken),
-      deviceInfo: getRequestDeviceInfo(req),
-      ipAddress: normalizeIpAddress(req.ip),
-      userAgent: req.get("user-agent") || null,
-      expiresAt: buildSessionExpiryDate(),
-      refreshExpiresAt: buildRefreshTokenExpiryDate(),
-    },
+  const now = new Date();
+  const session = await prisma.$transaction(async (tx) => {
+    await tx.userSession.updateMany({
+      where: {
+        userId,
+        revokedAt: null,
+      },
+      data: {
+        revokedAt: now,
+      },
+    });
+
+    return tx.userSession.create({
+      data: {
+        userId,
+        tokenHash: hashSessionToken(token),
+        refreshTokenHash: hashSessionToken(refreshToken),
+        deviceInfo: getRequestDeviceInfo(req),
+        ipAddress: normalizeIpAddress(req.ip),
+        userAgent: req.get("user-agent") || null,
+        expiresAt: buildSessionExpiryDate(),
+        refreshExpiresAt: buildRefreshTokenExpiryDate(),
+      },
+    });
   });
 
   return {
