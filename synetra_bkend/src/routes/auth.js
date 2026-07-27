@@ -32,6 +32,10 @@ const refreshSchema = z.object({
 });
 
 function resolveViewerRole(user) {
+  if (user.isSuperAdmin) {
+    return "superAdmin";
+  }
+
   if (user.isAdmin) {
     return "admin";
   }
@@ -75,6 +79,7 @@ function serializeSession(user, session = null) {
       associationId: user.associationId,
       memberId: user.memberId,
       viewerRole: resolveViewerRole(user),
+      isSuperAdmin: user.isSuperAdmin === true,
       mustChangePassword: isManagedDefaultPasswordHash(user.passwordHash),
       approvalStatus: user.approvalStatus,
       isActive: user.isActive,

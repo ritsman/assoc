@@ -153,6 +153,22 @@ export function requireAdminUser(req, res, next) {
   return next();
 }
 
+export function requireSuperAdminUser(req, res, next) {
+  if (!req.auth?.user) {
+    return res.status(401).json({
+      error: "Authentication is required for this action.",
+    });
+  }
+
+  if (!req.auth.user.isSuperAdmin) {
+    return res.status(403).json({
+      error: "Super admin access is required for this action.",
+    });
+  }
+
+  return next();
+}
+
 export async function resolveRefreshableSession(refreshToken) {
   if (!refreshToken) {
     return null;

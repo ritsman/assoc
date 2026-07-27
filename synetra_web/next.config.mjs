@@ -5,6 +5,9 @@ const nextConfig = {
   typedRoutes: false,
   outputFileTracingRoot: path.join(process.cwd(), ".."),
   devIndicators: false,
+  experimental: {
+    devtoolSegmentExplorer: false,
+  },
 };
 
 export default nextConfig;

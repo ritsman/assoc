@@ -1,7 +1,7 @@
 import { Router } from "express";
 import prismaPkg from "@prisma/client";
 import { z } from "zod";
-import { buildDefaultMemberPasswordHash } from "../lib/auth.js";
+import { buildDefaultMemberPasswordHash, hashPassword } from "../lib/auth.js";
 import { prisma } from "../lib/prisma.js";
 import {
   requireAdminUser,
@@ -10,13 +10,49 @@ import {
 
 const router = Router();
 const { ApprovalStatus, MemberStatus } = prismaPkg;
+const DEFAULT_SUPER_ADMIN_PASSWORD =
+  process.env.DEFAULT_SUPER_ADMIN_PASSWORD || "Admin@123";
 
 const accessStatusSchema = z.object({
   accessStatus: z.enum(["PENDING", "APPROVED", "SUSPENDED", "CANCELLED"]),
 });
-const adminRoleSchema = z.object({
-  isAdmin: z.boolean(),
+const adminRoleSchema = z
+  .object({
+    role: z.enum(["member", "admin", "superAdmin"]).optional(),
+    isAdmin: z.boolean().optional(),
+  })
+  .refine((value) => value.role || typeof value.isAdmin === "boolean", {
+    message: "Either role or isAdmin must be provided",
+  });
+const createSuperAdminSchema = z.object({
+  email: z.string().email(),
+  firstName: z.string().trim().optional(),
+  lastName: z.string().trim().optional(),
 });
+
+function buildNamesFromEmail(email) {
+  const localPart = String(email || "")
+    .split("@")[0]
+    .replace(/[._-]+/g, " ")
+    .trim();
+
+  if (!localPart) {
+    return {
+      firstName: "Super",
+      lastName: "Admin",
+    };
+  }
+
+  const segments = localPart
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1));
+
+  return {
+    firstName: segments[0] || "Super",
+    lastName: segments.slice(1).join(" ") || "Admin",
+  };
+}
 
 function serializeUser(user) {
   const { passwordHash, ...safeUser } = user;
@@ -68,6 +104,10 @@ function buildAccessUpdate(accessStatus) {
 }
 
 function resolveViewerRole(user) {
+  if (user.isSuperAdmin) {
+    return "superAdmin";
+  }
+
   if (user.isAdmin) {
     return "admin";
   }
@@ -254,6 +294,10 @@ router.patch(
       });
     }
 
+    const requestedRole =
+      parsed.data.role ??
+      (parsed.data.isAdmin === true ? "admin" : "member");
+
     const targetUser = await prisma.user.findUnique({
       where: { id: req.params.id },
       include: {
@@ -272,7 +316,7 @@ router.patch(
     }
 
     if (
-      parsed.data.isAdmin &&
+      requestedRole !== "member" &&
       (targetUser.approvalStatus !== ApprovalStatus.APPROVED ||
         !targetUser.isActive)
     ) {
@@ -281,12 +325,43 @@ router.patch(
       });
     }
 
+    if (requestedRole === "superAdmin" && !req.auth.user.isSuperAdmin) {
+      return res.status(403).json({
+        error: "Only a super admin can create another super admin.",
+      });
+    }
+
+    if (
+      requestedRole !== "superAdmin" &&
+      targetUser.isSuperAdmin
+    ) {
+      if (!req.auth.user.isSuperAdmin) {
+        return res.status(403).json({
+          error: "Only a super admin can remove super admin access.",
+        });
+      }
+
+      const superAdminCount = await prisma.user.count({
+        where: {
+          isSuperAdmin: true,
+          isActive: true,
+        },
+      });
+
+      if (superAdminCount <= 1) {
+        return res.status(400).json({
+          error: "At least one super admin must remain active.",
+        });
+      }
+    }
+
     const updatedUser = await prisma.user.update({
       where: { id: req.params.id },
       data: {
-        isAdmin: parsed.data.isAdmin,
+        isAdmin: requestedRole !== "member",
+        isSuperAdmin: requestedRole === "superAdmin",
         isActive: true,
-        ...(parsed.data.isAdmin
+        ...(requestedRole !== "member"
           ? {
               approvalStatus: ApprovalStatus.APPROVED,
               approvedAt: targetUser.approvedAt ?? new Date(),
@@ -301,6 +376,88 @@ router.patch(
     });
 
     return res.json({ user: serializeUser(updatedUser) });
+  },
+);
+
+router.post(
+  "/super-admins",
+  requireAuthenticatedSession,
+  requireAdminUser,
+  async (req, res) => {
+    if (!req.auth.user.isSuperAdmin) {
+      return res.status(403).json({
+        error: "Only a super admin can create another super admin.",
+      });
+    }
+
+    const parsed = createSuperAdminSchema.safeParse(req.body);
+
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: "Invalid super admin payload",
+        details: parsed.error.flatten(),
+      });
+    }
+
+    const email = parsed.data.email.trim().toLowerCase();
+    const derivedNames = buildNamesFromEmail(email);
+    const firstName =
+      parsed.data.firstName?.trim() || derivedNames.firstName;
+    const lastName = parsed.data.lastName?.trim() || derivedNames.lastName;
+    const passwordHash = await hashPassword(DEFAULT_SUPER_ADMIN_PASSWORD);
+
+    const existingUser = await prisma.user.findUnique({
+      where: { email },
+      include: {
+        member: true,
+        vendor: true,
+      },
+    });
+
+    const user = existingUser
+      ? await prisma.user.update({
+          where: { id: existingUser.id },
+          data: {
+            associationId:
+              req.auth.user.associationId || existingUser.associationId,
+            firstName: existingUser.firstName || firstName,
+            lastName: existingUser.lastName || lastName,
+            passwordHash,
+            isAdmin: true,
+            isSuperAdmin: true,
+            isActive: true,
+            approvalStatus: ApprovalStatus.APPROVED,
+            approvedAt: existingUser.approvedAt ?? new Date(),
+            rejectedAt: null,
+          },
+          include: {
+            member: true,
+            vendor: true,
+          },
+        })
+      : await prisma.user.create({
+          data: {
+            associationId: req.auth.user.associationId || null,
+            firstName,
+            lastName,
+            email,
+            passwordHash,
+            isAdmin: true,
+            isSuperAdmin: true,
+            isActive: true,
+            approvalStatus: ApprovalStatus.APPROVED,
+            approvedAt: new Date(),
+          },
+          include: {
+            member: true,
+            vendor: true,
+          },
+        });
+
+    return res.status(existingUser ? 200 : 201).json({
+      user: serializeUser(user),
+      defaultPassword: DEFAULT_SUPER_ADMIN_PASSWORD,
+    });
   },
 );
 
