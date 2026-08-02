@@ -30,6 +30,8 @@ function resolveRequestBaseUrl(req) {
   const forwardedPortHeader = req.get("x-forwarded-port") || "";
   const forwardedPort = forwardedPortHeader.split(",")[0]?.trim();
   const requestHost = forwardedHost || req.get("host");
+  const originHeader = req.get("origin") || "";
+  const refererHeader = req.get("referer") || "";
   const hostname = String(requestHost || "")
     .replace(/:\d+$/, "")
     .trim()
@@ -38,10 +40,20 @@ function resolveRequestBaseUrl(req) {
     hostname === "localhost" ||
     hostname === "127.0.0.1" ||
     hostname.endsWith(".local");
+  const matchingSecureHeader = [originHeader, refererHeader]
+    .map((value) => {
+      try {
+        return value ? new URL(value) : null;
+      } catch (_error) {
+        return null;
+      }
+    })
+    .find((value) => value?.host === requestHost && value.protocol === "https:");
   const protocol =
     forwardedProto === "https" ||
     forwardedProto === "on" ||
-    forwardedPort === "443"
+    forwardedPort === "443" ||
+    matchingSecureHeader
       ? "https"
       : forwardedProto || req.protocol || (req.secure ? "https" : isLocalHost ? "http" : "https");
 
