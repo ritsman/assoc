@@ -9995,6 +9995,12 @@ export default function HomePage() {
       if (resolvedSession?.authToken) {
         headers.set("Authorization", `Bearer ${resolvedSession.authToken}`);
       }
+      if (
+        typeof options.body === "string" &&
+        !headers.has("Content-Type")
+      ) {
+        headers.set("Content-Type", "application/json");
+      }
 
       return fetch(`${apiBaseUrl}${path}`, {
         ...options,
