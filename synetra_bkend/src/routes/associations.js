@@ -1009,10 +1009,6 @@ router.post("/:id/gallery/folders", galleryUpload.array("files", 100), async (re
     });
   }
 
-  if (!files.length) {
-    return res.status(400).json({ error: "At least one gallery image is required" });
-  }
-
   const association = await prisma.association.findUnique({
     where: { id: req.params.id },
   });
@@ -1029,12 +1025,14 @@ router.post("/:id/gallery/folders", galleryUpload.array("files", 100), async (re
       },
     });
 
-    await tx.associationGalleryPhoto.createMany({
-      data: files.map((file) => ({
-        folderId: folder.id,
-        imageUrl: buildPublicAssetUrl(req, `uploads/gallery/${file.filename}`),
-      })),
-    });
+    if (files.length > 0) {
+      await tx.associationGalleryPhoto.createMany({
+        data: files.map((file) => ({
+          folderId: folder.id,
+          imageUrl: buildPublicAssetUrl(req, `uploads/gallery/${file.filename}`),
+        })),
+      });
+    }
 
     return tx.associationGalleryFolder.findUnique({
       where: { id: folder.id },
@@ -1050,6 +1048,49 @@ router.post("/:id/gallery/folders", galleryUpload.array("files", 100), async (re
     galleryFolder: serializeGalleryFolder(req, createdFolder),
   });
 });
+
+router.post(
+  "/:id/gallery/folders/:folderId/photos",
+  galleryUpload.array("files", 100),
+  async (req, res) => {
+    const files = Array.isArray(req.files) ? req.files : [];
+
+    if (!files.length) {
+      return res.status(400).json({ error: "At least one gallery image is required" });
+    }
+
+    const folder = await prisma.associationGalleryFolder.findFirst({
+      where: {
+        id: req.params.folderId,
+        associationId: req.params.id,
+      },
+    });
+
+    if (!folder) {
+      return res.status(404).json({ error: "Gallery folder not found" });
+    }
+
+    await prisma.associationGalleryPhoto.createMany({
+      data: files.map((file) => ({
+        folderId: folder.id,
+        imageUrl: buildPublicAssetUrl(req, `uploads/gallery/${file.filename}`),
+      })),
+    });
+
+    const updatedFolder = await prisma.associationGalleryFolder.findUnique({
+      where: { id: folder.id },
+      include: {
+        photos: {
+          orderBy: [{ createdAt: "desc" }],
+        },
+      },
+    });
+
+    return res.status(201).json({
+      galleryFolder: serializeGalleryFolder(req, updatedFolder),
+    });
+  },
+);
 
 router.patch("/:id/gallery/folders/:folderId", async (req, res) => {
   const parsed = galleryFolderSchema.safeParse(req.body);

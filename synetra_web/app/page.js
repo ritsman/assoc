@@ -3468,6 +3468,7 @@ function AssociationTabContent({
   onSaveGalleryFolder,
   onDeleteGalleryFolder,
   onDeleteGalleryPhoto,
+  onUploadGalleryFolderPhotos,
   galleryFolderEditorRef,
   galleryFolderNameInputRef,
   circularDocuments,
@@ -3569,6 +3570,7 @@ function AssociationTabContent({
         onSave={onSaveGalleryFolder}
         onDeleteFolder={onDeleteGalleryFolder}
         onDeletePhoto={onDeleteGalleryPhoto}
+        onUploadPhotos={onUploadGalleryFolderPhotos}
         editorRef={galleryFolderEditorRef}
         nameInputRef={galleryFolderNameInputRef}
       />
@@ -4659,6 +4661,7 @@ function AssociationGalleryPanel({
   onSave,
   onDeleteFolder,
   onDeletePhoto,
+  onUploadPhotos,
   editorRef,
   nameInputRef,
 }) {
@@ -4739,20 +4742,18 @@ function AssociationGalleryPanel({
                     <div className="gallery-form-placeholder">
                       {formData.files.length > 0
                         ? `${formData.files.length} image${formData.files.length === 1 ? "" : "s"} selected`
-                        : "Folder preview"}
+                        : "No images selected yet"}
                     </div>
                   </div>
                   <button
                     className="secondary-link secondary-button profile-upload-button"
                     type="button"
                   >
-                    Upload Image Folder
+                    Select Images (Optional)
                     <input
                       type="file"
                       accept="image/*"
                       multiple
-                      webkitdirectory=""
-                      directory=""
                       onChange={(event) => onFilesChange(event.target.files)}
                     />
                   </button>
@@ -4863,8 +4864,8 @@ function AssociationGalleryPanel({
             <span className="mini-label">Gallery</span>
             <h3>No gallery folders yet</h3>
             <p>
-              Create a folder and upload photos to start organizing the
-              association gallery.
+              Create an empty folder first, then open it and upload photos any
+              time.
             </p>
           </article>
         )}
@@ -4876,34 +4877,62 @@ function AssociationGalleryPanel({
                 <span className="mini-label">Open Folder</span>
                 <h3>{activeFolder.name}</h3>
               </div>
+              {isAdmin ? (
+                <button
+                  className="secondary-link secondary-button profile-upload-button"
+                  type="button"
+                  disabled={isSaving}
+                >
+                  Upload Images
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={(event) =>
+                      onUploadPhotos(
+                        activeFolder.id,
+                        Array.from(event.target.files ?? []),
+                      )
+                    }
+                  />
+                </button>
+              ) : null}
             </div>
-            <div className="association-gallery-grid">
-              {activeFolder.photos.map((photo) => (
-                <article key={photo.id} className="association-gallery-card">
-                  <div className="association-gallery-visual">
-                    <img src={photo.imageUrl} alt={activeFolder.name} />
-                  </div>
-                  <div className="association-gallery-copy">
-                    <h3>{activeFolder.name}</h3>
-                    <span className="mini-label">
-                      {formatGalleryStamp(photo.createdAt) || "No timestamp"}
-                    </span>
-                  </div>
-                  {isAdmin ? (
-                    <div className="record-actions">
-                      <button
-                        className="secondary-link secondary-button danger-button"
-                        type="button"
-                        onClick={() => onDeletePhoto(activeFolder.id, photo.id)}
-                        disabled={isSaving}
-                      >
-                        Delete Photo
-                      </button>
+            {activeFolder.photos.length > 0 ? (
+              <div className="association-gallery-grid">
+                {activeFolder.photos.map((photo) => (
+                  <article key={photo.id} className="association-gallery-card">
+                    <div className="association-gallery-visual">
+                      <img src={photo.imageUrl} alt={activeFolder.name} />
                     </div>
-                  ) : null}
-                </article>
-              ))}
-            </div>
+                    <div className="association-gallery-copy">
+                      <h3>{activeFolder.name}</h3>
+                      <span className="mini-label">
+                        {formatGalleryStamp(photo.createdAt) || "No timestamp"}
+                      </span>
+                    </div>
+                    {isAdmin ? (
+                      <div className="record-actions">
+                        <button
+                          className="secondary-link secondary-button danger-button"
+                          type="button"
+                          onClick={() => onDeletePhoto(activeFolder.id, photo.id)}
+                          disabled={isSaving}
+                        >
+                          Delete Photo
+                        </button>
+                      </div>
+                    ) : null}
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <article className="association-profile-card committee-empty-card">
+                <span className="mini-label">Open Folder</span>
+                <h3>No photos in this folder yet</h3>
+                <p>Use Upload Images to add one or many photos into this folder.</p>
+              </article>
+            )}
           </article>
         ) : null}
       </section>
@@ -14208,13 +14237,6 @@ export default function HomePage() {
         return;
       }
 
-      if (!editingGalleryFolderId && galleryFolderForm.files.length === 0) {
-        setGalleryFolderFeedback(
-          "Select one or more images before creating a folder.",
-        );
-        return;
-      }
-
       setIsSavingGalleryFolder(true);
       setGalleryFolderFeedback("");
 
@@ -14268,6 +14290,64 @@ export default function HomePage() {
           editingGalleryFolderId
             ? "Gallery folder updated successfully."
             : "Gallery folder created successfully.",
+        );
+      } finally {
+        setIsSavingGalleryFolder(false);
+      }
+    })();
+  };
+
+  const uploadGalleryFolderPhotos = (folderId, files) => {
+    void (async () => {
+      if (!associationProfile.id) {
+        setGalleryFolderFeedback(
+          "Association profile must be available before uploading photos.",
+        );
+        return;
+      }
+
+      const imageFiles = Array.from(files ?? []).filter((file) =>
+        file.type.startsWith("image/"),
+      );
+
+      if (imageFiles.length === 0) {
+        setGalleryFolderFeedback("Select one or more images before uploading.");
+        return;
+      }
+
+      setIsSavingGalleryFolder(true);
+      setGalleryFolderFeedback("");
+
+      try {
+        const payload = new FormData();
+        imageFiles.forEach((file) => {
+          payload.append("files", file);
+        });
+
+        const response = await runAuthenticatedFetch(
+          `/associations/${associationProfile.id}/gallery/folders/${folderId}/photos`,
+          {
+            method: "POST",
+            body: payload,
+          },
+        );
+
+        if (!response.ok) {
+          let message = "Unable to upload gallery photos right now.";
+          try {
+            const result = await response.json();
+            if (result?.error) {
+              message = result.error;
+            }
+          } catch {}
+          setGalleryFolderFeedback(message);
+          return;
+        }
+
+        await loadAssociationProfile();
+        setActiveGalleryFolderId(folderId);
+        setGalleryFolderFeedback(
+          `${imageFiles.length} photo${imageFiles.length === 1 ? "" : "s"} uploaded successfully.`,
         );
       } finally {
         setIsSavingGalleryFolder(false);
