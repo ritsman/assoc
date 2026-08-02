@@ -3469,6 +3469,13 @@ function AssociationTabContent({
   onDeleteGalleryFolder,
   onDeleteGalleryPhoto,
   onUploadGalleryFolderPhotos,
+  selectedGalleryFolderIds,
+  selectedGalleryPhotoIds,
+  onToggleGalleryFolderSelect,
+  onDeleteSelectedGalleryFolders,
+  onToggleGalleryPhotoSelect,
+  onDeleteSelectedGalleryPhotos,
+  onCloseGalleryFolder,
   galleryFolderEditorRef,
   galleryFolderNameInputRef,
   circularDocuments,
@@ -3571,6 +3578,13 @@ function AssociationTabContent({
         onDeleteFolder={onDeleteGalleryFolder}
         onDeletePhoto={onDeleteGalleryPhoto}
         onUploadPhotos={onUploadGalleryFolderPhotos}
+        selectedFolderIds={selectedGalleryFolderIds}
+        selectedPhotoIds={selectedGalleryPhotoIds}
+        onToggleFolderSelect={onToggleGalleryFolderSelect}
+        onDeleteSelectedFolders={onDeleteSelectedGalleryFolders}
+        onTogglePhotoSelect={onToggleGalleryPhotoSelect}
+        onDeleteSelectedPhotos={onDeleteSelectedGalleryPhotos}
+        onCloseFolder={onCloseGalleryFolder}
         editorRef={galleryFolderEditorRef}
         nameInputRef={galleryFolderNameInputRef}
       />
@@ -4662,6 +4676,13 @@ function AssociationGalleryPanel({
   onDeleteFolder,
   onDeletePhoto,
   onUploadPhotos,
+  selectedFolderIds,
+  selectedPhotoIds,
+  onToggleFolderSelect,
+  onDeleteSelectedFolders,
+  onTogglePhotoSelect,
+  onDeleteSelectedPhotos,
+  onCloseFolder,
   editorRef,
   nameInputRef,
 }) {
@@ -4698,6 +4719,14 @@ function AssociationGalleryPanel({
             </div>
             {isAdmin ? (
               <div className="record-actions">
+                <button
+                  className="secondary-link secondary-button danger-button"
+                  type="button"
+                  onClick={onDeleteSelectedFolders}
+                  disabled={isSaving || selectedFolderIds.length === 0}
+                >
+                  Delete Selected
+                </button>
                 <button
                   className="primary-link admin-action-button"
                   type="button"
@@ -4838,6 +4867,15 @@ function AssociationGalleryPanel({
                 </div>
                 {isAdmin ? (
                   <div className="record-actions">
+                    <label className="association-card-selector">
+                      <input
+                        type="checkbox"
+                        checked={selectedFolderIds.includes(folder.id)}
+                        onChange={() => onToggleFolderSelect(folder.id)}
+                        disabled={isSaving}
+                      />
+                      <span>Select</span>
+                    </label>
                     <button
                       className="secondary-link secondary-button"
                       type="button"
@@ -4877,26 +4915,46 @@ function AssociationGalleryPanel({
                 <span className="mini-label">Open Folder</span>
                 <h3>{activeFolder.name}</h3>
               </div>
-              {isAdmin ? (
+              <div className="record-actions">
                 <button
-                  className="secondary-link secondary-button profile-upload-button"
+                  className="secondary-link secondary-button"
                   type="button"
+                  onClick={onCloseFolder}
                   disabled={isSaving}
                 >
-                  Upload Images
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    onChange={(event) =>
-                      onUploadPhotos(
-                        activeFolder.id,
-                        Array.from(event.target.files ?? []),
-                      )
-                    }
-                  />
+                  Back To Folders
                 </button>
-              ) : null}
+                {isAdmin ? (
+                  <>
+                    <button
+                      className="secondary-link secondary-button danger-button"
+                      type="button"
+                      onClick={onDeleteSelectedPhotos}
+                      disabled={isSaving || selectedPhotoIds.length === 0}
+                    >
+                      Delete Selected
+                    </button>
+                    <button
+                      className="secondary-link secondary-button profile-upload-button"
+                      type="button"
+                      disabled={isSaving}
+                    >
+                      Upload Images
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={(event) =>
+                          onUploadPhotos(
+                            activeFolder.id,
+                            Array.from(event.target.files ?? []),
+                          )
+                        }
+                      />
+                    </button>
+                  </>
+                ) : null}
+              </div>
             </div>
             {activeFolder.photos.length > 0 ? (
               <div className="association-gallery-grid">
@@ -4913,6 +4971,15 @@ function AssociationGalleryPanel({
                     </div>
                     {isAdmin ? (
                       <div className="record-actions">
+                        <label className="association-card-selector">
+                          <input
+                            type="checkbox"
+                            checked={selectedPhotoIds.includes(photo.id)}
+                            onChange={() => onTogglePhotoSelect(photo.id)}
+                            disabled={isSaving}
+                          />
+                          <span>Select</span>
+                        </label>
                         <button
                           className="secondary-link secondary-button danger-button"
                           type="button"
@@ -10026,6 +10093,8 @@ export default function HomePage() {
   const [galleryFolders, setGalleryFolders] = useState([]);
   const [activeGalleryFolderId, setActiveGalleryFolderId] = useState("");
   const [editingGalleryFolderId, setEditingGalleryFolderId] = useState(null);
+  const [selectedGalleryFolderIds, setSelectedGalleryFolderIds] = useState([]);
+  const [selectedGalleryPhotoIds, setSelectedGalleryPhotoIds] = useState([]);
   const [galleryFolderForm, setGalleryFolderForm] = useState(
     defaultGalleryFolderForm,
   );
@@ -10699,6 +10768,25 @@ export default function HomePage() {
       payload.association?.galleryFolders,
     );
     setGalleryFolders(nextGalleryFolders);
+    setSelectedGalleryFolderIds((current) =>
+      current.filter((folderId) =>
+        nextGalleryFolders.some((folder) => folder.id === folderId),
+      ),
+    );
+    setSelectedGalleryPhotoIds((current) => {
+      const nextActiveFolderId = nextGalleryFolders.some(
+        (folder) => folder.id === activeGalleryFolderId,
+      )
+        ? activeGalleryFolderId
+        : (nextGalleryFolders[0]?.id ?? "");
+      const nextActiveFolder =
+        nextGalleryFolders.find((folder) => folder.id === nextActiveFolderId) ??
+        null;
+
+      return current.filter((photoId) =>
+        nextActiveFolder?.photos?.some((photo) => photo.id === photoId),
+      );
+    });
     setActiveGalleryFolderId((current) =>
       nextGalleryFolders.some((folder) => folder.id === current)
         ? current
@@ -10953,6 +11041,26 @@ export default function HomePage() {
           payload.association?.galleryFolders,
         );
         setGalleryFolders(nextGalleryFolders);
+        setSelectedGalleryFolderIds((current) =>
+          current.filter((folderId) =>
+            nextGalleryFolders.some((folder) => folder.id === folderId),
+          ),
+        );
+        setSelectedGalleryPhotoIds((current) => {
+          const nextActiveFolderId = nextGalleryFolders.some(
+            (folder) => folder.id === activeGalleryFolderId,
+          )
+            ? activeGalleryFolderId
+            : (nextGalleryFolders[0]?.id ?? "");
+          const nextActiveFolder =
+            nextGalleryFolders.find(
+              (folder) => folder.id === nextActiveFolderId,
+            ) ?? null;
+
+          return current.filter((photoId) =>
+            nextActiveFolder?.photos?.some((photo) => photo.id === photoId),
+          );
+        });
         setActiveGalleryFolderId((current) =>
           nextGalleryFolders.some((folder) => folder.id === current)
             ? current
@@ -14355,6 +14463,22 @@ export default function HomePage() {
     })();
   };
 
+  const toggleSelectGalleryFolder = (folderId) => {
+    setSelectedGalleryFolderIds((current) =>
+      current.includes(folderId)
+        ? current.filter((id) => id !== folderId)
+        : [...current, folderId],
+    );
+  };
+
+  const toggleSelectGalleryPhoto = (photoId) => {
+    setSelectedGalleryPhotoIds((current) =>
+      current.includes(photoId)
+        ? current.filter((id) => id !== photoId)
+        : [...current, photoId],
+    );
+  };
+
   const deleteGalleryFolder = (folderId) => {
     void (async () => {
       if (!associationProfile.id) {
@@ -14388,8 +14512,12 @@ export default function HomePage() {
         }
 
         await loadAssociationProfile();
+        setSelectedGalleryFolderIds((current) =>
+          current.filter((id) => id !== folderId),
+        );
         if (activeGalleryFolderId === folderId) {
           setActiveGalleryFolderId("");
+          setSelectedGalleryPhotoIds([]);
         }
         if (editingGalleryFolderId === folderId) {
           cancelGalleryFolderEdit();
@@ -14434,11 +14562,112 @@ export default function HomePage() {
         }
 
         await loadAssociationProfile();
+        setSelectedGalleryPhotoIds((current) =>
+          current.filter((id) => id !== photoId),
+        );
         setGalleryFolderFeedback("Gallery photo deleted.");
       } finally {
         setIsSavingGalleryFolder(false);
       }
     })();
+  };
+
+  const deleteSelectedGalleryFolders = () => {
+    void (async () => {
+      if (!associationProfile.id || selectedGalleryFolderIds.length === 0) {
+        setGalleryFolderFeedback("Select one or more folders to delete.");
+        return;
+      }
+
+      setIsSavingGalleryFolder(true);
+      setGalleryFolderFeedback("");
+
+      try {
+        await Promise.all(
+          selectedGalleryFolderIds.map(async (folderId) => {
+            const response = await runAuthenticatedFetch(
+              `/associations/${associationProfile.id}/gallery/folders/${folderId}`,
+              {
+                method: "DELETE",
+              },
+            );
+
+            if (!response.ok && response.status !== 204) {
+              throw new Error("Unable to delete selected gallery folders.");
+            }
+          }),
+        );
+
+        const deletedFolderIds = [...selectedGalleryFolderIds];
+        await loadAssociationProfile();
+        setSelectedGalleryFolderIds([]);
+        if (deletedFolderIds.includes(activeGalleryFolderId)) {
+          setActiveGalleryFolderId("");
+          setSelectedGalleryPhotoIds([]);
+        }
+        setGalleryFolderFeedback(
+          `${deletedFolderIds.length} folder${deletedFolderIds.length === 1 ? "" : "s"} deleted.`,
+        );
+      } catch (_error) {
+        setGalleryFolderFeedback("Unable to delete selected gallery folders.");
+      } finally {
+        setIsSavingGalleryFolder(false);
+      }
+    })();
+  };
+
+  const deleteSelectedGalleryPhotos = () => {
+    void (async () => {
+      if (
+        !associationProfile.id ||
+        !activeGalleryFolderId ||
+        selectedGalleryPhotoIds.length === 0
+      ) {
+        setGalleryFolderFeedback("Select one or more photos to delete.");
+        return;
+      }
+
+      setIsSavingGalleryFolder(true);
+      setGalleryFolderFeedback("");
+
+      try {
+        await Promise.all(
+          selectedGalleryPhotoIds.map(async (photoId) => {
+            const response = await runAuthenticatedFetch(
+              `/associations/${associationProfile.id}/gallery/folders/${activeGalleryFolderId}/photos/${photoId}`,
+              {
+                method: "DELETE",
+              },
+            );
+
+            if (!response.ok && response.status !== 204) {
+              throw new Error("Unable to delete selected gallery photos.");
+            }
+          }),
+        );
+
+        const deletedPhotoIds = [...selectedGalleryPhotoIds];
+        await loadAssociationProfile();
+        setSelectedGalleryPhotoIds([]);
+        setGalleryFolderFeedback(
+          `${deletedPhotoIds.length} photo${deletedPhotoIds.length === 1 ? "" : "s"} deleted.`,
+        );
+      } catch (_error) {
+        setGalleryFolderFeedback("Unable to delete selected gallery photos.");
+      } finally {
+        setIsSavingGalleryFolder(false);
+      }
+    })();
+  };
+
+  const openGalleryFolder = (folderId) => {
+    setActiveGalleryFolderId(folderId);
+    setSelectedGalleryPhotoIds([]);
+  };
+
+  const closeGalleryFolder = () => {
+    setActiveGalleryFolderId("");
+    setSelectedGalleryPhotoIds([]);
   };
 
   const toggleSelectGalleryItem = (itemId) => {
@@ -15327,7 +15556,7 @@ export default function HomePage() {
                 galleryFolderForm={galleryFolderForm}
                 isSavingGalleryFolder={isSavingGalleryFolder}
                 galleryFolderFeedback={galleryFolderFeedback}
-                onOpenGalleryFolder={setActiveGalleryFolderId}
+                onOpenGalleryFolder={openGalleryFolder}
                 onOpenGalleryFolderEditor={openGalleryFolderEditor}
                 onGalleryFolderFieldChange={updateGalleryFolderField}
                 onGalleryFolderFilesChange={updateGalleryFolderFiles}
@@ -15336,6 +15565,13 @@ export default function HomePage() {
                 onDeleteGalleryFolder={deleteGalleryFolder}
                 onDeleteGalleryPhoto={deleteGalleryPhoto}
                 onUploadGalleryFolderPhotos={uploadGalleryFolderPhotos}
+                selectedGalleryFolderIds={selectedGalleryFolderIds}
+                selectedGalleryPhotoIds={selectedGalleryPhotoIds}
+                onToggleGalleryFolderSelect={toggleSelectGalleryFolder}
+                onDeleteSelectedGalleryFolders={deleteSelectedGalleryFolders}
+                onToggleGalleryPhotoSelect={toggleSelectGalleryPhoto}
+                onDeleteSelectedGalleryPhotos={deleteSelectedGalleryPhotos}
+                onCloseGalleryFolder={closeGalleryFolder}
                 galleryFolderEditorRef={galleryFolderEditorRef}
                 galleryFolderNameInputRef={galleryFolderNameInputRef}
                 circularDocuments={circularDocuments}
