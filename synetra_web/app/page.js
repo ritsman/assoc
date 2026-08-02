@@ -10795,7 +10795,7 @@ export default function HomePage() {
         (folder) => folder.id === activeGalleryFolderId,
       )
         ? activeGalleryFolderId
-        : (nextGalleryFolders[0]?.id ?? "");
+        : "";
       const nextActiveFolder =
         nextGalleryFolders.find((folder) => folder.id === nextActiveFolderId) ??
         null;
@@ -10807,7 +10807,7 @@ export default function HomePage() {
     setActiveGalleryFolderId((current) =>
       nextGalleryFolders.some((folder) => folder.id === current)
         ? current
-        : (nextGalleryFolders[0]?.id ?? ""),
+        : "",
     );
     setGalleryItems(
       mapAssociationGalleryItems(payload.association?.galleryItems),
@@ -11068,7 +11068,7 @@ export default function HomePage() {
             (folder) => folder.id === activeGalleryFolderId,
           )
             ? activeGalleryFolderId
-            : (nextGalleryFolders[0]?.id ?? "");
+            : "";
           const nextActiveFolder =
             nextGalleryFolders.find(
               (folder) => folder.id === nextActiveFolderId,
@@ -11081,7 +11081,7 @@ export default function HomePage() {
         setActiveGalleryFolderId((current) =>
           nextGalleryFolders.some((folder) => folder.id === current)
             ? current
-            : (nextGalleryFolders[0]?.id ?? ""),
+            : "",
         );
         setGalleryItems(
           mapAssociationGalleryItems(payload.association?.galleryItems),
