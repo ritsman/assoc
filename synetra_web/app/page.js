@@ -7,6 +7,7 @@ const apiBaseUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8083/api";
 const webAdminSessionStorageKey = "synetra_web.adminSession";
 const committeePostMasterStorageKey = "synetra_web.committeePostMaster";
+const membershipTypeMasterStorageKey = "synetra_web.membershipTypeMaster";
 const bootstrapSuperAdminEmail = "ritsman@gmail.com";
 const defaultCommitteePostOptions = [
   "Chairman",
@@ -14,6 +15,11 @@ const defaultCommitteePostOptions = [
   "Treasurer",
   "Vice Chairman",
   "Member",
+];
+const defaultMembershipTypeOptions = [
+  "Primary",
+  "Associate",
+  "Temporary Visit",
 ];
 const topLevelSections = {
   dashboard: "Dashboard",
@@ -134,6 +140,15 @@ function normalizeCommitteePostLabel(value) {
 
 function isReusableCommitteePost(value) {
   return normalizeCommitteePostLabel(value).toLowerCase() === "member";
+}
+
+function normalizeMembershipTypeLabel(value) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function getMembershipTypeDisplayLabel(value) {
+  const normalizedValue = normalizeMembershipTypeLabel(value);
+  return normalizedValue === "Temporary Visit" ? "Guest" : normalizedValue;
 }
 
 function readStoredCommitteePostOptions() {
@@ -1008,6 +1023,45 @@ function getCommitteeRank(post) {
   }
 }
 
+function readStoredMembershipTypeOptions() {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  try {
+    const rawValue = window.localStorage.getItem(membershipTypeMasterStorageKey);
+    if (!rawValue) {
+      return [];
+    }
+
+    const parsed = JSON.parse(rawValue);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed
+      .map((item) =>
+        typeof item === "string" ? normalizeMembershipTypeLabel(item) : "",
+      )
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function persistMembershipTypeOptions(types) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(
+      membershipTypeMasterStorageKey,
+      JSON.stringify(types),
+    );
+  } catch {}
+}
+
 function getCommitteeMembers(allMembers) {
   return [...allMembers]
     .filter((member) => member.isCommitteeMember)
@@ -1035,6 +1089,16 @@ function buildCommitteePostOptions(committeeMembers, storedPosts = []) {
       ...occupiedPosts,
     ]),
   ].sort((left, right) => getCommitteeRank(left) - getCommitteeRank(right));
+}
+
+function buildMembershipTypeOptions(allMembers, storedTypes = []) {
+  const occupiedTypes = allMembers
+    .map((member) => normalizeMembershipTypeLabel(member.membershipType || ""))
+    .filter(Boolean);
+
+  return [...new Set([...defaultMembershipTypeOptions, ...storedTypes, ...occupiedTypes])].sort(
+    (left, right) => left.localeCompare(right),
+  );
 }
 
 function areStringListsEqual(left, right) {
@@ -3449,6 +3513,7 @@ function AssociationTabContent({
   associationAboutFeedback,
   committeeMembers,
   allMembers,
+  membershipTypeOptions,
   editingCommitteeMemberId,
   committeeMemberForm,
   isSavingCommitteeMember,
@@ -3464,6 +3529,10 @@ function AssociationTabContent({
   masterFeedbackMessage,
   editingMasterPostValue,
   editMasterPostDraftValue,
+  membershipTypeDraftValue,
+  membershipTypeFeedbackMessage,
+  editingMembershipTypeValue,
+  editMembershipTypeDraftValue,
   onMasterDraftChange,
   onSaveMasterDraft,
   onEditMasterPostChange,
@@ -3471,6 +3540,13 @@ function AssociationTabContent({
   onDeleteMasterPost,
   onSaveMasterPostEdit,
   onCancelMasterPostEdit,
+  onMembershipTypeDraftChange,
+  onSaveMembershipTypeDraft,
+  onEditMembershipTypeDraftChange,
+  onEditMembershipType,
+  onDeleteMembershipType,
+  onSaveMembershipTypeEdit,
+  onCancelMembershipTypeEdit,
   galleryItems,
   galleryFolders,
   activeGalleryFolderId,
@@ -3562,6 +3638,7 @@ function AssociationTabContent({
       <ManagementCommitteePanel
         committeeMembers={committeeMembers}
         allMembers={allMembers}
+        membershipTypeOptions={membershipTypeOptions}
         committeePostOptions={committeePostOptions}
         isAdmin={isAdmin}
         editingMemberId={editingCommitteeMemberId}
@@ -3636,11 +3713,17 @@ function AssociationTabContent({
     return (
       <AssociationMasterPanel
         committeeMembers={committeeMembers}
+        allMembers={allMembers}
         committeePostOptions={committeePostOptions}
+        membershipTypeOptions={membershipTypeOptions}
         newCommitteePost={masterDraftValue}
         editCommitteePostDraft={editMasterPostDraftValue}
-        feedbackMessage={masterFeedbackMessage}
+        newMembershipType={membershipTypeDraftValue}
+        editMembershipTypeDraft={editMembershipTypeDraftValue}
+        committeeFeedbackMessage={masterFeedbackMessage}
+        membershipTypeFeedbackMessage={membershipTypeFeedbackMessage}
         editingPost={editingMasterPostValue}
+        editingMembershipType={editingMembershipTypeValue}
         isAdmin={isAdmin}
         onNewCommitteePostChange={onMasterDraftChange}
         onEditCommitteePostChange={onEditMasterPostChange}
@@ -3649,6 +3732,13 @@ function AssociationTabContent({
         onDeleteCommitteePost={onDeleteMasterPost}
         onSaveCommitteePostEdit={onSaveMasterPostEdit}
         onCancelCommitteePostEdit={onCancelMasterPostEdit}
+        onNewMembershipTypeChange={onMembershipTypeDraftChange}
+        onEditMembershipTypeChange={onEditMembershipTypeDraftChange}
+        onAddMembershipType={onSaveMembershipTypeDraft}
+        onEditMembershipType={onEditMembershipType}
+        onDeleteMembershipType={onDeleteMembershipType}
+        onSaveMembershipTypeEdit={onSaveMembershipTypeEdit}
+        onCancelMembershipTypeEdit={onCancelMembershipTypeEdit}
       />
     );
   }
@@ -5344,11 +5434,17 @@ function AssociationCircularsPanel({
 
 function AssociationMasterPanel({
   committeeMembers,
+  allMembers,
   committeePostOptions,
+  membershipTypeOptions,
   newCommitteePost,
   editCommitteePostDraft,
-  feedbackMessage,
+  newMembershipType,
+  editMembershipTypeDraft,
+  committeeFeedbackMessage,
+  membershipTypeFeedbackMessage,
   editingPost,
+  editingMembershipType,
   isAdmin,
   onNewCommitteePostChange,
   onEditCommitteePostChange,
@@ -5357,6 +5453,13 @@ function AssociationMasterPanel({
   onDeleteCommitteePost,
   onSaveCommitteePostEdit,
   onCancelCommitteePostEdit,
+  onNewMembershipTypeChange,
+  onEditMembershipTypeChange,
+  onAddMembershipType,
+  onEditMembershipType,
+  onDeleteMembershipType,
+  onSaveMembershipTypeEdit,
+  onCancelMembershipTypeEdit,
 }) {
   const postCards = committeePostOptions.map((post) => {
     const assignedMembers = committeeMembers.filter(
@@ -5372,6 +5475,18 @@ function AssociationMasterPanel({
       assignedMembers,
       isEditable: assignedMembers.length === 0 && !isDefaultPost,
       isReusable,
+    };
+  });
+  const membershipTypeCards = membershipTypeOptions.map((type) => {
+    const assignedMembers = allMembers.filter(
+      (member) => normalizeMembershipTypeLabel(member.membershipType || "") === type,
+    );
+    const isDefaultType = defaultMembershipTypeOptions.includes(type);
+
+    return {
+      type,
+      assignedMembers,
+      isEditable: assignedMembers.length === 0 && !isDefaultType,
     };
   });
 
@@ -5390,8 +5505,8 @@ function AssociationMasterPanel({
             member assignment. Existing occupied posts like Chairman and
             Secretary are shown here automatically.
           </p>
-          {feedbackMessage ? (
-            <p className="admin-access-feedback">{feedbackMessage}</p>
+          {committeeFeedbackMessage ? (
+            <p className="admin-access-feedback">{committeeFeedbackMessage}</p>
           ) : null}
         </article>
 
@@ -5513,6 +5628,148 @@ function AssociationMasterPanel({
                         isEditable
                           ? "Delete this committee post"
                           : "Only custom vacant posts can be deleted"
+                      }
+                    >
+                      Delete
+                    </button>
+                  </>
+                ) : null}
+              </div>
+            </article>
+          ))}
+        </div>
+
+        <article className="association-profile-card">
+          <div className="panel-topline">
+            <div>
+              <span className="mini-label">Association Master</span>
+              <h2>Membership Type Master</h2>
+            </div>
+          </div>
+          <p className="committee-hero-copy">
+            Manage the current membership types used in Member Master. Current
+            defaults include Primary, Associate, and Guest.
+          </p>
+          {membershipTypeFeedbackMessage ? (
+            <p className="admin-access-feedback">
+              {membershipTypeFeedbackMessage}
+            </p>
+          ) : null}
+        </article>
+
+        {isAdmin ? (
+          <>
+            <article className="association-profile-card">
+              <div className="panel-topline">
+                <h3>Add Membership Type</h3>
+                <span className="mini-label">Master Setup</span>
+              </div>
+              <div className="profile-form-grid">
+                <label className="profile-field profile-field-wide">
+                  <span>Membership Type Name</span>
+                  <input
+                    type="text"
+                    value={newMembershipType}
+                    placeholder="Student"
+                    onChange={(event) =>
+                      onNewMembershipTypeChange(event.target.value)
+                    }
+                  />
+                </label>
+              </div>
+              <div className="profile-action-row">
+                <button
+                  className="primary-link admin-action-button"
+                  type="button"
+                  onClick={onAddMembershipType}
+                >
+                  Add Membership Type
+                </button>
+              </div>
+            </article>
+
+            {editingMembershipType ? (
+              <article className="association-profile-card">
+                <div className="panel-topline">
+                  <h3>Edit Membership Type</h3>
+                  <span className="mini-label">Master Setup</span>
+                </div>
+                <div className="profile-form-grid">
+                  <label className="profile-field profile-field-wide">
+                    <span>Membership Type Name</span>
+                    <input
+                      type="text"
+                      value={editMembershipTypeDraft}
+                      placeholder="Student"
+                      onChange={(event) =>
+                        onEditMembershipTypeChange(event.target.value)
+                      }
+                    />
+                  </label>
+                </div>
+                <div className="profile-action-row">
+                  <button
+                    className="secondary-link secondary-button"
+                    type="button"
+                    onClick={onCancelMembershipTypeEdit}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="primary-link admin-action-button"
+                    type="button"
+                    onClick={onSaveMembershipTypeEdit}
+                  >
+                    Save Membership Type
+                  </button>
+                </div>
+              </article>
+            ) : null}
+          </>
+        ) : null}
+
+        <div className="association-gallery-grid">
+          {membershipTypeCards.map(({ type, assignedMembers, isEditable }) => (
+            <article key={type} className="association-gallery-card">
+              <div className="association-gallery-copy">
+                <span className="mini-label">Membership Type</span>
+                <h3>{getMembershipTypeDisplayLabel(type)}</h3>
+                <p>
+                  {assignedMembers.length > 0
+                    ? `${assignedMembers.length} member${assignedMembers.length === 1 ? "" : "s"} assigned`
+                    : "No members are using this membership type yet."}
+                </p>
+              </div>
+              <div className="record-actions">
+                <span className="access-status-chip">
+                  {assignedMembers.length > 0
+                    ? `${assignedMembers.length} Assigned`
+                    : "Vacant"}
+                </span>
+                {isAdmin ? (
+                  <>
+                    <button
+                      className="secondary-link secondary-button"
+                      type="button"
+                      onClick={() => onEditMembershipType(type)}
+                      disabled={!isEditable}
+                      title={
+                        isEditable
+                          ? "Edit this membership type"
+                          : "Only custom vacant membership types can be edited"
+                      }
+                    >
+                      Edit
+                    </button>
+                    <button
+                      className="secondary-link secondary-button danger-button"
+                      type="button"
+                      onClick={() => onDeleteMembershipType(type)}
+                      disabled={!isEditable}
+                      title={
+                        isEditable
+                          ? "Delete this membership type"
+                          : "Only custom vacant membership types can be deleted"
                       }
                     >
                       Delete
@@ -6048,6 +6305,7 @@ function MemberMembershipForm({
   fields,
   formData,
   editingId,
+  membershipTypeOptions,
   isSaving,
   feedbackMessage,
   onFieldChange,
@@ -6129,10 +6387,11 @@ function MemberMembershipForm({
               onFieldChange("membershipType", event.target.value)
             }
           >
-            <option value="Primary">Primary</option>
-            <option value="Associate">Associate</option>
-            <option value="Temporary Visit">Temporary Visit</option>
-            <option value="Committee">Committee</option>
+            {membershipTypeOptions.map((type) => (
+              <option key={type} value={type}>
+                {getMembershipTypeDisplayLabel(type)}
+              </option>
+            ))}
           </select>
         </label>
 
@@ -10343,6 +10602,17 @@ export default function HomePage() {
     useState("");
   const [committeePostMasterFeedback, setCommitteePostMasterFeedback] =
     useState("");
+  const [membershipTypeMasterList, setMembershipTypeMasterList] = useState(
+    defaultMembershipTypeOptions,
+  );
+  const [membershipTypeMasterDraft, setMembershipTypeMasterDraft] =
+    useState("");
+  const [editingMembershipTypeMaster, setEditingMembershipTypeMaster] =
+    useState("");
+  const [membershipTypeMasterEditDraft, setMembershipTypeMasterEditDraft] =
+    useState("");
+  const [membershipTypeMasterFeedback, setMembershipTypeMasterFeedback] =
+    useState("");
   const [memberMasterForm, setMemberMasterForm] = useState(
     defaultMemberAdminForm,
   );
@@ -10412,6 +10682,10 @@ export default function HomePage() {
   const committeePostOptions = buildCommitteePostOptions(
     committeeMembers,
     committeePostMasterList,
+  );
+  const membershipTypeOptions = buildMembershipTypeOptions(
+    memberTabData["All Members"] ?? [],
+    membershipTypeMasterList,
   );
   const [vendorStatusSearch, setVendorStatusSearch] = useState("");
   const [selectedVendorRequests, setSelectedVendorRequests] = useState([]);
@@ -10840,6 +11114,20 @@ export default function HomePage() {
     );
   }, []);
 
+  useEffect(() => {
+    const storedTypes = readStoredMembershipTypeOptions();
+    if (storedTypes.length === 0) {
+      return;
+    }
+
+    setMembershipTypeMasterList((current) =>
+      buildMembershipTypeOptions(
+        memberTabData["All Members"] ?? [],
+        [...current, ...storedTypes],
+      ),
+    );
+  }, []);
+
   const loadMembers = async () => {
     const [membersResponse, usersResponse] = await Promise.all([
       fetch(`${apiBaseUrl}/members`),
@@ -11086,6 +11374,20 @@ export default function HomePage() {
   useEffect(() => {
     persistCommitteePostOptions(committeePostMasterList);
   }, [committeePostMasterList]);
+
+  useEffect(() => {
+    setMembershipTypeMasterList((current) => {
+      const nextOptions = buildMembershipTypeOptions(
+        memberTabData["All Members"] ?? [],
+        current,
+      );
+      return areStringListsEqual(current, nextOptions) ? current : nextOptions;
+    });
+  }, [memberTabData]);
+
+  useEffect(() => {
+    persistMembershipTypeOptions(membershipTypeMasterList);
+  }, [membershipTypeMasterList]);
 
   useEffect(() => {
     let isActive = true;
@@ -14490,6 +14792,146 @@ export default function HomePage() {
     setCommitteePostMasterFeedback(`Committee post "${normalizedPost}" deleted.`);
   };
 
+  const addMembershipTypeMaster = () => {
+    const normalizedType = normalizeMembershipTypeLabel(
+      membershipTypeMasterDraft,
+    );
+    if (!normalizedType) {
+      setMembershipTypeMasterFeedback("Enter a membership type name first.");
+      return;
+    }
+
+    const alreadyExists = membershipTypeOptions.some(
+      (type) => type.toLowerCase() === normalizedType.toLowerCase(),
+    );
+    if (alreadyExists) {
+      setMembershipTypeMasterFeedback("That membership type already exists.");
+      return;
+    }
+
+    setMembershipTypeMasterList((current) =>
+      buildMembershipTypeOptions(memberTabData["All Members"] ?? [], [
+        ...current,
+        normalizedType,
+      ]),
+    );
+    setMembershipTypeMasterFeedback(
+      `Membership type "${getMembershipTypeDisplayLabel(normalizedType)}" added.`,
+    );
+    setMembershipTypeMasterDraft("");
+  };
+
+  const editMembershipTypeMaster = (type) => {
+    const normalizedType = normalizeMembershipTypeLabel(type);
+    const isOccupied = (memberTabData["All Members"] ?? []).some(
+      (member) =>
+        normalizeMembershipTypeLabel(member.membershipType || "") ===
+        normalizedType,
+    );
+    const isDefaultType = defaultMembershipTypeOptions.includes(normalizedType);
+
+    if (isOccupied || isDefaultType) {
+      setMembershipTypeMasterFeedback(
+        "Only custom vacant membership types can be edited.",
+      );
+      return;
+    }
+
+    setEditingMembershipTypeMaster(normalizedType);
+    setMembershipTypeMasterEditDraft(normalizedType);
+    setMembershipTypeMasterFeedback("");
+  };
+
+  const cancelMembershipTypeMasterEdit = () => {
+    setEditingMembershipTypeMaster("");
+    setMembershipTypeMasterEditDraft("");
+    setMembershipTypeMasterFeedback("");
+  };
+
+  const saveMembershipTypeMasterEdit = () => {
+    const normalizedType = normalizeMembershipTypeLabel(
+      membershipTypeMasterEditDraft,
+    );
+
+    if (!editingMembershipTypeMaster) {
+      setMembershipTypeMasterFeedback("Select a membership type to edit first.");
+      return;
+    }
+
+    if (!normalizedType) {
+      setMembershipTypeMasterFeedback("Enter a membership type name first.");
+      return;
+    }
+
+    const isStillOccupied = (memberTabData["All Members"] ?? []).some(
+      (member) =>
+        normalizeMembershipTypeLabel(member.membershipType || "") ===
+        editingMembershipTypeMaster,
+    );
+    const isDefaultType = defaultMembershipTypeOptions.includes(
+      editingMembershipTypeMaster,
+    );
+
+    if (isStillOccupied || isDefaultType) {
+      setMembershipTypeMasterFeedback(
+        "Vacate this membership type before editing it.",
+      );
+      return;
+    }
+
+    const alreadyExists = membershipTypeOptions.some(
+      (type) =>
+        type.toLowerCase() === normalizedType.toLowerCase() &&
+        type.toLowerCase() !== editingMembershipTypeMaster.toLowerCase(),
+    );
+    if (alreadyExists) {
+      setMembershipTypeMasterFeedback("That membership type already exists.");
+      return;
+    }
+
+    setMembershipTypeMasterList((current) =>
+      buildMembershipTypeOptions(
+        memberTabData["All Members"] ?? [],
+        current.map((type) =>
+          type === editingMembershipTypeMaster ? normalizedType : type,
+        ),
+      ),
+    );
+    setMembershipTypeMasterFeedback(
+      `Membership type "${getMembershipTypeDisplayLabel(editingMembershipTypeMaster)}" updated to "${getMembershipTypeDisplayLabel(normalizedType)}".`,
+    );
+    setEditingMembershipTypeMaster("");
+    setMembershipTypeMasterEditDraft("");
+  };
+
+  const deleteMembershipTypeMaster = (type) => {
+    const normalizedType = normalizeMembershipTypeLabel(type);
+    const isOccupied = (memberTabData["All Members"] ?? []).some(
+      (member) =>
+        normalizeMembershipTypeLabel(member.membershipType || "") ===
+        normalizedType,
+    );
+    const isDefaultType = defaultMembershipTypeOptions.includes(normalizedType);
+
+    if (isOccupied || isDefaultType) {
+      setMembershipTypeMasterFeedback(
+        "Only custom vacant membership types can be deleted.",
+      );
+      return;
+    }
+
+    setMembershipTypeMasterList((current) =>
+      current.filter((item) => item !== normalizedType),
+    );
+    if (editingMembershipTypeMaster === normalizedType) {
+      setEditingMembershipTypeMaster("");
+      setMembershipTypeMasterEditDraft("");
+    }
+    setMembershipTypeMasterFeedback(
+      `Membership type "${getMembershipTypeDisplayLabel(normalizedType)}" deleted.`,
+    );
+  };
+
   const saveCommitteeMember = () => {
     void (async () => {
       const targetMemberId = committeeMemberForm.memberId;
@@ -15892,6 +16334,7 @@ export default function HomePage() {
                 associationAboutFeedback={associationAboutFeedback}
                 committeeMembers={committeeMembers}
                 allMembers={memberTabData["All Members"] ?? []}
+                membershipTypeOptions={membershipTypeOptions}
                 editingCommitteeMemberId={editingCommitteeMemberId}
                 committeeMemberForm={committeeMemberForm}
                 isSavingCommitteeMember={isSavingCommitteeMember}
@@ -15901,6 +16344,10 @@ export default function HomePage() {
                 masterFeedbackMessage={committeePostMasterFeedback}
                 editingMasterPostValue={editingCommitteePostMaster}
                 editMasterPostDraftValue={committeePostMasterEditDraft}
+                membershipTypeDraftValue={membershipTypeMasterDraft}
+                membershipTypeFeedbackMessage={membershipTypeMasterFeedback}
+                editingMembershipTypeValue={editingMembershipTypeMaster}
+                editMembershipTypeDraftValue={membershipTypeMasterEditDraft}
                 onOpenCommitteeMemberEditor={openCommitteeMemberEditor}
                 onCommitteeMemberFormChange={updateCommitteeMemberForm}
                 onCommitteeMemberImageChange={updateCommitteeMemberImage}
@@ -15914,6 +16361,15 @@ export default function HomePage() {
                 onDeleteMasterPost={deleteCommitteePostMaster}
                 onSaveMasterPostEdit={saveCommitteePostMasterEdit}
                 onCancelMasterPostEdit={cancelCommitteePostMasterEdit}
+                onMembershipTypeDraftChange={setMembershipTypeMasterDraft}
+                onSaveMembershipTypeDraft={addMembershipTypeMaster}
+                onEditMembershipTypeDraftChange={
+                  setMembershipTypeMasterEditDraft
+                }
+                onEditMembershipType={editMembershipTypeMaster}
+                onDeleteMembershipType={deleteMembershipTypeMaster}
+                onSaveMembershipTypeEdit={saveMembershipTypeMasterEdit}
+                onCancelMembershipTypeEdit={cancelMembershipTypeMasterEdit}
                 galleryItems={galleryItems}
                 galleryFolders={galleryFolders}
                 activeGalleryFolderId={activeGalleryFolderId}
@@ -16764,6 +17220,7 @@ export default function HomePage() {
               fields={membershipFormFields}
               formData={memberMasterForm}
               editingId={editingMemberId}
+              membershipTypeOptions={membershipTypeOptions}
               isSaving={isSavingMemberMaster}
               feedbackMessage={memberMasterFeedback}
               onFieldChange={updateMemberMasterForm}
