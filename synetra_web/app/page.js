@@ -4708,6 +4708,117 @@ function AssociationGalleryPanel({
     });
   };
 
+  if (activeFolder) {
+    return (
+      <section className="association-tab-section">
+        <section className="association-profile-stack">
+          {feedbackMessage ? (
+            <p className="admin-access-feedback">{feedbackMessage}</p>
+          ) : null}
+
+          <article className="association-profile-card">
+            <div className="panel-topline">
+              <div>
+                <span className="mini-label">Gallery Folder</span>
+                <h2>{activeFolder.name}</h2>
+                <p className="committee-hero-copy">
+                  {activeFolder.photoCount} photo
+                  {activeFolder.photoCount === 1 ? "" : "s"} ·{" "}
+                  {formatGalleryStamp(activeFolder.createdAt) || "No timestamp"}
+                </p>
+              </div>
+              <div className="record-actions">
+                <button
+                  className="secondary-link secondary-button"
+                  type="button"
+                  onClick={onCloseFolder}
+                  disabled={isSaving}
+                >
+                  Back To Folders
+                </button>
+                {isAdmin ? (
+                  <>
+                    <button
+                      className="secondary-link secondary-button danger-button"
+                      type="button"
+                      onClick={onDeleteSelectedPhotos}
+                      disabled={isSaving || selectedPhotoIds.length === 0}
+                    >
+                      Delete Selected
+                    </button>
+                    <button
+                      className="secondary-link secondary-button profile-upload-button"
+                      type="button"
+                      disabled={isSaving}
+                    >
+                      Upload Images
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={(event) =>
+                          onUploadPhotos(
+                            activeFolder.id,
+                            Array.from(event.target.files ?? []),
+                          )
+                        }
+                      />
+                    </button>
+                  </>
+                ) : null}
+              </div>
+            </div>
+          </article>
+
+          {activeFolder.photos.length > 0 ? (
+            <div className="association-gallery-grid">
+              {activeFolder.photos.map((photo) => (
+                <article key={photo.id} className="association-gallery-card">
+                  <div className="association-gallery-visual">
+                    <img src={photo.imageUrl} alt={activeFolder.name} />
+                  </div>
+                  <div className="association-gallery-copy">
+                    <h3>{activeFolder.name}</h3>
+                    <span className="mini-label">
+                      {formatGalleryStamp(photo.createdAt) || "No timestamp"}
+                    </span>
+                  </div>
+                  {isAdmin ? (
+                    <div className="record-actions">
+                      <label className="association-card-selector">
+                        <input
+                          type="checkbox"
+                          checked={selectedPhotoIds.includes(photo.id)}
+                          onChange={() => onTogglePhotoSelect(photo.id)}
+                          disabled={isSaving}
+                        />
+                        <span>Select</span>
+                      </label>
+                      <button
+                        className="secondary-link secondary-button danger-button"
+                        type="button"
+                        onClick={() => onDeletePhoto(activeFolder.id, photo.id)}
+                        disabled={isSaving}
+                      >
+                        Delete Photo
+                      </button>
+                    </div>
+                  ) : null}
+                </article>
+              ))}
+            </div>
+          ) : (
+            <article className="association-profile-card committee-empty-card">
+              <span className="mini-label">Gallery Folder</span>
+              <h3>No photos in this folder yet</h3>
+              <p>Use Upload Images to add one or many photos into this folder.</p>
+            </article>
+          )}
+        </section>
+      </section>
+    );
+  }
+
   return (
     <section className="association-tab-section">
       <section className="association-profile-stack">
@@ -4908,100 +5019,6 @@ function AssociationGalleryPanel({
           </article>
         )}
 
-        {activeFolder ? (
-          <article className="association-profile-card">
-            <div className="panel-topline">
-              <div>
-                <span className="mini-label">Open Folder</span>
-                <h3>{activeFolder.name}</h3>
-              </div>
-              <div className="record-actions">
-                <button
-                  className="secondary-link secondary-button"
-                  type="button"
-                  onClick={onCloseFolder}
-                  disabled={isSaving}
-                >
-                  Back To Folders
-                </button>
-                {isAdmin ? (
-                  <>
-                    <button
-                      className="secondary-link secondary-button danger-button"
-                      type="button"
-                      onClick={onDeleteSelectedPhotos}
-                      disabled={isSaving || selectedPhotoIds.length === 0}
-                    >
-                      Delete Selected
-                    </button>
-                    <button
-                      className="secondary-link secondary-button profile-upload-button"
-                      type="button"
-                      disabled={isSaving}
-                    >
-                      Upload Images
-                      <input
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        onChange={(event) =>
-                          onUploadPhotos(
-                            activeFolder.id,
-                            Array.from(event.target.files ?? []),
-                          )
-                        }
-                      />
-                    </button>
-                  </>
-                ) : null}
-              </div>
-            </div>
-            {activeFolder.photos.length > 0 ? (
-              <div className="association-gallery-grid">
-                {activeFolder.photos.map((photo) => (
-                  <article key={photo.id} className="association-gallery-card">
-                    <div className="association-gallery-visual">
-                      <img src={photo.imageUrl} alt={activeFolder.name} />
-                    </div>
-                    <div className="association-gallery-copy">
-                      <h3>{activeFolder.name}</h3>
-                      <span className="mini-label">
-                        {formatGalleryStamp(photo.createdAt) || "No timestamp"}
-                      </span>
-                    </div>
-                    {isAdmin ? (
-                      <div className="record-actions">
-                        <label className="association-card-selector">
-                          <input
-                            type="checkbox"
-                            checked={selectedPhotoIds.includes(photo.id)}
-                            onChange={() => onTogglePhotoSelect(photo.id)}
-                            disabled={isSaving}
-                          />
-                          <span>Select</span>
-                        </label>
-                        <button
-                          className="secondary-link secondary-button danger-button"
-                          type="button"
-                          onClick={() => onDeletePhoto(activeFolder.id, photo.id)}
-                          disabled={isSaving}
-                        >
-                          Delete Photo
-                        </button>
-                      </div>
-                    ) : null}
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <article className="association-profile-card committee-empty-card">
-                <span className="mini-label">Open Folder</span>
-                <h3>No photos in this folder yet</h3>
-                <p>Use Upload Images to add one or many photos into this folder.</p>
-              </article>
-            )}
-          </article>
-        ) : null}
       </section>
     </section>
   );
