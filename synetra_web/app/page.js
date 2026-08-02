@@ -3468,6 +3468,8 @@ function AssociationTabContent({
   onSaveGalleryFolder,
   onDeleteGalleryFolder,
   onDeleteGalleryPhoto,
+  galleryFolderEditorRef,
+  galleryFolderNameInputRef,
   circularDocuments,
   selectedCircularIds,
   editingCircularDocumentId,
