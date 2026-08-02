@@ -5461,6 +5461,7 @@ function AssociationMasterPanel({
   onSaveMembershipTypeEdit,
   onCancelMembershipTypeEdit,
 }) {
+  const [activeMasterTab, setActiveMasterTab] = useState("committee-posts");
   const postCards = committeePostOptions.map((post) => {
     const assignedMembers = committeeMembers.filter(
       (member) => normalizeCommitteePostLabel(member.committeePost || "") === post,
@@ -5497,49 +5498,81 @@ function AssociationMasterPanel({
           <div className="panel-topline">
             <div>
               <span className="mini-label">Association Master</span>
-              <h2>Committee Post Master</h2>
+              <h2>Master Settings</h2>
             </div>
           </div>
           <p className="committee-hero-copy">
-            Manage the available committee post names used during committee
-            member assignment. Existing occupied posts like Chairman and
-            Secretary are shown here automatically.
+            Open one master at a time to manage committee posts and membership
+            types without stacking both editors on a single page.
           </p>
-          {committeeFeedbackMessage ? (
-            <p className="admin-access-feedback">{committeeFeedbackMessage}</p>
-          ) : null}
         </article>
 
-        {isAdmin ? (
+        <nav className="association-tabbar" aria-label="Association master sections">
+          <button
+            type="button"
+            className={`association-tab ${activeMasterTab === "committee-posts" ? "active" : ""}`}
+            onClick={() => setActiveMasterTab("committee-posts")}
+          >
+            Committee Post Master
+          </button>
+          <button
+            type="button"
+            className={`association-tab ${activeMasterTab === "membership-types" ? "active" : ""}`}
+            onClick={() => setActiveMasterTab("membership-types")}
+          >
+            Membership Type Master
+          </button>
+        </nav>
+
+        {activeMasterTab === "committee-posts" ? (
           <>
             <article className="association-profile-card">
               <div className="panel-topline">
-                <h3>Add Committee Post</h3>
-                <span className="mini-label">Master Setup</span>
+                <div>
+                  <span className="mini-label">Association Master</span>
+                  <h2>Committee Post Master</h2>
+                </div>
               </div>
-              <div className="profile-form-grid">
-                <label className="profile-field profile-field-wide">
-                  <span>Committee Post Name</span>
-                  <input
-                    type="text"
-                    value={newCommitteePost}
-                    placeholder="Joint Secretary"
-                    onChange={(event) =>
-                      onNewCommitteePostChange(event.target.value)
-                    }
-                  />
-                </label>
-              </div>
-              <div className="profile-action-row">
-                <button
-                  className="primary-link admin-action-button"
-                  type="button"
-                  onClick={onAddCommitteePost}
-                >
-                  Add Committee Post
-                </button>
-              </div>
+              <p className="committee-hero-copy">
+                Manage the available committee post names used during committee
+                member assignment. Existing occupied posts like Chairman and
+                Secretary are shown here automatically.
+              </p>
+              {committeeFeedbackMessage ? (
+                <p className="admin-access-feedback">{committeeFeedbackMessage}</p>
+              ) : null}
             </article>
+
+            {isAdmin ? (
+              <article className="association-profile-card">
+                <div className="panel-topline">
+                  <h3>Add Committee Post</h3>
+                  <span className="mini-label">Master Setup</span>
+                </div>
+                <div className="profile-form-grid">
+                  <label className="profile-field profile-field-wide">
+                    <span>Committee Post Name</span>
+                    <input
+                      type="text"
+                      value={newCommitteePost}
+                      placeholder="Joint Secretary"
+                      onChange={(event) =>
+                        onNewCommitteePostChange(event.target.value)
+                      }
+                    />
+                  </label>
+                </div>
+                <div className="profile-action-row">
+                  <button
+                    className="primary-link admin-action-button"
+                    type="button"
+                    onClick={onAddCommitteePost}
+                  >
+                    Add Committee Post
+                  </button>
+                </div>
+              </article>
+            ) : null}
 
             {editingPost ? (
               <article className="association-profile-card">
@@ -5578,115 +5611,122 @@ function AssociationMasterPanel({
                 </div>
               </article>
             ) : null}
-          </>
-        ) : null}
 
-        <div className="association-gallery-grid">
-          {postCards.map(
-            ({ post, assignedMember, assignedMembers, isEditable, isReusable }) => (
-            <article key={post} className="association-gallery-card">
-              <div className="association-gallery-copy">
-                <span className="mini-label">Committee Post</span>
-                <h3>{post}</h3>
-                <p>
-                  {assignedMembers.length > 0
-                    ? isReusable
-                      ? `${assignedMembers.length} members assigned`
-                      : `${assignedMember.name}${assignedMember.company ? ` · ${assignedMember.company}` : ""}`
-                    : "No committee member assigned yet."}
-                </p>
-              </div>
-              <div className="record-actions">
-                <span className="access-status-chip">
-                  {assignedMembers.length > 0
-                    ? isReusable
-                      ? `${assignedMembers.length} Assigned`
-                      : "Assigned"
-                    : "Vacant"}
-                </span>
-                {isAdmin ? (
-                  <>
-                    <button
-                      className="secondary-link secondary-button"
-                      type="button"
-                      onClick={() => onEditCommitteePost(post)}
-                      disabled={!isEditable}
-                      title={
-                        isEditable
-                          ? "Edit this committee post"
-                          : "Only custom vacant posts can be edited"
-                      }
-                    >
-                      Edit
-                    </button>
-                    <button
-                      className="secondary-link secondary-button danger-button"
-                      type="button"
-                      onClick={() => onDeleteCommitteePost(post)}
-                      disabled={!isEditable}
-                      title={
-                        isEditable
-                          ? "Delete this committee post"
-                          : "Only custom vacant posts can be deleted"
-                      }
-                    >
-                      Delete
-                    </button>
-                  </>
-                ) : null}
-              </div>
-            </article>
-          ))}
-        </div>
-
-        <article className="association-profile-card">
-          <div className="panel-topline">
-            <div>
-              <span className="mini-label">Association Master</span>
-              <h2>Membership Type Master</h2>
+            <div className="association-gallery-grid">
+              {postCards.map(
+                ({
+                  post,
+                  assignedMember,
+                  assignedMembers,
+                  isEditable,
+                  isReusable,
+                }) => (
+                  <article key={post} className="association-gallery-card">
+                    <div className="association-gallery-copy">
+                      <span className="mini-label">Committee Post</span>
+                      <h3>{post}</h3>
+                      <p>
+                        {assignedMembers.length > 0
+                          ? isReusable
+                            ? `${assignedMembers.length} members assigned`
+                            : `${assignedMember.name}${assignedMember.company ? ` · ${assignedMember.company}` : ""}`
+                          : "No committee member assigned yet."}
+                      </p>
+                    </div>
+                    <div className="record-actions">
+                      <span className="access-status-chip">
+                        {assignedMembers.length > 0
+                          ? isReusable
+                            ? `${assignedMembers.length} Assigned`
+                            : "Assigned"
+                          : "Vacant"}
+                      </span>
+                      {isAdmin ? (
+                        <>
+                          <button
+                            className="secondary-link secondary-button"
+                            type="button"
+                            onClick={() => onEditCommitteePost(post)}
+                            disabled={!isEditable}
+                            title={
+                              isEditable
+                                ? "Edit this committee post"
+                                : "Only custom vacant posts can be edited"
+                            }
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="secondary-link secondary-button danger-button"
+                            type="button"
+                            onClick={() => onDeleteCommitteePost(post)}
+                            disabled={!isEditable}
+                            title={
+                              isEditable
+                                ? "Delete this committee post"
+                                : "Only custom vacant posts can be deleted"
+                            }
+                          >
+                            Delete
+                          </button>
+                        </>
+                      ) : null}
+                    </div>
+                  </article>
+                ),
+              )}
             </div>
-          </div>
-          <p className="committee-hero-copy">
-            Manage the current membership types used in Member Master. Current
-            defaults include Primary, Associate, and Guest.
-          </p>
-          {membershipTypeFeedbackMessage ? (
-            <p className="admin-access-feedback">
-              {membershipTypeFeedbackMessage}
-            </p>
-          ) : null}
-        </article>
-
-        {isAdmin ? (
+          </>
+        ) : (
           <>
             <article className="association-profile-card">
               <div className="panel-topline">
-                <h3>Add Membership Type</h3>
-                <span className="mini-label">Master Setup</span>
+                <div>
+                  <span className="mini-label">Association Master</span>
+                  <h2>Membership Type Master</h2>
+                </div>
               </div>
-              <div className="profile-form-grid">
-                <label className="profile-field profile-field-wide">
-                  <span>Membership Type Name</span>
-                  <input
-                    type="text"
-                    value={newMembershipType}
-                    placeholder="Student"
-                    onChange={(event) =>
-                      onNewMembershipTypeChange(event.target.value)
-                    }
-                  />
-                </label>
-              </div>
-              <div className="profile-action-row">
-                <button
-                  className="primary-link admin-action-button"
-                  type="button"
-                  onClick={onAddMembershipType}
-                >
-                  Add Membership Type
-                </button>
-              </div>
+              <p className="committee-hero-copy">
+                Manage the current membership types used in Member Master. Current
+                defaults include Primary, Associate, and Guest.
+              </p>
+              {membershipTypeFeedbackMessage ? (
+                <p className="admin-access-feedback">
+                  {membershipTypeFeedbackMessage}
+                </p>
+              ) : null}
             </article>
+
+            {isAdmin ? (
+              <article className="association-profile-card">
+                <div className="panel-topline">
+                  <h3>Add Membership Type</h3>
+                  <span className="mini-label">Master Setup</span>
+                </div>
+                <div className="profile-form-grid">
+                  <label className="profile-field profile-field-wide">
+                    <span>Membership Type Name</span>
+                    <input
+                      type="text"
+                      value={newMembershipType}
+                      placeholder="Student"
+                      onChange={(event) =>
+                        onNewMembershipTypeChange(event.target.value)
+                      }
+                    />
+                  </label>
+                </div>
+                <div className="profile-action-row">
+                  <button
+                    className="primary-link admin-action-button"
+                    type="button"
+                    onClick={onAddMembershipType}
+                  >
+                    Add Membership Type
+                  </button>
+                </div>
+              </article>
+            ) : null}
 
             {editingMembershipType ? (
               <article className="association-profile-card">
@@ -5725,61 +5765,61 @@ function AssociationMasterPanel({
                 </div>
               </article>
             ) : null}
-          </>
-        ) : null}
 
-        <div className="association-gallery-grid">
-          {membershipTypeCards.map(({ type, assignedMembers, isEditable }) => (
-            <article key={type} className="association-gallery-card">
-              <div className="association-gallery-copy">
-                <span className="mini-label">Membership Type</span>
-                <h3>{getMembershipTypeDisplayLabel(type)}</h3>
-                <p>
-                  {assignedMembers.length > 0
-                    ? `${assignedMembers.length} member${assignedMembers.length === 1 ? "" : "s"} assigned`
-                    : "No members are using this membership type yet."}
-                </p>
-              </div>
-              <div className="record-actions">
-                <span className="access-status-chip">
-                  {assignedMembers.length > 0
-                    ? `${assignedMembers.length} Assigned`
-                    : "Vacant"}
-                </span>
-                {isAdmin ? (
-                  <>
-                    <button
-                      className="secondary-link secondary-button"
-                      type="button"
-                      onClick={() => onEditMembershipType(type)}
-                      disabled={!isEditable}
-                      title={
-                        isEditable
-                          ? "Edit this membership type"
-                          : "Only custom vacant membership types can be edited"
-                      }
-                    >
-                      Edit
-                    </button>
-                    <button
-                      className="secondary-link secondary-button danger-button"
-                      type="button"
-                      onClick={() => onDeleteMembershipType(type)}
-                      disabled={!isEditable}
-                      title={
-                        isEditable
-                          ? "Delete this membership type"
-                          : "Only custom vacant membership types can be deleted"
-                      }
-                    >
-                      Delete
-                    </button>
-                  </>
-                ) : null}
-              </div>
-            </article>
-          ))}
-        </div>
+            <div className="association-gallery-grid">
+              {membershipTypeCards.map(({ type, assignedMembers, isEditable }) => (
+                <article key={type} className="association-gallery-card">
+                  <div className="association-gallery-copy">
+                    <span className="mini-label">Membership Type</span>
+                    <h3>{getMembershipTypeDisplayLabel(type)}</h3>
+                    <p>
+                      {assignedMembers.length > 0
+                        ? `${assignedMembers.length} member${assignedMembers.length === 1 ? "" : "s"} assigned`
+                        : "No members are using this membership type yet."}
+                    </p>
+                  </div>
+                  <div className="record-actions">
+                    <span className="access-status-chip">
+                      {assignedMembers.length > 0
+                        ? `${assignedMembers.length} Assigned`
+                        : "Vacant"}
+                    </span>
+                    {isAdmin ? (
+                      <>
+                        <button
+                          className="secondary-link secondary-button"
+                          type="button"
+                          onClick={() => onEditMembershipType(type)}
+                          disabled={!isEditable}
+                          title={
+                            isEditable
+                              ? "Edit this membership type"
+                              : "Only custom vacant membership types can be edited"
+                          }
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className="secondary-link secondary-button danger-button"
+                          type="button"
+                          onClick={() => onDeleteMembershipType(type)}
+                          disabled={!isEditable}
+                          title={
+                            isEditable
+                              ? "Delete this membership type"
+                              : "Only custom vacant membership types can be deleted"
+                          }
+                        >
+                          Delete
+                        </button>
+                      </>
+                    ) : null}
+                  </div>
+                </article>
+              ))}
+            </div>
+          </>
+        )}
       </section>
     </section>
   );
