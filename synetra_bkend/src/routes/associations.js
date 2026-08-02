@@ -439,7 +439,7 @@ async function ensureCurrentAssociation() {
     include: {
       aboutContent: true,
       circularDocuments: {
-        orderBy: [{ displayOrder: "asc" }, { createdAt: "asc" }],
+        orderBy: [{ createdAt: "desc" }, { displayOrder: "asc" }],
       },
       appAccess: true,
       galleryItems: {
@@ -862,7 +862,7 @@ router.patch("/:id", async (req, res) => {
       include: {
         aboutContent: true,
         circularDocuments: {
-          orderBy: [{ displayOrder: "asc" }, { createdAt: "asc" }],
+          orderBy: [{ createdAt: "desc" }, { displayOrder: "asc" }],
         },
         galleryItems: {
           orderBy: [{ displayOrder: "asc" }, { createdAt: "asc" }],
@@ -1325,7 +1325,7 @@ router.get("/:id/circulars", async (req, res) => {
     where: { id: req.params.id },
     include: {
       circularDocuments: {
-        orderBy: [{ displayOrder: "asc" }, { createdAt: "asc" }],
+        orderBy: [{ createdAt: "desc" }, { displayOrder: "asc" }],
       },
     },
   });

@@ -2881,17 +2881,22 @@ function mapAssociationCircularDocuments(items) {
     return [];
   }
 
-  return items.map((item) => ({
-    id: item.id ?? "",
-    headline: item.headline ?? "",
-    tagline: item.tagline ?? "",
-    summary: item.summary ?? "",
-    fileName: item.originalFileName ?? "",
-    mimeType: item.mimeType ?? "",
-    fileExtension: item.fileExtension ?? "",
-    documentUrl: item.documentUrl ?? "",
-    previewUrl: item.previewUrl ?? "",
-  }));
+  return [...items]
+    .map((item) => ({
+      id: item.id ?? "",
+      headline: item.headline ?? "",
+      tagline: item.tagline ?? "",
+      summary: item.summary ?? "",
+      fileName: item.originalFileName ?? "",
+      mimeType: item.mimeType ?? "",
+      fileExtension: item.fileExtension ?? "",
+      documentUrl: item.documentUrl ?? "",
+      previewUrl: item.previewUrl ?? "",
+      createdAt: item.createdAt ?? "",
+    }))
+    .sort((left, right) =>
+      String(right.createdAt || "").localeCompare(String(left.createdAt || "")),
+    );
 }
 
 const INDIA_STATE_CITY_OPTIONS = {
