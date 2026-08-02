@@ -3451,8 +3451,12 @@ function AssociationTabContent({
   committeePostOptions,
   masterDraftValue,
   masterFeedbackMessage,
+  editingMasterPostValue,
   onMasterDraftChange,
   onSaveMasterDraft,
+  onEditMasterPost,
+  onDeleteMasterPost,
+  onCancelMasterPostEdit,
   galleryItems,
   galleryFolders,
   activeGalleryFolderId,
@@ -3620,9 +3624,13 @@ function AssociationTabContent({
         committeePostOptions={committeePostOptions}
         newCommitteePost={masterDraftValue}
         feedbackMessage={masterFeedbackMessage}
+        editingPost={editingMasterPostValue}
         isAdmin={isAdmin}
         onNewCommitteePostChange={onMasterDraftChange}
         onAddCommitteePost={onSaveMasterDraft}
+        onEditCommitteePost={onEditMasterPost}
+        onDeleteCommitteePost={onDeleteMasterPost}
+        onCancelCommitteePostEdit={onCancelMasterPostEdit}
       />
     );
   }
@@ -5253,18 +5261,24 @@ function AssociationMasterPanel({
   committeePostOptions,
   newCommitteePost,
   feedbackMessage,
+  editingPost,
   isAdmin,
   onNewCommitteePostChange,
   onAddCommitteePost,
+  onEditCommitteePost,
+  onDeleteCommitteePost,
+  onCancelCommitteePostEdit,
 }) {
   const postCards = committeePostOptions.map((post) => {
     const assignedMember = committeeMembers.find(
       (member) => normalizeCommitteePostLabel(member.committeePost || "") === post,
     );
+    const isDefaultPost = defaultCommitteePostOptions.includes(post);
 
     return {
       post,
       assignedMember,
+      isEditable: !assignedMember && !isDefaultPost,
     };
   });
 
@@ -5291,7 +5305,7 @@ function AssociationMasterPanel({
         {isAdmin ? (
           <article className="association-profile-card">
             <div className="panel-topline">
-              <h3>Add Committee Post</h3>
+              <h3>{editingPost ? "Edit Committee Post" : "Add Committee Post"}</h3>
               <span className="mini-label">Master Setup</span>
             </div>
             <div className="profile-form-grid">
@@ -5308,19 +5322,28 @@ function AssociationMasterPanel({
               </label>
             </div>
             <div className="profile-action-row">
+              {editingPost ? (
+                <button
+                  className="secondary-link secondary-button"
+                  type="button"
+                  onClick={onCancelCommitteePostEdit}
+                >
+                  Cancel
+                </button>
+              ) : null}
               <button
                 className="primary-link admin-action-button"
                 type="button"
                 onClick={onAddCommitteePost}
               >
-                Add Committee Post
+                {editingPost ? "Save Committee Post" : "Add Committee Post"}
               </button>
             </div>
           </article>
         ) : null}
 
         <div className="association-gallery-grid">
-          {postCards.map(({ post, assignedMember }) => (
+          {postCards.map(({ post, assignedMember, isEditable }) => (
             <article key={post} className="association-gallery-card">
               <div className="association-gallery-copy">
                 <span className="mini-label">Committee Post</span>
@@ -5335,6 +5358,36 @@ function AssociationMasterPanel({
                 <span className="access-status-chip">
                   {assignedMember ? "Assigned" : "Vacant"}
                 </span>
+                {isAdmin ? (
+                  <>
+                    <button
+                      className="secondary-link secondary-button"
+                      type="button"
+                      onClick={() => onEditCommitteePost(post)}
+                      disabled={!isEditable}
+                      title={
+                        isEditable
+                          ? "Edit this committee post"
+                          : "Only custom vacant posts can be edited"
+                      }
+                    >
+                      Edit
+                    </button>
+                    <button
+                      className="secondary-link secondary-button danger-button"
+                      type="button"
+                      onClick={() => onDeleteCommitteePost(post)}
+                      disabled={!isEditable}
+                      title={
+                        isEditable
+                          ? "Delete this committee post"
+                          : "Only custom vacant posts can be deleted"
+                      }
+                    >
+                      Delete
+                    </button>
+                  </>
+                ) : null}
               </div>
             </article>
           ))}
@@ -10153,6 +10206,8 @@ export default function HomePage() {
   );
   const [committeePostMasterDraft, setCommitteePostMasterDraft] =
     useState("");
+  const [editingCommitteePostMaster, setEditingCommitteePostMaster] =
+    useState("");
   const [committeePostMasterFeedback, setCommitteePostMasterFeedback] =
     useState("");
   const [memberMasterForm, setMemberMasterForm] = useState(
@@ -14156,18 +14211,87 @@ export default function HomePage() {
     }
 
     const alreadyExists = committeePostOptions.some(
-      (post) => post.toLowerCase() === normalizedPost.toLowerCase(),
+      (post) =>
+        post.toLowerCase() === normalizedPost.toLowerCase() &&
+        post.toLowerCase() !== editingCommitteePostMaster.toLowerCase(),
     );
     if (alreadyExists) {
       setCommitteePostMasterFeedback("That committee post already exists.");
       return;
     }
 
-    setCommitteePostMasterList((current) =>
-      buildCommitteePostOptions(committeeMembers, [...current, normalizedPost]),
-    );
+    if (editingCommitteePostMaster) {
+      setCommitteePostMasterList((current) =>
+        buildCommitteePostOptions(
+          committeeMembers,
+          current.map((post) =>
+            post === editingCommitteePostMaster ? normalizedPost : post,
+          ),
+        ),
+      );
+      setCommitteePostMasterFeedback(
+        `Committee post "${editingCommitteePostMaster}" updated to "${normalizedPost}".`,
+      );
+      setEditingCommitteePostMaster("");
+    } else {
+      setCommitteePostMasterList((current) =>
+        buildCommitteePostOptions(committeeMembers, [...current, normalizedPost]),
+      );
+      setCommitteePostMasterFeedback(`Committee post "${normalizedPost}" added.`);
+    }
+
     setCommitteePostMasterDraft("");
-    setCommitteePostMasterFeedback(`Committee post "${normalizedPost}" added.`);
+  };
+
+  const editCommitteePostMaster = (post) => {
+    const normalizedPost = normalizeCommitteePostLabel(post);
+    const isOccupied = committeeMembers.some(
+      (member) =>
+        normalizeCommitteePostLabel(member.committeePost || "") === normalizedPost,
+    );
+    const isDefaultPost = defaultCommitteePostOptions.includes(normalizedPost);
+
+    if (isOccupied || isDefaultPost) {
+      setCommitteePostMasterFeedback(
+        "Only custom vacant committee posts can be edited.",
+      );
+      return;
+    }
+
+    setEditingCommitteePostMaster(normalizedPost);
+    setCommitteePostMasterDraft(normalizedPost);
+    setCommitteePostMasterFeedback("");
+  };
+
+  const cancelCommitteePostMasterEdit = () => {
+    setEditingCommitteePostMaster("");
+    setCommitteePostMasterDraft("");
+    setCommitteePostMasterFeedback("");
+  };
+
+  const deleteCommitteePostMaster = (post) => {
+    const normalizedPost = normalizeCommitteePostLabel(post);
+    const isOccupied = committeeMembers.some(
+      (member) =>
+        normalizeCommitteePostLabel(member.committeePost || "") === normalizedPost,
+    );
+    const isDefaultPost = defaultCommitteePostOptions.includes(normalizedPost);
+
+    if (isOccupied || isDefaultPost) {
+      setCommitteePostMasterFeedback(
+        "Only custom vacant committee posts can be deleted.",
+      );
+      return;
+    }
+
+    setCommitteePostMasterList((current) =>
+      current.filter((item) => item !== normalizedPost),
+    );
+    if (editingCommitteePostMaster === normalizedPost) {
+      setEditingCommitteePostMaster("");
+      setCommitteePostMasterDraft("");
+    }
+    setCommitteePostMasterFeedback(`Committee post "${normalizedPost}" deleted.`);
   };
 
   const saveCommitteeMember = () => {
@@ -15559,6 +15683,7 @@ export default function HomePage() {
                 committeePostOptions={committeePostOptions}
                 masterDraftValue={committeePostMasterDraft}
                 masterFeedbackMessage={committeePostMasterFeedback}
+                editingMasterPostValue={editingCommitteePostMaster}
                 onOpenCommitteeMemberEditor={openCommitteeMemberEditor}
                 onCommitteeMemberFormChange={updateCommitteeMemberForm}
                 onCancelCommitteeMemberEdit={closeCommitteeMemberEditor}
@@ -15566,6 +15691,9 @@ export default function HomePage() {
                 onRemoveCommitteeMember={removeCommitteeMember}
                 onMasterDraftChange={setCommitteePostMasterDraft}
                 onSaveMasterDraft={addCommitteePostMaster}
+                onEditMasterPost={editCommitteePostMaster}
+                onDeleteMasterPost={deleteCommitteePostMaster}
+                onCancelMasterPostEdit={cancelCommitteePostMasterEdit}
                 galleryItems={galleryItems}
                 galleryFolders={galleryFolders}
                 activeGalleryFolderId={activeGalleryFolderId}
