@@ -116,6 +116,57 @@ function normalizeExcelValue(value) {
   return String(value).trim();
 }
 
+function normalizeCommitteePostLabel(value = "") {
+  return String(value).replace(/\s+/g, " ").trim();
+}
+
+function isReusableCommitteePost(value = "") {
+  return normalizeCommitteePostLabel(value).toLowerCase() === "member";
+}
+
+async function ensureCommitteePostAvailability(
+  tx,
+  { associationId, committeePost, memberId },
+) {
+  const normalizedCommitteePost = normalizeCommitteePostLabel(committeePost);
+  if (
+    !associationId ||
+    !normalizedCommitteePost ||
+    isReusableCommitteePost(normalizedCommitteePost)
+  ) {
+    return;
+  }
+
+  const conflictingMember = await tx.member.findFirst({
+    where: {
+      associationId,
+      ...(memberId ? { id: { not: memberId } } : {}),
+      committeePost: {
+        equals: normalizedCommitteePost,
+        mode: "insensitive",
+      },
+    },
+    select: {
+      firstName: true,
+      lastName: true,
+    },
+  });
+
+  if (!conflictingMember) {
+    return;
+  }
+
+  const conflictingName = `${conflictingMember.firstName || ""} ${conflictingMember.lastName || ""}`
+    .replace(/\s+/g, " ")
+    .trim();
+
+  throw new Error(
+    conflictingName
+      ? `${normalizedCommitteePost} is already assigned to ${conflictingName}.`
+      : `${normalizedCommitteePost} is already assigned to another member.`,
+  );
+}
+
 function splitRepresentativeName(name) {
   const cleaned = normalizeExcelValue(name).replace(/\s+/g, " ").trim();
   if (!cleaned) {
@@ -507,6 +558,11 @@ router.post("/", async (req, res) => {
 
   try {
     const member = await prisma.$transaction(async (tx) => {
+      await ensureCommitteePostAvailability(tx, {
+        associationId,
+        committeePost: parsed.data.committeePost,
+      });
+
       const createdMember = await tx.member.create({
         data: {
           ...parsed.data,
@@ -581,6 +637,12 @@ router.post("/", async (req, res) => {
     if (isDuplicateMemberEmailError(error)) {
       return res.status(409).json({
         error: "A member with this email already exists in the association",
+      });
+    }
+
+    if (error instanceof Error && error.message.includes("already assigned")) {
+      return res.status(409).json({
+        error: error.message,
       });
     }
 
@@ -779,6 +841,15 @@ router.patch("/:id", async (req, res) => {
 
   try {
     const member = await prisma.$transaction(async (tx) => {
+      await ensureCommitteePostAvailability(tx, {
+        associationId: associationId ?? existingMember.associationId,
+        committeePost:
+          parsed.data.committeePost === undefined
+            ? existingMember.committeePost
+            : parsed.data.committeePost,
+        memberId: existingMember.id,
+      });
+
       const updatedMember = await tx.member.update({
         where: { id: req.params.id },
         data: {
@@ -843,6 +914,12 @@ router.patch("/:id", async (req, res) => {
     if (isDuplicateMemberEmailError(error)) {
       return res.status(409).json({
         error: "A member with this email already exists in the association",
+      });
+    }
+
+    if (error instanceof Error && error.message.includes("already assigned")) {
+      return res.status(409).json({
+        error: error.message,
       });
     }
 

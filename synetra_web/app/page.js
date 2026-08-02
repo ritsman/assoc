@@ -132,6 +132,10 @@ function normalizeCommitteePostLabel(value) {
   return value.replace(/\s+/g, " ").trim();
 }
 
+function isReusableCommitteePost(value) {
+  return normalizeCommitteePostLabel(value).toLowerCase() === "member";
+}
+
 function readStoredCommitteePostOptions() {
   if (typeof window === "undefined") {
     return [];
@@ -940,6 +944,7 @@ const defaultCommitteeMemberForm = {
   committeeTenureStart: "",
   committeeTenureEnd: "",
   memberBio: "",
+  photoUrl: "",
 };
 
 function formatMembershipPeriod(startDate, endDate) {
@@ -3445,6 +3450,7 @@ function AssociationTabContent({
   committeeMemberFeedback,
   onOpenCommitteeMemberEditor,
   onCommitteeMemberFormChange,
+  onCommitteeMemberImageChange,
   onCancelCommitteeMemberEdit,
   onSaveCommitteeMember,
   onRemoveCommitteeMember,
@@ -3559,6 +3565,7 @@ function AssociationTabContent({
         feedbackMessage={committeeMemberFeedback}
         onOpenEditor={onOpenCommitteeMemberEditor}
         onFormChange={onCommitteeMemberFormChange}
+        onImageChange={onCommitteeMemberImageChange}
         onCancelEdit={onCancelCommitteeMemberEdit}
         onSave={onSaveCommitteeMember}
         onRemove={onRemoveCommitteeMember}
@@ -4456,6 +4463,7 @@ function ManagementCommitteePanel({
   onOpenEditor,
   onCancelEdit,
   onFormChange,
+  onImageChange,
   onSave,
   onRemove,
 }) {
@@ -4466,6 +4474,31 @@ function ManagementCommitteePanel({
 
     return !member.isCommitteeMember;
   });
+  const selectedMember = allMembers.find(
+    (member) => member.id === formData.memberId,
+  );
+  const memberPreviewName = selectedMember?.name || "Committee member";
+  const memberPreviewInitials =
+    memberPreviewName
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase() ?? "")
+      .join("") || "CM";
+  const normalizedSelectedPost = normalizeCommitteePostLabel(
+    formData.committeePost || "",
+  );
+  const selectedPostIsReusable = isReusableCommitteePost(normalizedSelectedPost);
+  const occupiedSingleSeatPosts = new Set(
+    committeeMembers
+      .filter(
+        (member) =>
+          member.id !== editingMemberId &&
+          !isReusableCommitteePost(member.committeePost || ""),
+      )
+      .map((member) => normalizeCommitteePostLabel(member.committeePost || ""))
+      .filter(Boolean),
+  );
 
   return (
     <section className="association-tab-section">
@@ -4506,6 +4539,34 @@ function ManagementCommitteePanel({
             </div>
 
             <div className="profile-form-grid">
+              <div className="profile-avatar-panel profile-field-wide member-photo-field">
+                <div className="profile-avatar-wrap">
+                  {formData.photoUrl ? (
+                    <img
+                      className="profile-avatar-image"
+                      src={formData.photoUrl}
+                      alt={`${memberPreviewName} preview`}
+                    />
+                  ) : (
+                    <span className="profile-avatar-placeholder">
+                      {memberPreviewInitials}
+                    </span>
+                  )}
+                </div>
+                <button
+                  className="secondary-link secondary-button profile-upload-button"
+                  type="button"
+                >
+                  Upload Member Picture
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(event) =>
+                      onImageChange?.(event.target.files?.[0] ?? null)
+                    }
+                  />
+                </button>
+              </div>
               <label className="profile-field profile-field-wide">
                 <span>Member</span>
                 <select
@@ -4532,12 +4593,26 @@ function ManagementCommitteePanel({
                 >
                   <option value="">Select post</option>
                   {committeePostOptions.map((post) => (
-                    <option key={post} value={post}>
+                    <option
+                      key={post}
+                      value={post}
+                      disabled={
+                        occupiedSingleSeatPosts.has(post) &&
+                        normalizeCommitteePostLabel(post) !== normalizedSelectedPost
+                      }
+                    >
                       {post}
                     </option>
                   ))}
                 </select>
               </label>
+              {normalizedSelectedPost &&
+              !selectedPostIsReusable &&
+              occupiedSingleSeatPosts.has(normalizedSelectedPost) ? (
+                <p className="profile-field-note">
+                  This committee post is already assigned to another member.
+                </p>
+              ) : null}
               <label className="profile-field">
                 <span>Tenure Start</span>
                 <input
@@ -5279,15 +5354,19 @@ function AssociationMasterPanel({
   onCancelCommitteePostEdit,
 }) {
   const postCards = committeePostOptions.map((post) => {
-    const assignedMember = committeeMembers.find(
+    const assignedMembers = committeeMembers.filter(
       (member) => normalizeCommitteePostLabel(member.committeePost || "") === post,
     );
+    const assignedMember = assignedMembers[0] ?? null;
     const isDefaultPost = defaultCommitteePostOptions.includes(post);
+    const isReusable = isReusableCommitteePost(post);
 
     return {
       post,
       assignedMember,
-      isEditable: !assignedMember && !isDefaultPost,
+      assignedMembers,
+      isEditable: assignedMembers.length === 0 && !isDefaultPost,
+      isReusable,
     };
   });
 
@@ -5383,20 +5462,27 @@ function AssociationMasterPanel({
         ) : null}
 
         <div className="association-gallery-grid">
-          {postCards.map(({ post, assignedMember, isEditable }) => (
+          {postCards.map(
+            ({ post, assignedMember, assignedMembers, isEditable, isReusable }) => (
             <article key={post} className="association-gallery-card">
               <div className="association-gallery-copy">
                 <span className="mini-label">Committee Post</span>
                 <h3>{post}</h3>
                 <p>
-                  {assignedMember
-                    ? `${assignedMember.name}${assignedMember.company ? ` · ${assignedMember.company}` : ""}`
+                  {assignedMembers.length > 0
+                    ? isReusable
+                      ? `${assignedMembers.length} members assigned`
+                      : `${assignedMember.name}${assignedMember.company ? ` · ${assignedMember.company}` : ""}`
                     : "No committee member assigned yet."}
                 </p>
               </div>
               <div className="record-actions">
                 <span className="access-status-chip">
-                  {assignedMember ? "Assigned" : "Vacant"}
+                  {assignedMembers.length > 0
+                    ? isReusable
+                      ? `${assignedMembers.length} Assigned`
+                      : "Assigned"
+                    : "Vacant"}
                 </span>
                 {isAdmin ? (
                   <>
@@ -14228,6 +14314,7 @@ export default function HomePage() {
       committeeTenureStart: member.committeeTenureStart ?? "",
       committeeTenureEnd: member.committeeTenureEnd ?? "",
       memberBio: member.memberBio ?? "",
+      photoUrl: member.photoUrl ?? "",
     });
   };
 
@@ -14235,8 +14322,31 @@ export default function HomePage() {
     setCommitteeMemberFeedback("");
     setCommitteeMemberForm((current) => ({
       ...current,
+      ...(field === "memberId"
+        ? {
+            photoUrl:
+              (memberTabData["All Members"] ?? []).find(
+                (member) => member.id === value,
+              )?.photoUrl ?? "",
+          }
+        : {}),
       [field]: value,
     }));
+  };
+
+  const updateCommitteeMemberImage = (file) => {
+    void (async () => {
+      if (!file) {
+        return;
+      }
+
+      const nextImage = await readFileAsDataUrl(file);
+      setCommitteeMemberFeedback("");
+      setCommitteeMemberForm((current) => ({
+        ...current,
+        photoUrl: nextImage,
+      }));
+    })();
   };
 
   const closeCommitteeMemberEditor = () => {
@@ -14378,9 +14488,28 @@ export default function HomePage() {
   const saveCommitteeMember = () => {
     void (async () => {
       const targetMemberId = committeeMemberForm.memberId;
-      if (!targetMemberId || !committeeMemberForm.committeePost.trim()) {
+      const normalizedCommitteePost = normalizeCommitteePostLabel(
+        committeeMemberForm.committeePost || "",
+      );
+
+      if (!targetMemberId || !normalizedCommitteePost) {
         setCommitteeMemberFeedback(
           "Select a member and committee post before saving.",
+        );
+        return;
+      }
+
+      const conflictingMember = committeeMembers.find(
+        (member) =>
+          member.id !== targetMemberId &&
+          normalizeCommitteePostLabel(member.committeePost || "") ===
+            normalizedCommitteePost &&
+          !isReusableCommitteePost(normalizedCommitteePost),
+      );
+
+      if (conflictingMember) {
+        setCommitteeMemberFeedback(
+          `${normalizedCommitteePost} is already assigned to ${conflictingMember.name}. Vacate it first or choose another post.`,
         );
         return;
       }
@@ -14394,11 +14523,12 @@ export default function HomePage() {
           {
             method: "PATCH",
             body: JSON.stringify({
-              committeePost: committeeMemberForm.committeePost.trim(),
+              committeePost: normalizedCommitteePost,
               committeeTenureStart:
                 committeeMemberForm.committeeTenureStart || null,
               committeeTenureEnd: committeeMemberForm.committeeTenureEnd || null,
               memberBio: committeeMemberForm.memberBio.trim(),
+              photoUrl: committeeMemberForm.photoUrl || null,
             }),
           },
         );
@@ -15768,6 +15898,7 @@ export default function HomePage() {
                 editMasterPostDraftValue={committeePostMasterEditDraft}
                 onOpenCommitteeMemberEditor={openCommitteeMemberEditor}
                 onCommitteeMemberFormChange={updateCommitteeMemberForm}
+                onCommitteeMemberImageChange={updateCommitteeMemberImage}
                 onCancelCommitteeMemberEdit={closeCommitteeMemberEditor}
                 onSaveCommitteeMember={saveCommitteeMember}
                 onRemoveCommitteeMember={removeCommitteeMember}
