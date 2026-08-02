@@ -3452,10 +3452,13 @@ function AssociationTabContent({
   masterDraftValue,
   masterFeedbackMessage,
   editingMasterPostValue,
+  editMasterPostDraftValue,
   onMasterDraftChange,
   onSaveMasterDraft,
+  onEditMasterPostChange,
   onEditMasterPost,
   onDeleteMasterPost,
+  onSaveMasterPostEdit,
   onCancelMasterPostEdit,
   galleryItems,
   galleryFolders,
@@ -3623,13 +3626,16 @@ function AssociationTabContent({
         committeeMembers={committeeMembers}
         committeePostOptions={committeePostOptions}
         newCommitteePost={masterDraftValue}
+        editCommitteePostDraft={editMasterPostDraftValue}
         feedbackMessage={masterFeedbackMessage}
         editingPost={editingMasterPostValue}
         isAdmin={isAdmin}
         onNewCommitteePostChange={onMasterDraftChange}
+        onEditCommitteePostChange={onEditMasterPostChange}
         onAddCommitteePost={onSaveMasterDraft}
         onEditCommitteePost={onEditMasterPost}
         onDeleteCommitteePost={onDeleteMasterPost}
+        onSaveCommitteePostEdit={onSaveMasterPostEdit}
         onCancelCommitteePostEdit={onCancelMasterPostEdit}
       />
     );
@@ -5260,13 +5266,16 @@ function AssociationMasterPanel({
   committeeMembers,
   committeePostOptions,
   newCommitteePost,
+  editCommitteePostDraft,
   feedbackMessage,
   editingPost,
   isAdmin,
   onNewCommitteePostChange,
+  onEditCommitteePostChange,
   onAddCommitteePost,
   onEditCommitteePost,
   onDeleteCommitteePost,
+  onSaveCommitteePostEdit,
   onCancelCommitteePostEdit,
 }) {
   const postCards = committeePostOptions.map((post) => {
@@ -5303,43 +5312,74 @@ function AssociationMasterPanel({
         </article>
 
         {isAdmin ? (
-          <article className="association-profile-card">
-            <div className="panel-topline">
-              <h3>{editingPost ? "Edit Committee Post" : "Add Committee Post"}</h3>
-              <span className="mini-label">Master Setup</span>
-            </div>
-            <div className="profile-form-grid">
-              <label className="profile-field profile-field-wide">
-                <span>Committee Post Name</span>
-                <input
-                  type="text"
-                  value={newCommitteePost}
-                  placeholder="Joint Secretary"
-                  onChange={(event) =>
-                    onNewCommitteePostChange(event.target.value)
-                  }
-                />
-              </label>
-            </div>
-            <div className="profile-action-row">
-              {editingPost ? (
+          <>
+            <article className="association-profile-card">
+              <div className="panel-topline">
+                <h3>Add Committee Post</h3>
+                <span className="mini-label">Master Setup</span>
+              </div>
+              <div className="profile-form-grid">
+                <label className="profile-field profile-field-wide">
+                  <span>Committee Post Name</span>
+                  <input
+                    type="text"
+                    value={newCommitteePost}
+                    placeholder="Joint Secretary"
+                    onChange={(event) =>
+                      onNewCommitteePostChange(event.target.value)
+                    }
+                  />
+                </label>
+              </div>
+              <div className="profile-action-row">
                 <button
-                  className="secondary-link secondary-button"
+                  className="primary-link admin-action-button"
                   type="button"
-                  onClick={onCancelCommitteePostEdit}
+                  onClick={onAddCommitteePost}
                 >
-                  Cancel
+                  Add Committee Post
                 </button>
-              ) : null}
-              <button
-                className="primary-link admin-action-button"
-                type="button"
-                onClick={onAddCommitteePost}
-              >
-                {editingPost ? "Save Committee Post" : "Add Committee Post"}
-              </button>
-            </div>
-          </article>
+              </div>
+            </article>
+
+            {editingPost ? (
+              <article className="association-profile-card">
+                <div className="panel-topline">
+                  <h3>Edit Committee Post</h3>
+                  <span className="mini-label">Master Setup</span>
+                </div>
+                <div className="profile-form-grid">
+                  <label className="profile-field profile-field-wide">
+                    <span>Committee Post Name</span>
+                    <input
+                      type="text"
+                      value={editCommitteePostDraft}
+                      placeholder="Joint Secretary"
+                      onChange={(event) =>
+                        onEditCommitteePostChange(event.target.value)
+                      }
+                    />
+                  </label>
+                </div>
+                <div className="profile-action-row">
+                  <button
+                    className="secondary-link secondary-button"
+                    type="button"
+                    onClick={onCancelCommitteePostEdit}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="primary-link admin-action-button"
+                    type="button"
+                    onClick={onSaveCommitteePostEdit}
+                  >
+                    Save Committee Post
+                  </button>
+                </div>
+              </article>
+            ) : null}
+          </>
         ) : null}
 
         <div className="association-gallery-grid">
@@ -10208,6 +10248,8 @@ export default function HomePage() {
     useState("");
   const [editingCommitteePostMaster, setEditingCommitteePostMaster] =
     useState("");
+  const [committeePostMasterEditDraft, setCommitteePostMasterEditDraft] =
+    useState("");
   const [committeePostMasterFeedback, setCommitteePostMasterFeedback] =
     useState("");
   const [memberMasterForm, setMemberMasterForm] = useState(
@@ -14211,34 +14253,17 @@ export default function HomePage() {
     }
 
     const alreadyExists = committeePostOptions.some(
-      (post) =>
-        post.toLowerCase() === normalizedPost.toLowerCase() &&
-        post.toLowerCase() !== editingCommitteePostMaster.toLowerCase(),
+      (post) => post.toLowerCase() === normalizedPost.toLowerCase(),
     );
     if (alreadyExists) {
       setCommitteePostMasterFeedback("That committee post already exists.");
       return;
     }
 
-    if (editingCommitteePostMaster) {
-      setCommitteePostMasterList((current) =>
-        buildCommitteePostOptions(
-          committeeMembers,
-          current.map((post) =>
-            post === editingCommitteePostMaster ? normalizedPost : post,
-          ),
-        ),
-      );
-      setCommitteePostMasterFeedback(
-        `Committee post "${editingCommitteePostMaster}" updated to "${normalizedPost}".`,
-      );
-      setEditingCommitteePostMaster("");
-    } else {
-      setCommitteePostMasterList((current) =>
-        buildCommitteePostOptions(committeeMembers, [...current, normalizedPost]),
-      );
-      setCommitteePostMasterFeedback(`Committee post "${normalizedPost}" added.`);
-    }
+    setCommitteePostMasterList((current) =>
+      buildCommitteePostOptions(committeeMembers, [...current, normalizedPost]),
+    );
+    setCommitteePostMasterFeedback(`Committee post "${normalizedPost}" added.`);
 
     setCommitteePostMasterDraft("");
   };
@@ -14259,14 +14284,70 @@ export default function HomePage() {
     }
 
     setEditingCommitteePostMaster(normalizedPost);
-    setCommitteePostMasterDraft(normalizedPost);
+    setCommitteePostMasterEditDraft(normalizedPost);
     setCommitteePostMasterFeedback("");
   };
 
   const cancelCommitteePostMasterEdit = () => {
     setEditingCommitteePostMaster("");
-    setCommitteePostMasterDraft("");
+    setCommitteePostMasterEditDraft("");
     setCommitteePostMasterFeedback("");
+  };
+
+  const saveCommitteePostMasterEdit = () => {
+    const normalizedPost = normalizeCommitteePostLabel(
+      committeePostMasterEditDraft,
+    );
+
+    if (!editingCommitteePostMaster) {
+      setCommitteePostMasterFeedback("Select a committee post to edit first.");
+      return;
+    }
+
+    if (!normalizedPost) {
+      setCommitteePostMasterFeedback("Enter a committee post name first.");
+      return;
+    }
+
+    const isStillOccupied = committeeMembers.some(
+      (member) =>
+        normalizeCommitteePostLabel(member.committeePost || "") ===
+        editingCommitteePostMaster,
+    );
+    const isDefaultPost = defaultCommitteePostOptions.includes(
+      editingCommitteePostMaster,
+    );
+
+    if (isStillOccupied || isDefaultPost) {
+      setCommitteePostMasterFeedback(
+        "Vacate this committee post before editing it.",
+      );
+      return;
+    }
+
+    const alreadyExists = committeePostOptions.some(
+      (post) =>
+        post.toLowerCase() === normalizedPost.toLowerCase() &&
+        post.toLowerCase() !== editingCommitteePostMaster.toLowerCase(),
+    );
+    if (alreadyExists) {
+      setCommitteePostMasterFeedback("That committee post already exists.");
+      return;
+    }
+
+    setCommitteePostMasterList((current) =>
+      buildCommitteePostOptions(
+        committeeMembers,
+        current.map((post) =>
+          post === editingCommitteePostMaster ? normalizedPost : post,
+        ),
+      ),
+    );
+    setCommitteePostMasterFeedback(
+      `Committee post "${editingCommitteePostMaster}" updated to "${normalizedPost}".`,
+    );
+    setEditingCommitteePostMaster("");
+    setCommitteePostMasterEditDraft("");
   };
 
   const deleteCommitteePostMaster = (post) => {
@@ -14289,7 +14370,7 @@ export default function HomePage() {
     );
     if (editingCommitteePostMaster === normalizedPost) {
       setEditingCommitteePostMaster("");
-      setCommitteePostMasterDraft("");
+      setCommitteePostMasterEditDraft("");
     }
     setCommitteePostMasterFeedback(`Committee post "${normalizedPost}" deleted.`);
   };
@@ -15684,15 +15765,18 @@ export default function HomePage() {
                 masterDraftValue={committeePostMasterDraft}
                 masterFeedbackMessage={committeePostMasterFeedback}
                 editingMasterPostValue={editingCommitteePostMaster}
+                editMasterPostDraftValue={committeePostMasterEditDraft}
                 onOpenCommitteeMemberEditor={openCommitteeMemberEditor}
                 onCommitteeMemberFormChange={updateCommitteeMemberForm}
                 onCancelCommitteeMemberEdit={closeCommitteeMemberEditor}
                 onSaveCommitteeMember={saveCommitteeMember}
                 onRemoveCommitteeMember={removeCommitteeMember}
                 onMasterDraftChange={setCommitteePostMasterDraft}
+                onEditMasterPostChange={setCommitteePostMasterEditDraft}
                 onSaveMasterDraft={addCommitteePostMaster}
                 onEditMasterPost={editCommitteePostMaster}
                 onDeleteMasterPost={deleteCommitteePostMaster}
+                onSaveMasterPostEdit={saveCommitteePostMasterEdit}
                 onCancelMasterPostEdit={cancelCommitteePostMasterEdit}
                 galleryItems={galleryItems}
                 galleryFolders={galleryFolders}
