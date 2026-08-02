@@ -15255,6 +15255,8 @@ export default function HomePage() {
                 onSaveGalleryFolder={saveGalleryFolder}
                 onDeleteGalleryFolder={deleteGalleryFolder}
                 onDeleteGalleryPhoto={deleteGalleryPhoto}
+                galleryFolderEditorRef={galleryFolderEditorRef}
+                galleryFolderNameInputRef={galleryFolderNameInputRef}
                 circularDocuments={circularDocuments}
                 selectedCircularIds={selectedCircularDocumentIds}
                 editingCircularDocumentId={editingCircularDocumentId}
