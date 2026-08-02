@@ -14,19 +14,13 @@ import {
   persistInlineImageDataUrl,
 } from "../lib/inline-image-assets.js";
 import { prisma } from "../lib/prisma.js";
+import { getUploadSubdirPath } from "../lib/uploads-dir.js";
 
 const router = Router();
 const postReviewStatuses = ["PENDING", "APPROVED", "REJECTED"];
 const currentFilePath = fileURLToPath(import.meta.url);
-const currentDirPath = path.dirname(currentFilePath);
-const memberPostUploadsDirPath = path.resolve(
-  currentDirPath,
-  "../../uploads/member-posts",
-);
-const memberPhotoUploadsDirPath = path.resolve(
-  currentDirPath,
-  "../../uploads/member-photos",
-);
+const memberPostUploadsDirPath = getUploadSubdirPath("member-posts");
+const memberPhotoUploadsDirPath = getUploadSubdirPath("member-photos");
 
 const optionalDateField = z.preprocess(
   (value) => (value === "" || value === null ? undefined : value),

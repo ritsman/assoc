@@ -2,8 +2,6 @@ import "dotenv/config";
 import express from "express";
 import compression from "compression";
 import cors from "cors";
-import path from "path";
-import { fileURLToPath } from "url";
 import associationsRouter from "./routes/associations.js";
 import eventsRouter from "./routes/events.js";
 import membersRouter from "./routes/members.js";
@@ -14,18 +12,17 @@ import authRouter from "./routes/auth.js";
 import usersRouter from "./routes/users.js";
 import vendorsRouter from "./routes/vendors.js";
 import { ensureBootstrapAdmin } from "./lib/bootstrap-admin.js";
+import { getUploadsDirPath } from "./lib/uploads-dir.js";
 import { attachSessionContext } from "./lib/session-auth.js";
 import vendorTaxonomyRouter from "./routes/vendor-taxonomy.js";
 import { backfillVendorTaxonomy } from "./lib/vendor-taxonomy.js";
 
 const app = express();
 const port = Number(process.env.PORT || 8083);
-const currentFilePath = fileURLToPath(import.meta.url);
-const currentDirPath = path.dirname(currentFilePath);
-const uploadsDirPath = path.resolve(currentDirPath, "../uploads");
 const configuredOrigins = process.env.CORS_ORIGIN?.split(",")
   .map((origin) => origin.trim())
   .filter(Boolean) || ["*"];
+const uploadsDirPath = getUploadsDirPath();
 
 app.set("trust proxy", true);
 

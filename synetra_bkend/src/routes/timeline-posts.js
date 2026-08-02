@@ -11,12 +11,12 @@ import {
   resolvePublicAssetUrl,
 } from "../lib/public-url.js";
 import { prisma } from "../lib/prisma.js";
+import { getUploadSubdirPath } from "../lib/uploads-dir.js";
 
 const router = Router();
 const { PostReviewStatus, TimelineSourceType } = prismaPkg;
 const currentFilePath = fileURLToPath(import.meta.url);
-const currentDirPath = path.dirname(currentFilePath);
-const timelineUploadsDirPath = path.resolve(currentDirPath, "../../uploads/timeline-posts");
+const timelineUploadsDirPath = getUploadSubdirPath("timeline-posts");
 
 const optionalDateField = z.preprocess(
   (value) => (value === "" || value === null ? undefined : value),

@@ -16,14 +16,15 @@ import {
 } from "../lib/inline-image-assets.js";
 import { ensureAssociationAppAccess } from "../lib/app-access.js";
 import { prisma } from "../lib/prisma.js";
+import { getUploadSubdirPath } from "../lib/uploads-dir.js";
 
 const router = Router();
 const currentFilePath = fileURLToPath(import.meta.url);
 const currentDirPath = path.dirname(currentFilePath);
-const circularUploadsDirPath = path.resolve(currentDirPath, "../../uploads/circulars");
-const galleryUploadsDirPath = path.resolve(currentDirPath, "../../uploads/gallery");
-const associationUploadsDirPath = path.resolve(currentDirPath, "../../uploads/associations");
-const memberPhotoUploadsDirPath = path.resolve(currentDirPath, "../../uploads/member-photos");
+const circularUploadsDirPath = getUploadSubdirPath("circulars");
+const galleryUploadsDirPath = getUploadSubdirPath("gallery");
+const associationUploadsDirPath = getUploadSubdirPath("associations");
+const memberPhotoUploadsDirPath = getUploadSubdirPath("member-photos");
 
 function buildSafeUploadName(file, fallbackBaseName) {
   const safeBaseName = path

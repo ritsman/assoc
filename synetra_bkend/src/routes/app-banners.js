@@ -7,12 +7,12 @@ import { fileURLToPath } from "url";
 import { z } from "zod";
 import { buildPublicAssetUrl, resolvePublicAssetUrl } from "../lib/public-url.js";
 import { prisma } from "../lib/prisma.js";
+import { getUploadSubdirPath } from "../lib/uploads-dir.js";
 
 const router = Router();
 const { PostReviewStatus } = prismaPkg;
 const currentFilePath = fileURLToPath(import.meta.url);
-const currentDirPath = path.dirname(currentFilePath);
-const appBannerUploadsDirPath = path.resolve(currentDirPath, "../../uploads/app-banners");
+const appBannerUploadsDirPath = getUploadSubdirPath("app-banners");
 const maxAppBannerImageBytes = 1024 * 1024;
 const maxAppBannerPdfBytes = 2 * 1024 * 1024;
 const maxActiveAppBanners = 50;

@@ -22,12 +22,13 @@ import {
 } from "../lib/inline-image-assets.js";
 import { ensureAssociationAppAccess } from "../lib/app-access.js";
 import { prisma } from "../lib/prisma.js";
+import { getUploadSubdirPath } from "../lib/uploads-dir.js";
 
 const router = Router();
 const { ApprovalStatus, MemberStatus, PaymentStatus, Prisma } = prismaPkg;
 const currentDirPath = path.dirname(new URL(import.meta.url).pathname);
-const bulkMemberUploadsDirPath = path.resolve(currentDirPath, "../../uploads/member-imports");
-const memberPhotoUploadsDirPath = path.resolve(currentDirPath, "../../uploads/member-photos");
+const bulkMemberUploadsDirPath = getUploadSubdirPath("member-imports");
+const memberPhotoUploadsDirPath = getUploadSubdirPath("member-photos");
 const optionalDateField = z.preprocess(
   (value) => (value === "" ? null : value),
   z.coerce.date().nullable().optional(),

@@ -10,11 +10,11 @@ import {
   resolvePublicAssetUrl,
 } from "../lib/public-url.js";
 import { prisma } from "../lib/prisma.js";
+import { getUploadSubdirPath } from "../lib/uploads-dir.js";
 
 const router = Router();
 const currentFilePath = fileURLToPath(import.meta.url);
-const currentDirPath = path.dirname(currentFilePath);
-const eventUploadsDirPath = path.resolve(currentDirPath, "../../uploads/events");
+const eventUploadsDirPath = getUploadSubdirPath("events");
 
 const optionalDateField = z.preprocess(
   (value) => (value === "" || value === null ? undefined : value),

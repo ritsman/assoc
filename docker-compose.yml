@@ -12,6 +12,7 @@ services:
     volumes:
       - ./synetra_bkend:/app
       - /app/node_modules
+      - synetra_bkend_uploads:/app/uploads
     command: sh -c "npx prisma generate && npm run dev"
 
   synetra_web:
@@ -29,3 +30,6 @@ services:
       - /app/node_modules
       - /app/.next
     command: npm run dev
+
+volumes:
+  synetra_bkend_uploads:

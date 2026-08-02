@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
+import { getUploadsDirPath } from "./uploads-dir.js";
 
 const mimeExtensionMap = new Map([
   ["image/jpeg", "jpg"],
@@ -69,7 +70,10 @@ export function deleteLocalAssetIfPresent(fileValue, uploadsSegment) {
     return;
   }
 
-  const filePath = path.resolve(process.cwd(), normalizedPath);
+  const filePath = path.join(
+    getUploadsDirPath(),
+    normalizedPath.slice(expectedPrefix.length),
+  );
   if (fs.existsSync(filePath)) {
     fs.unlinkSync(filePath);
   }
