@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const apiBaseUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8083/api";
@@ -3523,6 +3523,8 @@ function AssociationTabContent({
         onCancelEdit={onCancelGalleryItemEdit}
         onSave={onSaveGalleryItem}
         onDelete={onDeleteGalleryItem}
+        editorRef={galleryEditorRef}
+        headlineInputRef={galleryHeadlineInputRef}
       />
     );
   }
@@ -4611,6 +4613,8 @@ function AssociationGalleryPanel({
   onCancelEdit,
   onSave,
   onDelete,
+  editorRef,
+  headlineInputRef,
 }) {
   return (
     <section className="association-tab-section">
@@ -4649,7 +4653,7 @@ function AssociationGalleryPanel({
         </article>
 
         {editingItemId !== null ? (
-          <article className="association-profile-card">
+          <article className="association-profile-card" ref={editorRef}>
             <div className="panel-topline">
               <h3>
                 {editingItemId ? "Edit Gallery Item" : "Add Gallery Item"}
@@ -4687,6 +4691,7 @@ function AssociationGalleryPanel({
                 <input
                   type="text"
                   value={formData.headline}
+                  ref={headlineInputRef}
                   onChange={(event) =>
                     onFieldChange("headline", event.target.value)
                   }
@@ -9761,6 +9766,8 @@ export default function HomePage() {
   const [galleryItemForm, setGalleryItemForm] = useState(
     defaultGalleryItemForm,
   );
+  const galleryEditorRef = useRef(null);
+  const galleryHeadlineInputRef = useRef(null);
   const [selectedGalleryItemIds, setSelectedGalleryItemIds] = useState([]);
   const [isSavingGalleryItem, setIsSavingGalleryItem] = useState(false);
   const [galleryItemFeedback, setGalleryItemFeedback] = useState("");
@@ -9950,6 +9957,22 @@ export default function HomePage() {
   const isSuperAdmin =
     authSession?.viewerRole === "superAdmin" ||
     normalizedAuthEmail === bootstrapSuperAdminEmail;
+
+  useEffect(() => {
+    if (editingGalleryItemId === null) {
+      return;
+    }
+
+    galleryEditorRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+
+    window.requestAnimationFrame(() => {
+      galleryHeadlineInputRef.current?.focus();
+      galleryHeadlineInputRef.current?.select();
+    });
+  }, [editingGalleryItemId]);
 
   const updateLoginField = (field, value) => {
     setLoginForm((current) => ({
