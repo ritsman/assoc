@@ -303,6 +303,7 @@ const navSections = [
 
 const adminAccessSections = [
   "App Access",
+  "Registration Requests",
   "Member Access",
   "Banner Access",
   "Timeline Access",
@@ -2677,6 +2678,12 @@ const defaultGalleryItemForm = {
   description: "",
 };
 
+const defaultGalleryFolderForm = {
+  id: "",
+  name: "",
+  files: [],
+};
+
 const defaultCircularDocumentForm = {
   id: "",
   headline: "",
@@ -2828,6 +2835,39 @@ function mapAssociationGalleryItems(items) {
     headline: item.headline ?? "",
     tagline: item.tagline ?? "",
     description: item.description ?? "",
+  }));
+}
+
+function mapAssociationGalleryPhotos(items) {
+  if (!Array.isArray(items)) {
+    return [];
+  }
+
+  return items.map((item) => ({
+    id: item.id ?? "",
+    imageUrl: item.imageUrl ?? "",
+    thumbnailUrl: item.thumbnailUrl ?? item.imageUrl ?? "",
+    createdAt: item.createdAt ?? "",
+  }));
+}
+
+function mapAssociationGalleryFolders(items) {
+  if (!Array.isArray(items)) {
+    return [];
+  }
+
+  return items.map((item) => ({
+    id: item.id ?? "",
+    name: item.name ?? "",
+    createdAt: item.createdAt ?? "",
+    updatedAt: item.updatedAt ?? "",
+    photoCount:
+      item.photoCount ??
+      (Array.isArray(item.photos) ? item.photos.length : 0),
+    previewPhotos: mapAssociationGalleryPhotos(
+      item.previewPhotos ?? item.photos,
+    ),
+    photos: mapAssociationGalleryPhotos(item.photos),
   }));
 }
 
@@ -3414,16 +3454,20 @@ function AssociationTabContent({
   onMasterDraftChange,
   onSaveMasterDraft,
   galleryItems,
-  editingGalleryItemId,
-  galleryItemForm,
-  isSavingGalleryItem,
-  galleryItemFeedback,
-  onOpenGalleryItemEditor,
-  onGalleryItemFieldChange,
-  onGalleryItemImageChange,
-  onCancelGalleryItemEdit,
-  onSaveGalleryItem,
-  onDeleteGalleryItem,
+  galleryFolders,
+  activeGalleryFolderId,
+  editingGalleryFolderId,
+  galleryFolderForm,
+  isSavingGalleryFolder,
+  galleryFolderFeedback,
+  onOpenGalleryFolder,
+  onOpenGalleryFolderEditor,
+  onGalleryFolderFieldChange,
+  onGalleryFolderFilesChange,
+  onCancelGalleryFolderEdit,
+  onSaveGalleryFolder,
+  onDeleteGalleryFolder,
+  onDeleteGalleryPhoto,
   circularDocuments,
   selectedCircularIds,
   editingCircularDocumentId,
@@ -3508,23 +3552,23 @@ function AssociationTabContent({
   if (activeTab === "Gallery") {
     return (
       <AssociationGalleryPanel
-        items={galleryItems}
+        folders={galleryFolders}
         isAdmin={isAdmin}
-        selectedIds={selectedIds}
-        editingItemId={editingGalleryItemId}
-        formData={galleryItemForm}
-        isSaving={isSavingGalleryItem}
-        feedbackMessage={galleryItemFeedback}
-        onOpenEditor={onOpenGalleryItemEditor}
-        onToggleSelect={onToggleSelect}
-        onDeleteSelected={onDeleteSelected}
-        onFieldChange={onGalleryItemFieldChange}
-        onImageChange={onGalleryItemImageChange}
-        onCancelEdit={onCancelGalleryItemEdit}
-        onSave={onSaveGalleryItem}
-        onDelete={onDeleteGalleryItem}
-        editorRef={galleryEditorRef}
-        headlineInputRef={galleryHeadlineInputRef}
+        activeFolderId={activeGalleryFolderId}
+        editingFolderId={editingGalleryFolderId}
+        formData={galleryFolderForm}
+        isSaving={isSavingGalleryFolder}
+        feedbackMessage={galleryFolderFeedback}
+        onOpenFolder={onOpenGalleryFolder}
+        onOpenEditor={onOpenGalleryFolderEditor}
+        onFieldChange={onGalleryFolderFieldChange}
+        onFilesChange={onGalleryFolderFilesChange}
+        onCancelEdit={onCancelGalleryFolderEdit}
+        onSave={onSaveGalleryFolder}
+        onDeleteFolder={onDeleteGalleryFolder}
+        onDeletePhoto={onDeleteGalleryPhoto}
+        editorRef={galleryFolderEditorRef}
+        nameInputRef={galleryFolderNameInputRef}
       />
     );
   }
@@ -4598,24 +4642,46 @@ function ManagementCommitteePanel({
 }
 
 function AssociationGalleryPanel({
-  items,
+  folders,
   isAdmin,
-  selectedIds,
-  editingItemId,
+  activeFolderId,
+  editingFolderId,
   formData,
   isSaving,
   feedbackMessage,
+  onOpenFolder,
   onOpenEditor,
-  onToggleSelect,
-  onDeleteSelected,
   onFieldChange,
-  onImageChange,
+  onFilesChange,
   onCancelEdit,
   onSave,
-  onDelete,
+  onDeleteFolder,
+  onDeletePhoto,
   editorRef,
-  headlineInputRef,
+  nameInputRef,
 }) {
+  const activeFolder =
+    folders.find((folder) => folder.id === activeFolderId) ?? null;
+
+  const formatGalleryStamp = (value) => {
+    if (!value) {
+      return "";
+    }
+
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return "";
+    }
+
+    return parsed.toLocaleString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
   return (
     <section className="association-tab-section">
       <section className="association-profile-stack">
@@ -4623,100 +4689,73 @@ function AssociationGalleryPanel({
           <div className="panel-topline">
             <div>
               <span className="mini-label">Gallery</span>
-              <h2>Visual Stories</h2>
+              <h2>Gallery Folders</h2>
             </div>
             {isAdmin ? (
               <div className="record-actions">
-                <button
-                  className="secondary-link secondary-button danger-button"
-                  type="button"
-                  onClick={onDeleteSelected}
-                  disabled={isSaving || selectedIds.length === 0}
-                >
-                  Delete Selected
-                </button>
                 <button
                   className="primary-link admin-action-button"
                   type="button"
                   onClick={() => onOpenEditor("")}
                   disabled={isSaving}
                 >
-                  Add New
+                  Add Folder
                 </button>
               </div>
             ) : null}
           </div>
           <p className="committee-hero-copy">
-            Each gallery entry uses one main image on top with a clear headline,
-            short tagline, and full description below.
+            Organize gallery photos into named folders. Newest folders and newest
+            photos appear first.
           </p>
         </article>
 
-        {editingItemId !== null ? (
+        {editingFolderId !== null ? (
           <article className="association-profile-card" ref={editorRef}>
             <div className="panel-topline">
               <h3>
-                {editingItemId ? "Edit Gallery Item" : "Add Gallery Item"}
+                {editingFolderId ? "Edit Gallery Folder" : "Add Gallery Folder"}
               </h3>
-              <span className="mini-label">Gallery CMS</span>
+              <span className="mini-label">Folder CMS</span>
             </div>
 
             <div className="profile-form-grid">
-              <div className="profile-avatar-panel profile-field-wide member-photo-field">
-                <div className="gallery-form-preview">
-                  {formData.imageUrl ? (
-                    <img src={formData.imageUrl} alt="Gallery preview" />
-                  ) : (
+              <label className="profile-field profile-field-wide">
+                <span>Folder Name</span>
+                <input
+                  type="text"
+                  value={formData.name}
+                  ref={nameInputRef}
+                  onChange={(event) =>
+                    onFieldChange("name", event.target.value)
+                  }
+                />
+              </label>
+              {!editingFolderId ? (
+                <div className="profile-avatar-panel profile-field-wide member-photo-field">
+                  <div className="gallery-form-preview">
                     <div className="gallery-form-placeholder">
-                      Image preview
+                      {formData.files.length > 0
+                        ? `${formData.files.length} image${formData.files.length === 1 ? "" : "s"} selected`
+                        : "Folder preview"}
                     </div>
-                  )}
+                  </div>
+                  <button
+                    className="secondary-link secondary-button profile-upload-button"
+                    type="button"
+                  >
+                    Upload Image Folder
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      webkitdirectory=""
+                      directory=""
+                      onChange={(event) => onFilesChange(event.target.files)}
+                    />
+                  </button>
                 </div>
-                <button
-                  className="secondary-link secondary-button profile-upload-button"
-                  type="button"
-                >
-                  Upload Gallery Picture
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(event) =>
-                      onImageChange(event.target.files?.[0] ?? null)
-                    }
-                  />
-                </button>
-              </div>
-              <label className="profile-field profile-field-wide">
-                <span>Headline</span>
-                <input
-                  type="text"
-                  value={formData.headline}
-                  ref={headlineInputRef}
-                  onChange={(event) =>
-                    onFieldChange("headline", event.target.value)
-                  }
-                />
-              </label>
-              <label className="profile-field profile-field-wide">
-                <span>Tagline</span>
-                <input
-                  type="text"
-                  value={formData.tagline}
-                  onChange={(event) =>
-                    onFieldChange("tagline", event.target.value)
-                  }
-                />
-              </label>
-              <label className="profile-field profile-field-wide">
-                <span>Description</span>
-                <textarea
-                  rows="5"
-                  value={formData.description}
-                  onChange={(event) =>
-                    onFieldChange("description", event.target.value)
-                  }
-                />
-              </label>
+              ) : null}
             </div>
 
             <div className="profile-action-row">
@@ -4734,7 +4773,7 @@ function AssociationGalleryPanel({
                 onClick={onSave}
                 disabled={isSaving}
               >
-                {isSaving ? "Saving..." : "Save Gallery Item"}
+                {isSaving ? "Saving..." : "Save Gallery Folder"}
               </button>
             </div>
           </article>
@@ -4744,41 +4783,62 @@ function AssociationGalleryPanel({
           <p className="admin-access-feedback">{feedbackMessage}</p>
         ) : null}
 
-        {items.length > 0 ? (
+        {folders.length > 0 ? (
           <div className="association-gallery-grid">
-            {items.map((item) => (
-              <article key={item.id} className="association-gallery-card">
-                {isAdmin ? (
-                  <label className="association-card-selector">
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.includes(item.id)}
-                      onChange={() => onToggleSelect(item.id)}
-                      disabled={isSaving}
-                    />
-                    <span>Select</span>
-                  </label>
-                ) : null}
-                <div className="association-gallery-visual">
-                  {item.imageUrl ? (
-                    <img src={item.imageUrl} alt={item.headline} />
+            {folders.map((folder) => (
+              <article
+                key={folder.id}
+                className="association-gallery-card"
+                style={{ background: "rgba(255, 255, 255, 0.72)" }}
+              >
+                <button
+                  className="association-gallery-visual"
+                  type="button"
+                  onClick={() => onOpenFolder(folder.id)}
+                  style={{
+                    border: "none",
+                    padding: 0,
+                    cursor: "pointer",
+                    display: "grid",
+                    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                    gap: "6px",
+                    paddingInline: "12px",
+                    paddingTop: "12px",
+                  }}
+                >
+                  {folder.previewPhotos.length > 0 ? (
+                    folder.previewPhotos.map((photo) => (
+                      <img
+                        key={photo.id}
+                        src={photo.thumbnailUrl || photo.imageUrl}
+                        alt={folder.name}
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          minHeight: "92px",
+                          objectFit: "cover",
+                          borderRadius: "16px",
+                          opacity: 0.92,
+                        }}
+                      />
+                    ))
                   ) : (
-                    <div className="gallery-form-placeholder">No image</div>
+                    <div className="gallery-form-placeholder">No images</div>
                   )}
-                </div>
+                </button>
                 <div className="association-gallery-copy">
-                  <h3>{item.headline}</h3>
+                  <h3>{folder.name || "Gallery Folder"}</h3>
                   <span className="mini-label">
-                    {item.tagline || "No tagline added yet"}
+                    {folder.photoCount} photo{folder.photoCount === 1 ? "" : "s"}
                   </span>
-                  <p>{item.description || "No description added yet."}</p>
+                  <p>{formatGalleryStamp(folder.createdAt) || "No timestamp"}</p>
                 </div>
                 {isAdmin ? (
                   <div className="record-actions">
                     <button
                       className="secondary-link secondary-button"
                       type="button"
-                      onClick={() => onOpenEditor(item.id)}
+                      onClick={() => onOpenEditor(folder.id)}
                       disabled={isSaving}
                     >
                       Edit
@@ -4786,7 +4846,7 @@ function AssociationGalleryPanel({
                     <button
                       className="secondary-link secondary-button danger-button"
                       type="button"
-                      onClick={() => onDelete(item.id)}
+                      onClick={() => onDeleteFolder(folder.id)}
                       disabled={isSaving}
                     >
                       Delete
@@ -4799,13 +4859,51 @@ function AssociationGalleryPanel({
         ) : (
           <article className="association-profile-card committee-empty-card">
             <span className="mini-label">Gallery</span>
-            <h3>No gallery entries yet</h3>
+            <h3>No gallery folders yet</h3>
             <p>
-              Add a gallery item to start showing image-led stories for the
-              association.
+              Create a folder and upload photos to start organizing the
+              association gallery.
             </p>
           </article>
         )}
+
+        {activeFolder ? (
+          <article className="association-profile-card">
+            <div className="panel-topline">
+              <div>
+                <span className="mini-label">Open Folder</span>
+                <h3>{activeFolder.name}</h3>
+              </div>
+            </div>
+            <div className="association-gallery-grid">
+              {activeFolder.photos.map((photo) => (
+                <article key={photo.id} className="association-gallery-card">
+                  <div className="association-gallery-visual">
+                    <img src={photo.imageUrl} alt={activeFolder.name} />
+                  </div>
+                  <div className="association-gallery-copy">
+                    <h3>{activeFolder.name}</h3>
+                    <span className="mini-label">
+                      {formatGalleryStamp(photo.createdAt) || "No timestamp"}
+                    </span>
+                  </div>
+                  {isAdmin ? (
+                    <div className="record-actions">
+                      <button
+                        className="secondary-link secondary-button danger-button"
+                        type="button"
+                        onClick={() => onDeletePhoto(activeFolder.id, photo.id)}
+                        disabled={isSaving}
+                      >
+                        Delete Photo
+                      </button>
+                    </div>
+                  ) : null}
+                </article>
+              ))}
+            </div>
+          </article>
+        ) : null}
       </section>
     </section>
   );
@@ -8894,7 +8992,8 @@ function AdminMemberAccessPanel({
   isSaving,
   feedbackMessage,
 }) {
-  const allSelected = items.length > 0 && selectedIds.length === items.length;
+  const allSelected =
+    items.length > 0 && items.every((member) => selectedIds.includes(member.id));
 
   return (
     <article className="admin-access-panel">
@@ -9338,6 +9437,137 @@ function AdminMemberAccessPanel({
   );
 }
 
+function AdminRegistrationRequestsPanel({
+  items,
+  selectedIds,
+  feedbackMessage,
+  isSaving,
+  onToggleSelect,
+  onToggleSelectAll,
+  onApplyBulkMemberAccessStatus,
+  onUpdateMemberAccessStatus,
+  onSaveMemberAccessChanges,
+}) {
+  const allSelected =
+    items.length > 0 && items.every((member) => selectedIds.includes(member.id));
+
+  return (
+    <article className="admin-access-panel">
+      <div className="panel-topline">
+        <h2>Registration Requests</h2>
+        <span className="mini-label">Approve Or Reject</span>
+      </div>
+
+      <p className="admin-access-helper-copy">
+        Review new member login requests from the web admin. Approving grants
+        app access, while cancelling rejects the registration request.
+      </p>
+
+      <div className="admin-member-toolbar">
+        <label className="selection-chip">
+          <input
+            type="checkbox"
+            checked={allSelected}
+            onChange={onToggleSelectAll}
+          />
+          <span>Select pending</span>
+        </label>
+        <button
+          className="secondary-link secondary-button"
+          type="button"
+          onClick={() => onApplyBulkMemberAccessStatus("APPROVED")}
+        >
+          Approve Selected
+        </button>
+        <button
+          className="secondary-link secondary-button danger-button"
+          type="button"
+          onClick={() => onApplyBulkMemberAccessStatus("CANCELLED")}
+        >
+          Reject Selected
+        </button>
+      </div>
+
+      <div className="member-table-wrap">
+        <table className="member-table">
+          <thead>
+            <tr>
+              <th>Select</th>
+              <th>Name</th>
+              <th>Company</th>
+              <th>Member Type</th>
+              <th>Membership Period</th>
+              <th>Request Status</th>
+              <th>Contact</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((member) => (
+              <tr key={member.id}>
+                <td>
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.includes(member.id)}
+                    onChange={() => onToggleSelect(member.id)}
+                  />
+                </td>
+                <td>{member.name}</td>
+                <td>{member.company}</td>
+                <td>{member.membershipType}</td>
+                <td>{member.membershipPeriod}</td>
+                <td>
+                  <select
+                    className="member-access-select"
+                    value={member.appAccessStatus}
+                    onChange={(event) =>
+                      onUpdateMemberAccessStatus(member.id, event.target.value)
+                    }
+                  >
+                    <option value="Pending Approval">Pending Approval</option>
+                    <option value="Approved">Approved</option>
+                    <option value="Cancelled">Rejected</option>
+                  </select>
+                </td>
+                <td>
+                  <div className="member-table-contact">
+                    <a href={`mailto:${member.email}`}>{member.email}</a>
+                    <span>{member.phone}</span>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {items.length === 0 ? (
+        <article className="association-empty-state">
+          <span className="mini-label">All Clear</span>
+          <h2>No pending registration requests right now.</h2>
+          <p>
+            New member login requests will appear here whenever registration
+            approval is required.
+          </p>
+        </article>
+      ) : null}
+
+      <div className="profile-action-row">
+        {feedbackMessage ? (
+          <p className="admin-access-feedback">{feedbackMessage}</p>
+        ) : null}
+        <button
+          className="primary-link admin-action-button"
+          type="button"
+          disabled={isSaving}
+          onClick={onSaveMemberAccessChanges}
+        >
+          {isSaving ? "Saving..." : "Save Registration Decisions"}
+        </button>
+      </div>
+    </article>
+  );
+}
+
 function AdminVendorAccessPanel({
   items,
   activeView,
@@ -9762,6 +9992,16 @@ export default function HomePage() {
     useState(false);
   const [associationAboutFeedback, setAssociationAboutFeedback] = useState("");
   const [galleryItems, setGalleryItems] = useState([]);
+  const [galleryFolders, setGalleryFolders] = useState([]);
+  const [activeGalleryFolderId, setActiveGalleryFolderId] = useState("");
+  const [editingGalleryFolderId, setEditingGalleryFolderId] = useState(null);
+  const [galleryFolderForm, setGalleryFolderForm] = useState(
+    defaultGalleryFolderForm,
+  );
+  const [isSavingGalleryFolder, setIsSavingGalleryFolder] = useState(false);
+  const [galleryFolderFeedback, setGalleryFolderFeedback] = useState("");
+  const galleryFolderEditorRef = useRef(null);
+  const galleryFolderNameInputRef = useRef(null);
   const [editingGalleryItemId, setEditingGalleryItemId] = useState(null);
   const [galleryItemForm, setGalleryItemForm] = useState(
     defaultGalleryItemForm,
@@ -9973,6 +10213,22 @@ export default function HomePage() {
       galleryHeadlineInputRef.current?.select();
     });
   }, [editingGalleryItemId]);
+
+  useEffect(() => {
+    if (editingGalleryFolderId === null) {
+      return;
+    }
+
+    galleryFolderEditorRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+
+    window.requestAnimationFrame(() => {
+      galleryFolderNameInputRef.current?.focus();
+      galleryFolderNameInputRef.current?.select();
+    });
+  }, [editingGalleryFolderId]);
 
   const updateLoginField = (field, value) => {
     setLoginForm((current) => ({
@@ -10408,6 +10664,15 @@ export default function HomePage() {
     );
     setAssociationAbout(nextAbout);
     setAssociationAboutForm(nextAbout);
+    const nextGalleryFolders = mapAssociationGalleryFolders(
+      payload.association?.galleryFolders,
+    );
+    setGalleryFolders(nextGalleryFolders);
+    setActiveGalleryFolderId((current) =>
+      nextGalleryFolders.some((folder) => folder.id === current)
+        ? current
+        : (nextGalleryFolders[0]?.id ?? ""),
+    );
     setGalleryItems(
       mapAssociationGalleryItems(payload.association?.galleryItems),
     );
@@ -10653,6 +10918,15 @@ export default function HomePage() {
         );
         setAssociationAbout(nextAbout);
         setAssociationAboutForm(nextAbout);
+        const nextGalleryFolders = mapAssociationGalleryFolders(
+          payload.association?.galleryFolders,
+        );
+        setGalleryFolders(nextGalleryFolders);
+        setActiveGalleryFolderId((current) =>
+          nextGalleryFolders.some((folder) => folder.id === current)
+            ? current
+            : (nextGalleryFolders[0]?.id ?? ""),
+        );
         setGalleryItems(
           mapAssociationGalleryItems(payload.association?.galleryItems),
         );
@@ -10888,6 +11162,12 @@ export default function HomePage() {
       ...member,
       appAccessStatus: memberAccessEdits[member.id] ?? member.appAccessStatus,
     }));
+  const pendingRegistrationRequests = (memberTabData["All Members"] ?? [])
+    .map((member) => ({
+      ...member,
+      appAccessStatus: memberAccessEdits[member.id] ?? member.appAccessStatus,
+    }))
+    .filter((member) => member.appAccessStatus === "Pending Approval");
   const contentMemberMatches = (memberTabData["All Members"] ?? []).filter(
     (member) => {
       const query = adminContentMemberSearch.trim().toLowerCase();
@@ -11662,9 +11942,14 @@ export default function HomePage() {
   };
 
   const toggleSelectAllAdminMembers = () => {
-    const filteredIds = filteredAdminMembers.map((member) => member.id);
+    const filteredIds =
+      activeAdminAccessSection === "Registration Requests"
+        ? pendingRegistrationRequests.map((member) => member.id)
+        : filteredAdminMembers.map((member) => member.id);
     setSelectedAdminMembers((current) =>
-      current.length === filteredIds.length ? [] : filteredIds,
+      filteredIds.every((memberId) => current.includes(memberId))
+        ? current.filter((memberId) => !filteredIds.includes(memberId))
+        : Array.from(new Set([...current, ...filteredIds])),
     );
   };
 
@@ -13869,6 +14154,211 @@ export default function HomePage() {
     setGalleryItemForm(defaultGalleryItemForm);
   };
 
+  const openGalleryFolderEditor = (folderId = "") => {
+    setGalleryFolderFeedback("");
+    if (!folderId) {
+      setEditingGalleryFolderId("");
+      setGalleryFolderForm(defaultGalleryFolderForm);
+      return;
+    }
+
+    const folder = galleryFolders.find((item) => item.id === folderId);
+    if (!folder) {
+      return;
+    }
+
+    setEditingGalleryFolderId(folderId);
+    setGalleryFolderForm({
+      id: folder.id,
+      name: folder.name ?? "",
+      files: [],
+    });
+  };
+
+  const cancelGalleryFolderEdit = () => {
+    setGalleryFolderFeedback("");
+    setEditingGalleryFolderId(null);
+    setGalleryFolderForm(defaultGalleryFolderForm);
+  };
+
+  const updateGalleryFolderField = (field, value) => {
+    setGalleryFolderFeedback("");
+    setGalleryFolderForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  };
+
+  const updateGalleryFolderFiles = (files) => {
+    setGalleryFolderFeedback("");
+    setGalleryFolderForm((current) => ({
+      ...current,
+      files: Array.from(files ?? []).filter((file) =>
+        file.type.startsWith("image/"),
+      ),
+    }));
+  };
+
+  const saveGalleryFolder = () => {
+    void (async () => {
+      if (!associationProfile.id || !galleryFolderForm.name.trim()) {
+        setGalleryFolderFeedback("Folder name is required before saving.");
+        return;
+      }
+
+      if (!editingGalleryFolderId && galleryFolderForm.files.length === 0) {
+        setGalleryFolderFeedback(
+          "Select one or more images before creating a folder.",
+        );
+        return;
+      }
+
+      setIsSavingGalleryFolder(true);
+      setGalleryFolderFeedback("");
+
+      try {
+        let response;
+        if (editingGalleryFolderId) {
+          response = await runAuthenticatedFetch(
+            `/associations/${associationProfile.id}/gallery/folders/${editingGalleryFolderId}`,
+            {
+              method: "PATCH",
+              body: JSON.stringify({
+                name: galleryFolderForm.name.trim(),
+              }),
+            },
+          );
+        } else {
+          const payload = new FormData();
+          payload.append("name", galleryFolderForm.name.trim());
+          galleryFolderForm.files.forEach((file) => {
+            payload.append("files", file);
+          });
+          response = await runAuthenticatedFetch(
+            `/associations/${associationProfile.id}/gallery/folders`,
+            {
+              method: "POST",
+              body: payload,
+            },
+          );
+        }
+
+        if (!response.ok) {
+          let message = editingGalleryFolderId
+            ? "Unable to update the gallery folder right now."
+            : "Unable to create the gallery folder right now.";
+          try {
+            const result = await response.json();
+            if (result?.error) {
+              message = result.error;
+            }
+          } catch {}
+          setGalleryFolderFeedback(message);
+          return;
+        }
+
+        const result = await response.json();
+        const nextFolderId = result?.galleryFolder?.id ?? "";
+        await loadAssociationProfile();
+        setActiveGalleryFolderId(nextFolderId || activeGalleryFolderId);
+        cancelGalleryFolderEdit();
+        setGalleryFolderFeedback(
+          editingGalleryFolderId
+            ? "Gallery folder updated successfully."
+            : "Gallery folder created successfully.",
+        );
+      } finally {
+        setIsSavingGalleryFolder(false);
+      }
+    })();
+  };
+
+  const deleteGalleryFolder = (folderId) => {
+    void (async () => {
+      if (!associationProfile.id) {
+        setGalleryFolderFeedback(
+          "Association profile must be available before deleting a folder.",
+        );
+        return;
+      }
+
+      setIsSavingGalleryFolder(true);
+      setGalleryFolderFeedback("");
+
+      try {
+        const response = await runAuthenticatedFetch(
+          `/associations/${associationProfile.id}/gallery/folders/${folderId}`,
+          {
+            method: "DELETE",
+          },
+        );
+
+        if (!response.ok && response.status !== 204) {
+          let message = "Unable to delete the gallery folder right now.";
+          try {
+            const result = await response.json();
+            if (result?.error) {
+              message = result.error;
+            }
+          } catch {}
+          setGalleryFolderFeedback(message);
+          return;
+        }
+
+        await loadAssociationProfile();
+        if (activeGalleryFolderId === folderId) {
+          setActiveGalleryFolderId("");
+        }
+        if (editingGalleryFolderId === folderId) {
+          cancelGalleryFolderEdit();
+        }
+        setGalleryFolderFeedback("Gallery folder deleted.");
+      } finally {
+        setIsSavingGalleryFolder(false);
+      }
+    })();
+  };
+
+  const deleteGalleryPhoto = (folderId, photoId) => {
+    void (async () => {
+      if (!associationProfile.id) {
+        setGalleryFolderFeedback(
+          "Association profile must be available before deleting a photo.",
+        );
+        return;
+      }
+
+      setIsSavingGalleryFolder(true);
+      setGalleryFolderFeedback("");
+
+      try {
+        const response = await runAuthenticatedFetch(
+          `/associations/${associationProfile.id}/gallery/folders/${folderId}/photos/${photoId}`,
+          {
+            method: "DELETE",
+          },
+        );
+
+        if (!response.ok && response.status !== 204) {
+          let message = "Unable to delete the gallery photo right now.";
+          try {
+            const result = await response.json();
+            if (result?.error) {
+              message = result.error;
+            }
+          } catch {}
+          setGalleryFolderFeedback(message);
+          return;
+        }
+
+        await loadAssociationProfile();
+        setGalleryFolderFeedback("Gallery photo deleted.");
+      } finally {
+        setIsSavingGalleryFolder(false);
+      }
+    })();
+  };
+
   const toggleSelectGalleryItem = (itemId) => {
     setSelectedGalleryItemIds((current) =>
       current.includes(itemId)
@@ -14749,19 +15239,20 @@ export default function HomePage() {
                 onMasterDraftChange={setCommitteePostMasterDraft}
                 onSaveMasterDraft={addCommitteePostMaster}
                 galleryItems={galleryItems}
-                selectedIds={selectedGalleryItemIds}
-                editingGalleryItemId={editingGalleryItemId}
-                galleryItemForm={galleryItemForm}
-                isSavingGalleryItem={isSavingGalleryItem}
-                galleryItemFeedback={galleryItemFeedback}
-                onOpenGalleryItemEditor={openGalleryItemEditor}
-                onToggleSelect={toggleSelectGalleryItem}
-                onDeleteSelected={deleteSelectedGalleryItems}
-                onGalleryItemFieldChange={updateGalleryItemField}
-                onGalleryItemImageChange={updateGalleryItemImage}
-                onCancelGalleryItemEdit={cancelGalleryItemEdit}
-                onSaveGalleryItem={saveGalleryItem}
-                onDeleteGalleryItem={deleteGalleryItem}
+                galleryFolders={galleryFolders}
+                activeGalleryFolderId={activeGalleryFolderId}
+                editingGalleryFolderId={editingGalleryFolderId}
+                galleryFolderForm={galleryFolderForm}
+                isSavingGalleryFolder={isSavingGalleryFolder}
+                galleryFolderFeedback={galleryFolderFeedback}
+                onOpenGalleryFolder={setActiveGalleryFolderId}
+                onOpenGalleryFolderEditor={openGalleryFolderEditor}
+                onGalleryFolderFieldChange={updateGalleryFolderField}
+                onGalleryFolderFilesChange={updateGalleryFolderFiles}
+                onCancelGalleryFolderEdit={cancelGalleryFolderEdit}
+                onSaveGalleryFolder={saveGalleryFolder}
+                onDeleteGalleryFolder={deleteGalleryFolder}
+                onDeleteGalleryPhoto={deleteGalleryPhoto}
                 circularDocuments={circularDocuments}
                 selectedCircularIds={selectedCircularDocumentIds}
                 editingCircularDocumentId={editingCircularDocumentId}
@@ -15349,7 +15840,7 @@ export default function HomePage() {
               <div className="association-header-meta">
                 <div className="association-dashboard-grid">
                   <article className="association-dashboard-card">
-                    <strong>4</strong>
+                    <strong>5</strong>
                     <span>Access Sections</span>
                   </article>
                   <article className="association-dashboard-card">
@@ -15415,6 +15906,18 @@ export default function HomePage() {
                     </button>
                   </div>
                 </article>
+              ) : activeAdminAccessSection === "Registration Requests" ? (
+                <AdminRegistrationRequestsPanel
+                  items={pendingRegistrationRequests}
+                  selectedIds={selectedAdminMembers}
+                  feedbackMessage={memberAccessFeedback}
+                  isSaving={isSavingMemberAccess}
+                  onToggleSelect={toggleAdminMemberSelect}
+                  onToggleSelectAll={toggleSelectAllAdminMembers}
+                  onApplyBulkMemberAccessStatus={applyBulkMemberAccessStatus}
+                  onUpdateMemberAccessStatus={updateMemberAccessStatus}
+                  onSaveMemberAccessChanges={saveMemberAccessChanges}
+                />
               ) : activeAdminAccessSection === "Member Access" ? (
                 <AdminMemberAccessPanel
                   items={filteredAdminMembers}

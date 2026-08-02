@@ -36,6 +36,7 @@ model Association {
   regionalAddresses  AssociationRegionalAddress[]
   aboutContent       AssociationAboutContent?
   galleryItems       AssociationGalleryItem[]
+  galleryFolders     AssociationGalleryFolder[]
   circularDocuments  AssociationCircularDocument[]
   appAccess         AssociationAppAccess?
   MemberPost         MemberPost[]
@@ -115,6 +116,29 @@ model AssociationGalleryItem {
   association   Association @relation(fields: [associationId], references: [id], onDelete: Cascade)
 
   @@index([associationId, displayOrder])
+}
+
+model AssociationGalleryFolder {
+  id            String                    @id @default(cuid())
+  associationId String
+  name          String
+  createdAt     DateTime                  @default(now())
+  updatedAt     DateTime                  @updatedAt
+  association   Association               @relation(fields: [associationId], references: [id], onDelete: Cascade)
+  photos        AssociationGalleryPhoto[]
+
+  @@index([associationId, createdAt])
+}
+
+model AssociationGalleryPhoto {
+  id        String                   @id @default(cuid())
+  folderId  String
+  imageUrl  String?
+  createdAt DateTime                 @default(now())
+  updatedAt DateTime                 @updatedAt
+  folder    AssociationGalleryFolder @relation(fields: [folderId], references: [id], onDelete: Cascade)
+
+  @@index([folderId, createdAt])
 }
 
 model AssociationCircularDocument {

@@ -112,6 +112,10 @@ const galleryItemSchema = z.object({
   description: z.string().optional(),
 });
 
+const galleryFolderSchema = z.object({
+  name: z.string().min(1),
+});
+
 const circularDocumentSchema = z.object({
   headline: z.string().min(1),
   tagline: z.string().optional(),
@@ -338,6 +342,35 @@ function serializeGalleryItem(req, galleryItem) {
   };
 }
 
+function serializeGalleryPhoto(req, photo) {
+  const imageUrl = resolvePublicAssetUrl(req, photo.imageUrl);
+
+  return {
+    ...photo,
+    imageUrl,
+    thumbnailUrl: buildPublicThumbnailUrl(req, photo.imageUrl),
+  };
+}
+
+function serializeGalleryFolder(req, folder) {
+  const photos = Array.isArray(folder.photos)
+    ? folder.photos
+        .slice()
+        .sort(
+          (left, right) =>
+            new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
+        )
+        .map((photo) => serializeGalleryPhoto(req, photo))
+    : [];
+
+  return {
+    ...folder,
+    photoCount: photos.length,
+    previewPhotos: photos.slice(0, 4),
+    photos,
+  };
+}
+
 function serializeAboutContent(req, aboutContent) {
   if (!aboutContent) {
     return null;
@@ -358,6 +391,9 @@ function serializeAssociation(req, association) {
     aboutContent: serializeAboutContent(req, association.aboutContent),
     galleryItems: Array.isArray(association.galleryItems)
       ? association.galleryItems.map((item) => serializeGalleryItem(req, item))
+      : [],
+    galleryFolders: Array.isArray(association.galleryFolders)
+      ? association.galleryFolders.map((folder) => serializeGalleryFolder(req, folder))
       : [],
     circularDocuments: Array.isArray(association.circularDocuments)
       ? association.circularDocuments.map((item) => serializeCircularDocument(req, item))
@@ -408,6 +444,14 @@ async function ensureCurrentAssociation() {
       appAccess: true,
       galleryItems: {
         orderBy: [{ displayOrder: "asc" }, { createdAt: "asc" }],
+      },
+      galleryFolders: {
+        orderBy: [{ createdAt: "desc" }],
+        include: {
+          photos: {
+            orderBy: [{ createdAt: "desc" }],
+          },
+        },
       },
       regionalAddresses: {
         orderBy: { createdAt: "asc" },
@@ -476,6 +520,14 @@ router.get("/", async (req, res) => {
       galleryItems: {
         orderBy: [{ displayOrder: "asc" }, { createdAt: "asc" }],
       },
+      galleryFolders: {
+        orderBy: [{ createdAt: "desc" }],
+        include: {
+          photos: {
+            orderBy: [{ createdAt: "desc" }],
+          },
+        },
+      },
       regionalAddresses: {
         orderBy: { createdAt: "asc" },
       },
@@ -511,6 +563,7 @@ router.get("/current/dashboard-summary", async (req, res) => {
   const [
     regionalAddresses,
     latestGalleryItems,
+    latestFolderPhotos,
     upcomingEvents,
     committeeMembers,
     totalMembers,
@@ -525,6 +578,18 @@ router.get("/current/dashboard-summary", async (req, res) => {
     prisma.associationGalleryItem.findMany({
       where: { associationId: association.id },
       orderBy: [{ createdAt: "desc" }, { displayOrder: "asc" }],
+      take: 10,
+    }),
+    prisma.associationGalleryPhoto.findMany({
+      where: {
+        folder: {
+          associationId: association.id,
+        },
+      },
+      include: {
+        folder: true,
+      },
+      orderBy: [{ createdAt: "desc" }],
       take: 10,
     }),
     prisma.associationEvent.findMany({
@@ -589,9 +654,30 @@ router.get("/current/dashboard-summary", async (req, res) => {
   const normalizedGalleryItems = await Promise.all(
     latestGalleryItems.map(normalizeGalleryItemRecord),
   );
+  const latestFolderGalleryItems = latestFolderPhotos.map((photo) => ({
+    id: photo.id,
+    imageUrl: photo.imageUrl,
+    headline: photo.folder?.name || "Gallery Folder",
+    tagline: "",
+    description: "",
+    createdAt: photo.createdAt,
+    updatedAt: photo.updatedAt,
+  }));
+  const latestSerializedFolderItems = latestFolderGalleryItems.map((item) =>
+    serializeGalleryItem(req, item),
+  );
   const normalizedCommitteeMembers = await Promise.all(
     committeeMembers.map(normalizeCommitteeMemberRecord),
   );
+  const combinedLatestGalleryItems = [
+    ...normalizedGalleryItems.map((item) => serializeGalleryItem(req, item)),
+    ...latestSerializedFolderItems,
+  ]
+    .sort(
+      (left, right) =>
+        new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
+    )
+    .slice(0, 10);
 
   res.json({
     summary: {
@@ -600,9 +686,7 @@ router.get("/current/dashboard-summary", async (req, res) => {
       totalCities: citySet.size,
       totalGuests,
       totalVendors,
-      galleryItems: normalizedGalleryItems
-        .map((item) => serializeGalleryItem(req, item))
-        .reverse(),
+      galleryItems: combinedLatestGalleryItems,
       upcomingEvents: upcomingEvents.map((event) =>
         serializeDashboardEvent(req, event),
       ),
@@ -783,6 +867,14 @@ router.patch("/:id", async (req, res) => {
         galleryItems: {
           orderBy: [{ displayOrder: "asc" }, { createdAt: "asc" }],
         },
+        galleryFolders: {
+          orderBy: [{ createdAt: "desc" }],
+          include: {
+            photos: {
+              orderBy: [{ createdAt: "desc" }],
+            },
+          },
+        },
         regionalAddresses: {
           orderBy: { createdAt: "asc" },
         },
@@ -857,6 +949,14 @@ router.get("/:id/gallery", async (req, res) => {
       galleryItems: {
         orderBy: [{ displayOrder: "asc" }, { createdAt: "asc" }],
       },
+      galleryFolders: {
+        orderBy: [{ createdAt: "desc" }],
+        include: {
+          photos: {
+            orderBy: [{ createdAt: "desc" }],
+          },
+        },
+      },
     },
   });
 
@@ -869,8 +969,178 @@ router.get("/:id/gallery", async (req, res) => {
   );
 
   return res.json({
+    galleryFolders: association.galleryFolders.map((folder) =>
+      serializeGalleryFolder(req, folder),
+    ),
     galleryItems: galleryItems.map((item) => serializeGalleryItem(req, item)),
   });
+});
+
+router.get("/:id/gallery/folders/:folderId", async (req, res) => {
+  const folder = await prisma.associationGalleryFolder.findFirst({
+    where: {
+      id: req.params.folderId,
+      associationId: req.params.id,
+    },
+    include: {
+      photos: {
+        orderBy: [{ createdAt: "desc" }],
+      },
+    },
+  });
+
+  if (!folder) {
+    return res.status(404).json({ error: "Gallery folder not found" });
+  }
+
+  return res.json({
+    galleryFolder: serializeGalleryFolder(req, folder),
+  });
+});
+
+router.post("/:id/gallery/folders", galleryUpload.array("files", 100), async (req, res) => {
+  const parsed = galleryFolderSchema.safeParse(req.body);
+  const files = Array.isArray(req.files) ? req.files : [];
+
+  if (!parsed.success) {
+    return res.status(400).json({
+      error: "Invalid gallery folder payload",
+      details: parsed.error.flatten(),
+    });
+  }
+
+  if (!files.length) {
+    return res.status(400).json({ error: "At least one gallery image is required" });
+  }
+
+  const association = await prisma.association.findUnique({
+    where: { id: req.params.id },
+  });
+
+  if (!association) {
+    return res.status(404).json({ error: "Association not found" });
+  }
+
+  const createdFolder = await prisma.$transaction(async (tx) => {
+    const folder = await tx.associationGalleryFolder.create({
+      data: {
+        associationId: req.params.id,
+        name: parsed.data.name.trim(),
+      },
+    });
+
+    await tx.associationGalleryPhoto.createMany({
+      data: files.map((file) => ({
+        folderId: folder.id,
+        imageUrl: buildPublicAssetUrl(req, `uploads/gallery/${file.filename}`),
+      })),
+    });
+
+    return tx.associationGalleryFolder.findUnique({
+      where: { id: folder.id },
+      include: {
+        photos: {
+          orderBy: [{ createdAt: "desc" }],
+        },
+      },
+    });
+  });
+
+  return res.status(201).json({
+    galleryFolder: serializeGalleryFolder(req, createdFolder),
+  });
+});
+
+router.patch("/:id/gallery/folders/:folderId", async (req, res) => {
+  const parsed = galleryFolderSchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    return res.status(400).json({
+      error: "Invalid gallery folder payload",
+      details: parsed.error.flatten(),
+    });
+  }
+
+  const folder = await prisma.associationGalleryFolder.findFirst({
+    where: {
+      id: req.params.folderId,
+      associationId: req.params.id,
+    },
+    include: {
+      photos: {
+        orderBy: [{ createdAt: "desc" }],
+      },
+    },
+  });
+
+  if (!folder) {
+    return res.status(404).json({ error: "Gallery folder not found" });
+  }
+
+  const updatedFolder = await prisma.associationGalleryFolder.update({
+    where: { id: folder.id },
+    data: {
+      name: parsed.data.name.trim(),
+    },
+    include: {
+      photos: {
+        orderBy: [{ createdAt: "desc" }],
+      },
+    },
+  });
+
+  return res.json({
+    galleryFolder: serializeGalleryFolder(req, updatedFolder),
+  });
+});
+
+router.delete("/:id/gallery/folders/:folderId", async (req, res) => {
+  const folder = await prisma.associationGalleryFolder.findFirst({
+    where: {
+      id: req.params.folderId,
+      associationId: req.params.id,
+    },
+    include: {
+      photos: true,
+    },
+  });
+
+  if (!folder) {
+    return res.status(404).json({ error: "Gallery folder not found" });
+  }
+
+  await prisma.associationGalleryFolder.delete({
+    where: { id: folder.id },
+  });
+
+  for (const photo of folder.photos) {
+    deleteLocalAssetIfPresent(photo.imageUrl, "uploads/gallery");
+  }
+
+  return res.status(204).send();
+});
+
+router.delete("/:id/gallery/folders/:folderId/photos/:photoId", async (req, res) => {
+  const photo = await prisma.associationGalleryPhoto.findFirst({
+    where: {
+      id: req.params.photoId,
+      folderId: req.params.folderId,
+      folder: {
+        associationId: req.params.id,
+      },
+    },
+  });
+
+  if (!photo) {
+    return res.status(404).json({ error: "Gallery photo not found" });
+  }
+
+  await prisma.associationGalleryPhoto.delete({
+    where: { id: photo.id },
+  });
+  deleteLocalAssetIfPresent(photo.imageUrl, "uploads/gallery");
+
+  return res.status(204).send();
 });
 
 router.post("/:id/gallery", async (req, res) => {
