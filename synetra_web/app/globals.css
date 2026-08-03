@@ -2216,10 +2216,6 @@ body {
       "hero"
       "approvals"
       "vendorApprovals"
-      "refresh"
-      "vendors"
-      "committee"
-      "shortcuts"
       "banners";
     align-items: start;
   }
@@ -2234,22 +2230,6 @@ body {
 
   .dashboard-home-slot-hero {
     grid-area: hero;
-  }
-
-  .dashboard-refresh-row {
-    grid-area: refresh;
-  }
-
-  .dashboard-home-slot-vendors {
-    grid-area: vendors;
-  }
-
-  .dashboard-home-slot-committee {
-    grid-area: committee;
-  }
-
-  .dashboard-home-slot-shortcuts {
-    grid-area: shortcuts;
   }
 
   .dashboard-home-slot-banner {

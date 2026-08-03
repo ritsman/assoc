@@ -16654,28 +16654,6 @@ export default function HomePage() {
                 }}
               />
             </div>
-
-            <div className="dashboard-refresh-row">
-              <button
-                type="button"
-                className="dashboard-link-button"
-                onClick={() => window.location.reload()}
-              >
-                Refresh
-              </button>
-            </div>
-            <div className="dashboard-home-slot dashboard-home-slot-vendors">
-              <DashboardVendorStrip
-                vendors={featuredDashboardVendors}
-                onOpenVendors={() => setActiveSection(topLevelSections.vendors)}
-              />
-            </div>
-            <div className="dashboard-home-slot dashboard-home-slot-committee">
-              <DashboardCommitteeSection members={committeeMembers} />
-            </div>
-            <div className="dashboard-home-slot dashboard-home-slot-shortcuts">
-              <DashboardArenaShortcuts items={dashboardShortcutItems} />
-            </div>
             <div className="dashboard-home-slot dashboard-home-slot-banner">
               <DashboardAppBannerCarousel items={dashboardAppBanners} />
             </div>
