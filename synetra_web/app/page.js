@@ -1928,6 +1928,70 @@ function DashboardPendingApprovalsPanel({
   );
 }
 
+function DashboardPendingVendorApprovalsPanel({
+  items,
+  onOpenRequests,
+}) {
+  return (
+    <article className="dashboard-section-block dashboard-approvals-panel">
+      <div className="dashboard-section-head">
+        <div>
+          <h2>Pending Vendor Approvals</h2>
+          <p>
+            Review pending vendor registrations from the dashboard before moving
+            into the full approval workspace.
+          </p>
+        </div>
+        <button
+          type="button"
+          className="dashboard-link-button"
+          onClick={onOpenRequests}
+        >
+          Open Full Requests
+        </button>
+      </div>
+
+      <div className="dashboard-approvals-scroll">
+        <table className="member-table dashboard-approvals-table">
+          <thead>
+            <tr>
+              <th>Vendor</th>
+              <th>Company</th>
+              <th>Category</th>
+              <th>Sub Category</th>
+              <th>Contact</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((vendor) => (
+              <tr key={vendor.id}>
+                <td>{vendor.name}</td>
+                <td>{vendor.company}</td>
+                <td>{vendor.category || "--"}</td>
+                <td>{vendor.vendorType || "--"}</td>
+                <td>
+                  <div className="member-table-contact">
+                    <a href={`mailto:${vendor.email}`}>{vendor.email}</a>
+                    <span>{vendor.phone}</span>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        {items.length === 0 ? (
+          <article className="association-empty-state dashboard-approvals-empty">
+            <span className="mini-label">No Pending Requests</span>
+            <h2>No vendor approvals are waiting right now.</h2>
+            <p>New vendor registration requests will appear here automatically.</p>
+          </article>
+        ) : null}
+      </div>
+    </article>
+  );
+}
+
 function DashboardVendorStrip({ vendors, onOpenVendors }) {
   if (vendors.length === 0) {
     return null;
@@ -16568,10 +16632,6 @@ export default function HomePage() {
               />
             </div>
 
-            <div className="dashboard-home-slot dashboard-home-slot-banner">
-              <DashboardAppBannerCarousel items={dashboardAppBanners} />
-            </div>
-
             <div className="dashboard-home-slot dashboard-home-slot-approvals">
               <DashboardPendingApprovalsPanel
                 activeTab={dashboardApprovalTab}
@@ -16581,6 +16641,16 @@ export default function HomePage() {
                 onOpenRequests={() => {
                   setActiveSection(topLevelSections.admin);
                   setActiveAdminAccessSection("Registration Requests");
+                }}
+              />
+            </div>
+
+            <div className="dashboard-home-slot dashboard-home-slot-vendor-approvals">
+              <DashboardPendingVendorApprovalsPanel
+                items={vendorStatusRequests}
+                onOpenRequests={() => {
+                  setActiveSection(topLevelSections.vendors);
+                  setActiveVendorTab("Vendor Status");
                 }}
               />
             </div>
@@ -16605,6 +16675,9 @@ export default function HomePage() {
             </div>
             <div className="dashboard-home-slot dashboard-home-slot-shortcuts">
               <DashboardArenaShortcuts items={dashboardShortcutItems} />
+            </div>
+            <div className="dashboard-home-slot dashboard-home-slot-banner">
+              <DashboardAppBannerCarousel items={dashboardAppBanners} />
             </div>
           </section>
         ) : activeSection === topLevelSections.association ? (

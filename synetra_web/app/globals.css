@@ -2214,26 +2214,26 @@ body {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
       "hero"
-      "banners"
       "approvals"
+      "vendorApprovals"
       "refresh"
       "vendors"
       "committee"
-      "shortcuts";
+      "shortcuts"
+      "banners";
     align-items: start;
-  }
-
-  .dashboard-home-slot-hero {
-    grid-area: hero;
-  }
-
-  .dashboard-home-slot-banner {
-    grid-area: banners;
-    align-self: start;
   }
 
   .dashboard-home-slot-approvals {
     grid-area: approvals;
+  }
+
+  .dashboard-home-slot-vendor-approvals {
+    grid-area: vendorApprovals;
+  }
+
+  .dashboard-home-slot-hero {
+    grid-area: hero;
   }
 
   .dashboard-refresh-row {
@@ -2250,6 +2250,11 @@ body {
 
   .dashboard-home-slot-shortcuts {
     grid-area: shortcuts;
+  }
+
+  .dashboard-home-slot-banner {
+    grid-area: banners;
+    align-self: start;
   }
 
   .dashboard-section-block,
