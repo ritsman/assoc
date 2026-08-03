@@ -381,6 +381,12 @@ const adminMemberAccessFilters = [
   { key: "Guest", label: "Guest" },
   { key: "Committee", label: "Committee Members" },
 ];
+const dashboardMemberApprovalTabs = [
+  { key: "Primary", label: "Primary" },
+  { key: "Associate", label: "Associate" },
+  { key: "Guest", label: "Guest" },
+  { key: "Committee", label: "Committee" },
+];
 const adminMemberAccessViews = [
   { key: "app", label: "Member App Access" },
   { key: "content", label: "Member Content Access" },
@@ -1822,6 +1828,103 @@ function DashboardHeroStats({
         </div>
       </article>
     </section>
+  );
+}
+
+function DashboardPendingApprovalsPanel({
+  activeTab,
+  allItems,
+  items,
+  onTabChange,
+  onOpenRequests,
+}) {
+  return (
+    <article className="dashboard-section-block dashboard-approvals-panel">
+      <div className="dashboard-section-head">
+        <div>
+          <h2>Pending Member Approvals</h2>
+          <p>
+            Review member login requests by membership type. This panel stays
+            focused on pending approvals only.
+          </p>
+        </div>
+        <button
+          type="button"
+          className="dashboard-link-button"
+          onClick={onOpenRequests}
+        >
+          Open Full Requests
+        </button>
+      </div>
+
+      <div className="dashboard-approval-tabs" role="tablist" aria-label="Pending member approval types">
+        {dashboardMemberApprovalTabs.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab.key}
+            className={`dashboard-approval-tab ${activeTab === tab.key ? "active" : ""}`}
+            onClick={() => onTabChange(tab.key)}
+          >
+            {tab.label}
+            <span className="dashboard-approval-tab-count">
+              {
+                allItems.filter((member) => {
+                  if (tab.key === "Guest") {
+                    return member.membershipType === "Temporary Visit";
+                  }
+
+                  return member.membershipType === tab.key;
+                }).length
+              }
+            </span>
+          </button>
+        ))}
+      </div>
+
+      <div className="dashboard-approvals-scroll">
+        <table className="member-table dashboard-approvals-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Company</th>
+              <th>Member Type</th>
+              <th>Membership Period</th>
+              <th>Contact</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((member) => (
+              <tr key={member.id}>
+                <td>{member.name}</td>
+                <td>{member.company}</td>
+                <td>
+                  {member.membershipType === "Temporary Visit"
+                    ? "Guest"
+                    : member.membershipType}
+                </td>
+                <td>{member.membershipPeriod}</td>
+                <td>
+                  <div className="member-table-contact">
+                    <a href={`mailto:${member.email}`}>{member.email}</a>
+                    <span>{member.phone}</span>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        {items.length === 0 ? (
+          <article className="association-empty-state dashboard-approvals-empty">
+            <span className="mini-label">No Pending Requests</span>
+            <h2>No {activeTab.toLowerCase()} approvals waiting right now.</h2>
+            <p>New requests for this membership type will appear here automatically.</p>
+          </article>
+        ) : null}
+      </div>
+    </article>
   );
 }
 
@@ -10647,6 +10750,7 @@ export default function HomePage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [topbarSearchQuery, setTopbarSearchQuery] = useState("");
+  const [dashboardApprovalTab, setDashboardApprovalTab] = useState("Primary");
   const [vendorOverviewStatusFilter, setVendorOverviewStatusFilter] =
     useState("");
   const [activeSection, setActiveSection] = useState(topLevelSections.dashboard);
@@ -12034,6 +12138,15 @@ export default function HomePage() {
       appAccessStatus: memberAccessEdits[member.id] ?? member.appAccessStatus,
     }))
     .filter((member) => member.appAccessStatus === "Pending Approval");
+  const dashboardPendingRegistrationRequests = pendingRegistrationRequests.filter(
+    (member) => {
+      if (dashboardApprovalTab === "Guest") {
+        return member.membershipType === "Temporary Visit";
+      }
+
+      return member.membershipType === dashboardApprovalTab;
+    },
+  );
   const contentMemberMatches = (memberTabData["All Members"] ?? []).filter(
     (member) => {
       const query = adminContentMemberSearch.trim().toLowerCase();
@@ -16457,6 +16570,19 @@ export default function HomePage() {
 
             <div className="dashboard-home-slot dashboard-home-slot-banner">
               <DashboardAppBannerCarousel items={dashboardAppBanners} />
+            </div>
+
+            <div className="dashboard-home-slot dashboard-home-slot-approvals">
+              <DashboardPendingApprovalsPanel
+                activeTab={dashboardApprovalTab}
+                allItems={pendingRegistrationRequests}
+                items={dashboardPendingRegistrationRequests}
+                onTabChange={setDashboardApprovalTab}
+                onOpenRequests={() => {
+                  setActiveSection(topLevelSections.admin);
+                  setActiveAdminAccessSection("Registration Requests");
+                }}
+              />
             </div>
 
             <div className="dashboard-refresh-row">

@@ -1948,6 +1948,73 @@ body {
   justify-content: flex-end;
 }
 
+.dashboard-approvals-panel {
+  min-height: 430px;
+}
+
+.dashboard-approval-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.dashboard-approval-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(129, 140, 248, 0.18);
+  background: rgba(255, 255, 255, 0.84);
+  color: var(--accent-dark);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.dashboard-approval-tab.active {
+  border-color: rgba(99, 102, 241, 0.5);
+  background: linear-gradient(135deg, #eef2ff, #f5f3ff);
+  box-shadow: 0 12px 28px rgba(99, 102, 241, 0.14);
+}
+
+.dashboard-approval-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(99, 102, 241, 0.12);
+  color: #4338ca;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.dashboard-approvals-scroll {
+  overflow: auto;
+  max-height: 280px;
+  border-radius: 22px;
+  border: 1px solid rgba(129, 140, 248, 0.12);
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.dashboard-approvals-table {
+  min-width: 860px;
+}
+
+.dashboard-approvals-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: rgba(245, 243, 255, 0.98);
+}
+
+.dashboard-approvals-empty {
+  min-height: 220px;
+  margin: 16px;
+}
+
 .dashboard-section-block,
 .dashboard-shortcuts-card {
   display: grid;
@@ -2148,6 +2215,7 @@ body {
     grid-template-areas:
       "hero"
       "banners"
+      "approvals"
       "refresh"
       "vendors"
       "committee"
@@ -2162,6 +2230,10 @@ body {
   .dashboard-home-slot-banner {
     grid-area: banners;
     align-self: start;
+  }
+
+  .dashboard-home-slot-approvals {
+    grid-area: approvals;
   }
 
   .dashboard-refresh-row {
