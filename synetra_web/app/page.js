@@ -9466,6 +9466,10 @@ function AdminBulkMemberPanel({
             Members can log in with that password first and then change it
             later from their account settings.
           </small>
+          <small>
+            Need the correct format first? Download the member import template
+            and fill the same headers before uploading.
+          </small>
         </label>
       </div>
 
@@ -9475,6 +9479,13 @@ function AdminBulkMemberPanel({
       ) : null}
 
       <div className="profile-action-row">
+        <a
+          className="secondary-link secondary-button"
+          href="/templates/member-bulk-import-template.xlsx"
+          download
+        >
+          Download Template
+        </a>
         <button
           className="primary-link admin-action-button"
           type="button"
