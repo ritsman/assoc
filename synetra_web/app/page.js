@@ -1724,6 +1724,107 @@ function splitPhoneNumber(value) {
   };
 }
 
+function DashboardHeroStats({
+  primaryMembersCount,
+  associateMembersCount,
+  guestMembersCount,
+  totalVendorsCount,
+  approvedVendorsCount,
+  pendingVendorsCount,
+  suspendedVendorsCount,
+  activeUsersCount,
+  activeUsersThisMonthCount,
+  activeUsersLastSixMonthsCount,
+  totalMembersCount,
+}) {
+  return (
+    <section className="dashboard-hero-stats">
+      <article className="dashboard-hero-card">
+        <div className="dashboard-hero-card-head">
+          <span className="mini-label">Members</span>
+          <h2>Membership Snapshot</h2>
+        </div>
+        <div className="dashboard-hero-metrics">
+          <div className="dashboard-hero-metric">
+            <strong>{primaryMembersCount}</strong>
+            <span>Primary Members</span>
+          </div>
+          <div className="dashboard-hero-metric">
+            <strong>{associateMembersCount}</strong>
+            <span>Associate Members</span>
+          </div>
+          <div className="dashboard-hero-metric">
+            <strong>{guestMembersCount}</strong>
+            <span>Guest Members</span>
+          </div>
+        </div>
+      </article>
+
+      <article className="dashboard-hero-card">
+        <div className="dashboard-hero-card-head">
+          <span className="mini-label">Vendors</span>
+          <h2>Vendor Access Status</h2>
+        </div>
+        <div className="dashboard-hero-metrics">
+          <div className="dashboard-hero-metric">
+            <strong>{totalVendorsCount}</strong>
+            <span>Total Vendors</span>
+          </div>
+          <div className="dashboard-hero-metric">
+            <strong>{approvedVendorsCount}</strong>
+            <span>Approved</span>
+          </div>
+          <div className="dashboard-hero-metric">
+            <strong>{pendingVendorsCount}</strong>
+            <span>Pending</span>
+          </div>
+          <div className="dashboard-hero-metric">
+            <strong>{suspendedVendorsCount}</strong>
+            <span>Suspended</span>
+          </div>
+        </div>
+      </article>
+
+      <article className="dashboard-hero-card">
+        <div className="dashboard-hero-card-head">
+          <span className="mini-label">Logins</span>
+          <h2>Login Activity</h2>
+        </div>
+        <div className="dashboard-hero-metrics">
+          <div className="dashboard-hero-metric">
+            <strong>{activeUsersThisMonthCount}</strong>
+            <span>This Month</span>
+          </div>
+          <div className="dashboard-hero-metric">
+            <strong>{activeUsersCount}</strong>
+            <span>Active Now</span>
+          </div>
+          <div className="dashboard-hero-metric">
+            <strong>{activeUsersLastSixMonthsCount}</strong>
+            <span>Last 6 Months</span>
+          </div>
+        </div>
+        <p className="dashboard-hero-note">
+          Counts are based on authenticated session activity in this association.
+        </p>
+      </article>
+
+      <article className="dashboard-hero-card">
+        <div className="dashboard-hero-card-head">
+          <span className="mini-label">Association</span>
+          <h2>Overall Totals</h2>
+        </div>
+        <div className="dashboard-hero-metrics">
+          <div className="dashboard-hero-metric">
+            <strong>{totalMembersCount}</strong>
+            <span>Total Members</span>
+          </div>
+        </div>
+      </article>
+    </section>
+  );
+}
+
 function DashboardVendorStrip({ vendors, onOpenVendors }) {
   if (vendors.length === 0) {
     return null;
@@ -10531,6 +10632,11 @@ function WebAdminLoginScreen({
 export default function HomePage() {
   const [authReady, setAuthReady] = useState(false);
   const [authSession, setAuthSession] = useState(null);
+  const [sessionReportSummary, setSessionReportSummary] = useState({
+    activeUsers: 0,
+    activeUsersThisMonth: 0,
+    activeUsersLastSixMonths: 0,
+  });
   const [loginForm, setLoginForm] = useState({
     email: "ritsman@gmail.com",
     password: "Admin@123",
@@ -10966,6 +11072,28 @@ export default function HomePage() {
 
     const payload = await response.json().catch(() => ({}));
     setAppPermissions(normalizeAppAccessSettings(payload?.appAccess));
+  };
+
+  const loadSessionReport = async () => {
+    const response = await runAuthenticatedFetch(
+      "/users/session-report?activeWindowMinutes=5",
+      {
+        method: "GET",
+      },
+    );
+
+    if (!response.ok) {
+      throw new Error("Unable to load session activity.");
+    }
+
+    const payload = await response.json().catch(() => ({}));
+    setSessionReportSummary({
+      activeUsers: Number(payload?.summary?.activeUsers || 0),
+      activeUsersThisMonth: Number(payload?.summary?.activeUsersThisMonth || 0),
+      activeUsersLastSixMonths: Number(
+        payload?.summary?.activeUsersLastSixMonths || 0,
+      ),
+    });
   };
 
   const saveAppAccessChanges = () => {
@@ -11516,6 +11644,11 @@ export default function HomePage() {
 
   useEffect(() => {
     if (!authSession) {
+      setSessionReportSummary({
+        activeUsers: 0,
+        activeUsersThisMonth: 0,
+        activeUsersLastSixMonths: 0,
+      });
       return;
     }
 
@@ -11524,6 +11657,18 @@ export default function HomePage() {
         await loadAppAccessSettings();
       } catch (_error) {
         setAppAccessFeedback("Unable to load app access settings.");
+      }
+    })();
+
+    void (async () => {
+      try {
+        await loadSessionReport();
+      } catch (_error) {
+        setSessionReportSummary({
+          activeUsers: 0,
+          activeUsersThisMonth: 0,
+          activeUsersLastSixMonths: 0,
+        });
       }
     })();
   }, [authSession]);
@@ -11743,6 +11888,30 @@ export default function HomePage() {
     .sort(
       (left, right) => Number(left.displayIndex) - Number(right.displayIndex),
     );
+  const allMembers = memberTabData["All Members"] ?? [];
+  const primaryMembersCount = allMembers.filter(
+    (member) => normalizeMembershipTypeLabel(member.membershipType || "") === "Primary",
+  ).length;
+  const associateMembersCount = allMembers.filter(
+    (member) => normalizeMembershipTypeLabel(member.membershipType || "") === "Associate",
+  ).length;
+  const guestMembersCount = allMembers.filter(
+    (member) => normalizeMembershipTypeLabel(member.membershipType || "") === "Temporary Visit",
+  ).length;
+  const approvedVendorsCount = vendorRecords.filter(
+    (vendor) => vendor.appAccessStatus === "Approved",
+  ).length;
+  const pendingVendorsCount = vendorRecords.filter(
+    (vendor) => vendor.appAccessStatus === "Pending Approval",
+  ).length;
+  const suspendedVendorsCount = vendorRecords.filter(
+    (vendor) => vendor.appAccessStatus === "Suspended",
+  ).length;
+  const activeUsersCount = sessionReportSummary.activeUsers;
+  const activeUsersThisMonthCount =
+    sessionReportSummary.activeUsersThisMonth;
+  const activeUsersLastSixMonthsCount =
+    sessionReportSummary.activeUsersLastSixMonths;
   const featuredDashboardVendors = vendorRecords
     .filter((vendor) => vendor.registrationStatus === "Active")
     .slice(0, 8);
@@ -16268,7 +16437,27 @@ export default function HomePage() {
 
         {activeSection === topLevelSections.dashboard ? (
           <section className="dashboard-home">
-            <DashboardAppBannerCarousel items={dashboardAppBanners} />
+            <div className="dashboard-home-slot dashboard-home-slot-hero">
+              <DashboardHeroStats
+                primaryMembersCount={primaryMembersCount}
+                associateMembersCount={associateMembersCount}
+                guestMembersCount={guestMembersCount}
+                totalVendorsCount={vendorRecords.length}
+                approvedVendorsCount={approvedVendorsCount}
+                pendingVendorsCount={pendingVendorsCount}
+                suspendedVendorsCount={suspendedVendorsCount}
+                activeUsersCount={activeUsersCount}
+                activeUsersThisMonthCount={activeUsersThisMonthCount}
+                activeUsersLastSixMonthsCount={
+                  activeUsersLastSixMonthsCount
+                }
+                totalMembersCount={allMembers.length}
+              />
+            </div>
+
+            <div className="dashboard-home-slot dashboard-home-slot-banner">
+              <DashboardAppBannerCarousel items={dashboardAppBanners} />
+            </div>
 
             <div className="dashboard-refresh-row">
               <button
@@ -16279,12 +16468,18 @@ export default function HomePage() {
                 Refresh
               </button>
             </div>
-            <DashboardVendorStrip
-              vendors={featuredDashboardVendors}
-              onOpenVendors={() => setActiveSection(topLevelSections.vendors)}
-            />
-            <DashboardCommitteeSection members={committeeMembers} />
-            <DashboardArenaShortcuts items={dashboardShortcutItems} />
+            <div className="dashboard-home-slot dashboard-home-slot-vendors">
+              <DashboardVendorStrip
+                vendors={featuredDashboardVendors}
+                onOpenVendors={() => setActiveSection(topLevelSections.vendors)}
+              />
+            </div>
+            <div className="dashboard-home-slot dashboard-home-slot-committee">
+              <DashboardCommitteeSection members={committeeMembers} />
+            </div>
+            <div className="dashboard-home-slot dashboard-home-slot-shortcuts">
+              <DashboardArenaShortcuts items={dashboardShortcutItems} />
+            </div>
           </section>
         ) : activeSection === topLevelSections.association ? (
           <section className="association-workspace">

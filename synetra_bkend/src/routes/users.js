@@ -160,6 +160,12 @@ router.get(
     const activeSince = new Date(
       now.getTime() - activeWindowMinutes * 60 * 1000,
     );
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const sixMonthsAgo = new Date(
+      now.getFullYear(),
+      now.getMonth() - 5,
+      1,
+    );
     const associationId = req.auth.user.associationId || undefined;
 
     const sessions = await prisma.userSession.findMany({
@@ -167,6 +173,22 @@ router.get(
         revokedAt: null,
         refreshExpiresAt: {
           gt: now,
+        },
+        user: {
+          ...(associationId ? { associationId } : {}),
+        },
+      },
+      include: {
+        user: true,
+      },
+      orderBy: {
+        lastSeenAt: "desc",
+      },
+    });
+    const recentSessions = await prisma.userSession.findMany({
+      where: {
+        lastSeenAt: {
+          gte: sixMonthsAgo,
         },
         user: {
           ...(associationId ? { associationId } : {}),
@@ -187,6 +209,14 @@ router.get(
     const activeUserIds = new Set(
       activeSessions.map((session) => session.userId),
     );
+    const monthActiveUserIds = new Set(
+      recentSessions
+        .filter((session) => session.lastSeenAt >= monthStart)
+        .map((session) => session.userId),
+    );
+    const sixMonthActiveUserIds = new Set(
+      recentSessions.map((session) => session.userId),
+    );
     const todayStart = new Date(
       Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
     );
@@ -196,6 +226,8 @@ router.get(
         activeWindowMinutes,
         loggedInUsers: loggedInUserIds.size,
         activeUsers: activeUserIds.size,
+        activeUsersThisMonth: monthActiveUserIds.size,
+        activeUsersLastSixMonths: sixMonthActiveUserIds.size,
         totalSessions: sessions.length,
         activeSessions: activeSessions.length,
         sessionsToday: sessions.filter(
