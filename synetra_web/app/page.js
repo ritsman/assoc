@@ -15372,7 +15372,9 @@ export default function HomePage() {
                 committeeMemberForm.committeeTenureStart || null,
               committeeTenureEnd: committeeMemberForm.committeeTenureEnd || null,
               memberBio: committeeMemberForm.memberBio.trim(),
-              photoUrl: committeeMemberForm.photoUrl || null,
+              ...(committeeMemberForm.photoUrl
+                ? { photoUrl: committeeMemberForm.photoUrl }
+                : {}),
             }),
           },
         );
