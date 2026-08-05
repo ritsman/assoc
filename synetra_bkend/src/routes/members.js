@@ -38,6 +38,21 @@ const accessStatusSchema = z.object({
   accessStatus: z.enum(["PENDING", "APPROVED", "SUSPENDED", "CANCELLED"]),
 });
 const memberViewQuerySchema = z.enum(["legacy", "directory", "admin"]);
+const optionalStringAsNullField = z.preprocess(
+  (value) => {
+    if (value === null || value === undefined) {
+      return value;
+    }
+
+    if (typeof value !== "string") {
+      return value;
+    }
+
+    const normalizedValue = value.trim();
+    return normalizedValue === "" ? null : normalizedValue;
+  },
+  z.string().nullable().optional(),
+);
 
 const memberSchema = z.object({
   associationId: z.string().min(1).optional(),
@@ -51,7 +66,7 @@ const memberSchema = z.object({
   companyName: z.string().optional(),
   roleTitle: z.string().optional(),
   specialization: z.string().optional(),
-  committeePost: z.string().optional(),
+  committeePost: optionalStringAsNullField,
   committeeTenureStart: optionalDateField,
   committeeTenureEnd: optionalDateField,
   memberBio: z.string().optional(),

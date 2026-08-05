@@ -15409,7 +15409,7 @@ export default function HomePage() {
         const response = await runAuthenticatedFetch(`/members/${memberId}`, {
           method: "PATCH",
           body: JSON.stringify({
-            committeePost: "",
+            committeePost: null,
             committeeTenureStart: null,
             committeeTenureEnd: null,
             memberBio: "",
