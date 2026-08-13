@@ -5534,46 +5534,40 @@ function AssociationGalleryPanel({
         ) : null}
 
         {folders.length > 0 ? (
-          <div className="association-gallery-grid">
+          <div className="association-gallery-folder-grid">
             {folders.map((folder) => (
               <article
                 key={folder.id}
-                className="association-gallery-card"
-                style={{ background: "rgba(255, 255, 255, 0.72)" }}
+                className="association-gallery-card association-gallery-folder-card"
               >
                 <button
-                  className="association-gallery-visual"
+                  className="association-gallery-visual association-gallery-folder-visual"
                   type="button"
                   onClick={() => onOpenFolder(folder.id)}
-                  style={{
-                    border: "none",
-                    padding: 0,
-                    cursor: "pointer",
-                    display: "grid",
-                    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                    gap: "6px",
-                    paddingInline: "12px",
-                    paddingTop: "12px",
-                  }}
                 >
+                  <span
+                    className="association-gallery-folder-badge"
+                    aria-hidden="true"
+                  >
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M4 6.5C4 5.67 4.67 5 5.5 5h4.4c.4 0 .78.16 1.06.44L12.4 6.9c.28.28.66.44 1.06.44h5.04c.83 0 1.5.67 1.5 1.5v9.16c0 .83-.67 1.5-1.5 1.5h-13c-.83 0-1.5-.67-1.5-1.5V6.5Z" />
+                    </svg>
+                  </span>
                   {folder.previewPhotos.length > 0 ? (
-                    folder.previewPhotos.map((photo) => (
-                      <img
-                        key={photo.id}
-                        src={photo.thumbnailUrl || photo.imageUrl}
-                        alt={folder.name}
-                        style={{
-                          width: "100%",
-                          height: "100%",
-                          minHeight: "92px",
-                          objectFit: "cover",
-                          borderRadius: "16px",
-                          opacity: 0.92,
-                        }}
-                      />
-                    ))
+                    <span className="association-gallery-folder-thumbs">
+                      {folder.previewPhotos.slice(0, 4).map((photo) => (
+                        <img
+                          key={photo.id}
+                          className="association-gallery-folder-thumb"
+                          src={photo.thumbnailUrl || photo.imageUrl}
+                          alt={folder.name}
+                        />
+                      ))}
+                    </span>
                   ) : (
-                    <div className="gallery-form-placeholder">No images</div>
+                    <span className="association-gallery-folder-empty">
+                      No images
+                    </span>
                   )}
                 </button>
                 <div className="association-gallery-copy">

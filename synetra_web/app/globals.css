@@ -3660,6 +3660,102 @@ body {
   line-height: 1.7;
 }
 
+.association-gallery-folder-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 16px;
+}
+
+.association-gallery-folder-card {
+  border-radius: 20px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+}
+
+.association-gallery-folder-visual {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  padding: 10px;
+  border: 0;
+  cursor: pointer;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 122, 69, 0.12),
+    rgba(26, 170, 217, 0.12)
+  );
+}
+
+.association-gallery-folder-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: rgba(20, 23, 31, 0.55);
+  color: white;
+  backdrop-filter: blur(4px);
+}
+
+.association-gallery-folder-badge svg {
+  width: 14px;
+  height: 14px;
+}
+
+.association-gallery-folder-thumbs {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+  gap: 5px;
+  width: 100%;
+  height: 100%;
+}
+
+.association-gallery-folder-thumb {
+  width: 100%;
+  height: 100%;
+  border-radius: 10px;
+  object-fit: cover;
+  opacity: 0.94;
+}
+
+.association-gallery-folder-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.association-gallery-folder-card .association-gallery-copy {
+  gap: 4px;
+  padding: 14px;
+}
+
+.association-gallery-folder-card .association-gallery-copy h3 {
+  font-size: 0.95rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.association-gallery-folder-card .association-gallery-copy p {
+  font-size: 0.78rem;
+}
+
+.association-gallery-folder-card .record-actions {
+  padding: 0 14px 14px;
+  margin-top: 0;
+}
+
 .gallery-form-preview {
   width: min(100%, 360px);
   aspect-ratio: 16 / 10;
