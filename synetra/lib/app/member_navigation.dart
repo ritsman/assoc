@@ -12,7 +12,6 @@ class MemberArenaNavigation {
     MemberArenaSection.primaryMembers,
     MemberArenaSection.associateMembers,
     MemberArenaSection.temporaryVisitors,
-    MemberArenaSection.committeeMembers,
     if (role.isAdmin) MemberArenaSection.master,
   ];
 

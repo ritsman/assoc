@@ -18,7 +18,6 @@ class MemberArenaPanel extends ConsumerStatefulWidget {
 
 class _MemberArenaPanelState extends ConsumerState<MemberArenaPanel> {
   String? _updatingPostId;
-  MemberMasterDraft? _memberMasterDraft;
   String? _editingMemberMasterId;
   bool _isSavingMemberMaster = false;
 
@@ -65,25 +64,28 @@ class _MemberArenaPanelState extends ConsumerState<MemberArenaPanel> {
     }
   }
 
-  void _openMemberMasterEditor([MemberDirectoryItem? member]) {
+  Future<void> _openMemberMasterEditor([MemberDirectoryItem? member]) async {
     setState(() {
       _editingMemberMasterId = member?.id ?? '';
-      _memberMasterDraft =
-          member == null
-              ? const MemberMasterDraft.empty()
-              : MemberMasterDraft.fromMember(member);
     });
-  }
 
-  void _closeMemberMasterEditor() {
+    final result = await showDialog<MemberMasterDraft>(
+      context: context,
+      builder:
+          (dialogContext) => _MemberMasterDialog(
+            initialDraft:
+                member == null
+                    ? const MemberMasterDraft.empty()
+                    : MemberMasterDraft.fromMember(member),
+          ),
+    );
+
+    if (!mounted) return;
     setState(() {
       _editingMemberMasterId = null;
-      _memberMasterDraft = null;
     });
-  }
 
-  Future<void> _saveMemberMaster() async {
-    if (_memberMasterDraft == null || _isSavingMemberMaster) {
+    if (result == null || _isSavingMemberMaster) {
       return;
     }
 
@@ -91,19 +93,14 @@ class _MemberArenaPanelState extends ConsumerState<MemberArenaPanel> {
       _isSavingMemberMaster = true;
     });
     try {
-      await ref
-          .read(apiClientProvider)
-          .saveMemberRecord(draft: _memberMasterDraft!);
+      await ref.read(apiClientProvider).saveMemberRecord(draft: result);
       if (!mounted) return;
       await _refresh();
       if (!mounted) return;
-      _closeMemberMasterEditor();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            _memberMasterDraft!.id.isEmpty
-                ? 'Member created.'
-                : 'Member updated.',
+            result.id.isEmpty ? 'Member created.' : 'Member updated.',
           ),
         ),
       );
@@ -133,9 +130,6 @@ class _MemberArenaPanelState extends ConsumerState<MemberArenaPanel> {
       if (!mounted) return;
       await _refresh();
       if (!mounted) return;
-      if (_editingMemberMasterId == memberId) {
-        _closeMemberMasterEditor();
-      }
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Member deleted.')));
@@ -183,7 +177,9 @@ class _MemberArenaPanelState extends ConsumerState<MemberArenaPanel> {
                 viewerRole: widget.viewerRole,
                 tenant: ref.watch(tenantProvider).valueOrNull,
                 onNavigateToMemberArena:
-                    () => widget.onSectionSelected(MemberArenaSection.media),
+                    () => widget.onSectionSelected(
+                      MemberArenaNavigation.defaultSection(widget.viewerRole),
+                    ),
                 child: _MemberMediaSection(
                   posts: data.posts,
                   viewerRole: widget.viewerRole,
@@ -195,29 +191,27 @@ class _MemberArenaPanelState extends ConsumerState<MemberArenaPanel> {
               _MemberDirectoryView(
                 tenant: ref.watch(tenantProvider).valueOrNull,
                 onNavigateToMemberArena:
-                    () =>
-                        widget.onSectionSelected(MemberArenaSection.directory),
+                    () => widget.onSectionSelected(
+                      MemberArenaNavigation.defaultSection(widget.viewerRole),
+                    ),
                 child: _MemberDirectorySection(members: data.members),
               )
             else if (widget.section == MemberArenaSection.master)
               _MemberMasterView(
                 tenant: ref.watch(tenantProvider).valueOrNull,
                 onNavigateToMemberArena:
-                    () => widget.onSectionSelected(MemberArenaSection.master),
+                    () => widget.onSectionSelected(
+                      MemberArenaNavigation.defaultSection(widget.viewerRole),
+                    ),
                 child: _AssociationMasterSection(
                   canManage: widget.viewerRole.isAdmin,
                   members: [...data.members]..sort(
                     (a, b) =>
                         a.name.toLowerCase().compareTo(b.name.toLowerCase()),
                   ),
-                  draft: _memberMasterDraft,
                   editingMemberId: _editingMemberMasterId,
                   isSaving: _isSavingMemberMaster,
                   onOpenEditor: _openMemberMasterEditor,
-                  onCancelEdit: _closeMemberMasterEditor,
-                  onDraftChanged:
-                      (draft) => setState(() => _memberMasterDraft = draft),
-                  onSave: _saveMemberMaster,
                   onDelete: _deleteMemberMaster,
                 ),
               )
@@ -226,7 +220,9 @@ class _MemberArenaPanelState extends ConsumerState<MemberArenaPanel> {
                 tenant: ref.watch(tenantProvider).valueOrNull,
                 section: widget.section,
                 onNavigateToMemberArena:
-                    () => widget.onSectionSelected(widget.section),
+                    () => widget.onSectionSelected(
+                      MemberArenaNavigation.defaultSection(widget.viewerRole),
+                    ),
                 child: _FilteredMemberDirectorySection(
                   members: data.members,
                   section: widget.section,
@@ -257,10 +253,14 @@ class VendorArenaPanel extends ConsumerStatefulWidget {
   const VendorArenaPanel({
     super.key,
     required this.viewerRole,
+    required this.section,
+    required this.onSectionSelected,
     required this.onOpenProfile,
   });
 
   final AppViewerRole viewerRole;
+  final VendorArenaSection section;
+  final ValueChanged<VendorArenaSection> onSectionSelected;
   final VoidCallback onOpenProfile;
 
   @override
@@ -268,10 +268,143 @@ class VendorArenaPanel extends ConsumerStatefulWidget {
 }
 
 class _VendorArenaPanelState extends ConsumerState<VendorArenaPanel> {
+  static const List<String> _vendorPhoneCodeOptions = ['+91'];
+  static const List<String> _vendorPlanOptions = [
+    'Basic',
+    'Standard',
+    'Premium',
+    'Featured',
+  ];
+  static const List<String> _vendorPaymentModeOptions = [
+    'Online/NEFT/IMPS',
+    'Cheque',
+    'Cash',
+    'Card',
+  ];
+  static const List<String> _vendorCountryOptions = [
+    'India',
+    'United Arab Emirates',
+    'Singapore',
+  ];
+  static const Map<String, List<String>> _vendorStateOptionsByCountry = {
+    'India': ['Gujarat', 'Maharashtra', 'Karnataka', 'Delhi'],
+    'United Arab Emirates': ['Dubai', 'Abu Dhabi', 'Sharjah'],
+    'Singapore': ['Central Region'],
+  };
+  static const Map<String, List<String>> _vendorCityOptionsByState = {
+    'Gujarat': [
+      'Ahmedabad',
+      'Surat',
+      'Vadodara',
+      'Rajkot',
+      'Bhavnagar',
+      'Jamnagar',
+      'Junagadh',
+      'Gandhinagar',
+      'Anand',
+      'Nadiad',
+      'Morbi',
+      'Mehsana',
+      'Bharuch',
+      'Navsari',
+      'Vapi',
+      'Porbandar',
+      'Palanpur',
+      'Veraval',
+      'Godhra',
+      'Gandhidham',
+    ],
+    'Maharashtra': [
+      'Mumbai',
+      'Pune',
+      'Nagpur',
+      'Nashik',
+      'Thane',
+      'Navi Mumbai',
+      'Aurangabad',
+      'Solapur',
+      'Kolhapur',
+      'Amravati',
+      'Nanded',
+      'Sangli',
+      'Jalgaon',
+      'Akola',
+      'Latur',
+      'Ahmednagar',
+      'Dhule',
+      'Chandrapur',
+      'Parbhani',
+      'Jalna',
+      'Bhiwandi',
+      'Panvel',
+      'Satara',
+      'Ratnagiri',
+      'Beed',
+      'Yavatmal',
+      'Gondia',
+      'Wardha',
+      'Osmanabad',
+      'Palghar',
+      'Malegaon',
+      'Mira-Bhayandar',
+      'Ulhasnagar',
+      'Ichalkaranji',
+      'Baramati',
+    ],
+    'Karnataka': [
+      'Bengaluru',
+      'Mysuru',
+      'Mangaluru',
+      'Hubballi',
+      'Dharwad',
+      'Belagavi',
+      'Kalaburagi',
+      'Ballari',
+      'Shivamogga',
+      'Tumakuru',
+      'Davanagere',
+      'Udupi',
+      'Vijayapura',
+      'Raichur',
+      'Bidar',
+      'Hassan',
+      'Mandya',
+      'Kolar',
+      'Chikkamagaluru',
+      'Karwar',
+    ],
+    'Delhi': [
+      'New Delhi',
+      'Central Delhi',
+      'East Delhi',
+      'North Delhi',
+      'South Delhi',
+      'West Delhi',
+      'Dwarka',
+      'Rohini',
+      'Saket',
+      'Karol Bagh',
+      'Janakpuri',
+      'Shahdara',
+      'Pitampura',
+    ],
+    'Dubai': ['Dubai'],
+    'Abu Dhabi': ['Abu Dhabi'],
+    'Sharjah': ['Sharjah'],
+    'Central Region': ['Singapore'],
+  };
+
   final TextEditingController _searchController = TextEditingController();
   String _query = '';
   String? _selectedCategory;
   String? _selectedSubCategory;
+  String? _selectedTaxonomyCategoryId;
+  String? _updatingVendorId;
+  String? _updatingBannerId;
+  bool _isSavingNewBanner = false;
+  String? _savingTaxonomyKey;
+  String? _savingVendorRegistrationId;
+  String? _savingVendorApprovalId;
 
   @override
   void dispose() {
@@ -281,7 +414,2021 @@ class _VendorArenaPanelState extends ConsumerState<VendorArenaPanel> {
 
   Future<void> _refresh() async {
     ref.invalidate(vendorDirectoryProvider);
+    ref.invalidate(vendorTaxonomyProvider);
+    if (widget.viewerRole.isAdmin) {
+      ref.invalidate(adminArenaDataProvider);
+    }
     await ref.read(vendorDirectoryProvider.future);
+  }
+
+  Future<void> _refreshVendorTaxonomy() async {
+    ref.invalidate(vendorTaxonomyProvider);
+    ref.invalidate(vendorDirectoryProvider);
+    if (widget.viewerRole.isAdmin) {
+      ref.invalidate(adminArenaDataProvider);
+    }
+    await Future.wait([
+      ref.read(vendorTaxonomyProvider.future),
+      ref.read(vendorDirectoryProvider.future),
+    ]);
+  }
+
+  Future<void> _updateVendorAccess(
+    AdminVendorAccessItem vendor,
+    MemberAccessStatus status,
+  ) async {
+    setState(() {
+      _updatingVendorId = vendor.id;
+    });
+
+    try {
+      await ref
+          .read(apiClientProvider)
+          .updateVendorAccess(vendorId: vendor.id, status: status);
+      if (!mounted) return;
+      ref.invalidate(adminArenaDataProvider);
+      await ref.read(adminArenaDataProvider.future);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${vendor.displayName} marked ${status.label.toLowerCase()}.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update vendor access: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _updatingVendorId = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _updateBannerStatus(
+    AdminAppBannerItem banner,
+    BannerReviewStatus status,
+  ) async {
+    setState(() {
+      _updatingBannerId = banner.id;
+    });
+
+    try {
+      await ref
+          .read(apiClientProvider)
+          .updateAppBannerModeration(
+            bannerId: banner.id,
+            status: status,
+            paymentReceived:
+                status == BannerReviewStatus.approved
+                    ? true
+                    : banner.paymentReceived,
+            paymentMode:
+                status == BannerReviewStatus.approved
+                    ? (banner.paymentMode.trim().isEmpty
+                        ? 'Bank'
+                        : banner.paymentMode)
+                    : banner.paymentMode,
+            paymentRemarks: banner.paymentRemarks,
+            displayIndex: banner.displayIndex > 0 ? banner.displayIndex : 1,
+          );
+      if (!mounted) return;
+      ref.invalidate(adminArenaDataProvider);
+      await ref.read(adminArenaDataProvider.future);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${banner.vendorName.isEmpty ? 'Banner' : banner.vendorName} moved to ${status.label.toLowerCase()}.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update banner status: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _updatingBannerId = null;
+        });
+      }
+    }
+  }
+
+  AdminBannerModerationDraft _buildBannerModerationDraft(
+    AdminAppBannerItem banner,
+  ) {
+    return AdminBannerModerationDraft(
+      status: banner.reviewStatus,
+      paymentReceived: banner.paymentReceived,
+      paymentMode: banner.paymentMode,
+      paymentRemarks: banner.paymentRemarks,
+      displayIndex: banner.displayIndex > 0 ? '${banner.displayIndex}' : '',
+      displayStart: banner.displayStart,
+      displayEnd: banner.displayEnd,
+    );
+  }
+
+  Future<void> _openBannerModerationDialog(AdminAppBannerItem banner) async {
+    var draft = _buildBannerModerationDraft(banner);
+    String? validationMessage;
+
+    final result = await showDialog<AdminBannerModerationDraft>(
+      context: context,
+      builder:
+          (context) => StatefulBuilder(
+            builder: (context, setDialogState) {
+              void updateDraft(AdminBannerModerationDraft nextDraft) {
+                setDialogState(() {
+                  draft = nextDraft;
+                  validationMessage = null;
+                });
+              }
+
+              Future<void> submit() async {
+                final error = draft.validationMessage;
+                if (error != null) {
+                  setDialogState(() {
+                    validationMessage = error;
+                  });
+                  return;
+                }
+                Navigator.of(context).pop(draft);
+              }
+
+              return AlertDialog(
+                title: Text(
+                  banner.vendorName.isEmpty
+                      ? 'Review Banner'
+                      : 'Review ${banner.vendorName}',
+                ),
+                content: SizedBox(
+                  width: 560,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        DropdownButtonFormField<BannerReviewStatus>(
+                          value: draft.status,
+                          decoration: const InputDecoration(
+                            labelText: 'Banner status',
+                            border: OutlineInputBorder(),
+                          ),
+                          items:
+                              BannerReviewStatus.values
+                                  .map(
+                                    (status) =>
+                                        DropdownMenuItem<BannerReviewStatus>(
+                                          value: status,
+                                          child: Text(status.label),
+                                        ),
+                                  )
+                                  .toList(),
+                          onChanged: (value) {
+                            if (value == null) return;
+                            updateDraft(draft.copyWith(status: value));
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        SwitchListTile.adaptive(
+                          contentPadding: EdgeInsets.zero,
+                          value: draft.paymentReceived,
+                          title: const Text('Payment received'),
+                          onChanged:
+                              (value) => updateDraft(
+                                draft.copyWith(paymentReceived: value),
+                              ),
+                        ),
+                        const SizedBox(height: 12),
+                        _dialogTextField(
+                          label: 'Payment Mode',
+                          initialValue: draft.paymentMode,
+                          onChanged:
+                              (value) => updateDraft(
+                                draft.copyWith(paymentMode: value),
+                              ),
+                        ),
+                        const SizedBox(height: 12),
+                        _dialogTextField(
+                          label: 'Payment Remarks',
+                          initialValue: draft.paymentRemarks,
+                          maxLines: 2,
+                          onChanged:
+                              (value) => updateDraft(
+                                draft.copyWith(paymentRemarks: value),
+                              ),
+                        ),
+                        const SizedBox(height: 12),
+                        _dialogTextField(
+                          label: 'Banner Slot',
+                          initialValue: draft.displayIndex,
+                          keyboardType: TextInputType.number,
+                          onChanged:
+                              (value) => updateDraft(
+                                draft.copyWith(displayIndex: value),
+                              ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _dialogTextField(
+                                label: 'Display Start',
+                                initialValue: draft.displayStart,
+                                onChanged:
+                                    (value) => updateDraft(
+                                      draft.copyWith(displayStart: value),
+                                    ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _dialogTextField(
+                                label: 'Display End',
+                                initialValue: draft.displayEnd,
+                                onChanged:
+                                    (value) => updateDraft(
+                                      draft.copyWith(displayEnd: value),
+                                    ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (validationMessage != null) ...[
+                          const SizedBox(height: 12),
+                          Text(
+                            validationMessage!,
+                            style: const TextStyle(
+                              color: Color(0xFFDC2626),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Close'),
+                  ),
+                  FilledButton(onPressed: submit, child: const Text('Save')),
+                ],
+              );
+            },
+          ),
+    );
+
+    if (!mounted || result == null) {
+      return;
+    }
+
+    setState(() {
+      _updatingBannerId = banner.id;
+    });
+    try {
+      await ref
+          .read(apiClientProvider)
+          .updateAppBannerModeration(
+            bannerId: banner.id,
+            status: result.status,
+            paymentReceived: result.paymentReceived,
+            paymentMode: result.paymentMode.trim(),
+            paymentRemarks: result.paymentRemarks.trim(),
+            displayIndex: int.tryParse(result.displayIndex.trim()) ?? 1,
+            displayStart: result.displayStart.trim(),
+            displayEnd: result.displayEnd.trim(),
+          );
+      if (!mounted) return;
+      await _refresh();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${banner.vendorName.isEmpty ? 'Banner' : banner.vendorName} updated.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update banner moderation: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _updatingBannerId = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _openAppBannerDialog(List<AdminVendorAccessItem> vendors) async {
+    if (vendors.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Add at least one vendor before creating a banner.'),
+        ),
+      );
+      return;
+    }
+
+    AdminAppBannerDraft draft = AdminAppBannerDraft.empty().copyWith(
+      vendorId: vendors.first.id,
+      vendorName: vendors.first.displayName,
+      contactNumber: vendors.first.phone,
+    );
+    String? validationMessage;
+
+    Future<AssociationUploadFile?> pickFile({
+      required FileType type,
+      List<String>? allowedExtensions,
+    }) async {
+      final result = await FilePicker.platform.pickFiles(
+        allowMultiple: false,
+        type: type,
+        allowedExtensions: allowedExtensions,
+        withData: true,
+      );
+      final file = result?.files.single;
+      if (file == null || file.bytes == null) {
+        return null;
+      }
+      return AssociationUploadFile.fromPlatformFile(file);
+    }
+
+    final result = await showDialog<AdminAppBannerDraft>(
+      context: context,
+      builder:
+          (context) => StatefulBuilder(
+            builder: (context, setDialogState) {
+              void updateDraft(AdminAppBannerDraft nextDraft) {
+                setDialogState(() {
+                  draft = nextDraft;
+                  validationMessage = null;
+                });
+              }
+
+              return AlertDialog(
+                title: const Text('Add New App Banner'),
+                content: SizedBox(
+                  width: 560,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        DropdownButtonFormField<String>(
+                          value:
+                              draft.vendorId.isNotEmpty ? draft.vendorId : null,
+                          decoration: const InputDecoration(
+                            labelText: 'Vendor *',
+                            border: OutlineInputBorder(),
+                          ),
+                          items:
+                              vendors
+                                  .map(
+                                    (vendor) => DropdownMenuItem<String>(
+                                      value: vendor.id,
+                                      child: Text(vendor.displayName),
+                                    ),
+                                  )
+                                  .toList(),
+                          onChanged: (value) {
+                            if (value == null) return;
+                            final selectedVendor = vendors.firstWhere(
+                              (vendor) => vendor.id == value,
+                              orElse: () => vendors.first,
+                            );
+                            updateDraft(
+                              draft.copyWith(
+                                vendorId: selectedVendor.id,
+                                vendorName: selectedVendor.displayName,
+                                contactNumber: selectedVendor.phone,
+                              ),
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        _dialogTextField(
+                          label: 'Short Text *',
+                          initialValue: draft.shortText,
+                          maxLines: 3,
+                          onChanged:
+                              (value) =>
+                                  updateDraft(draft.copyWith(shortText: value)),
+                        ),
+                        const SizedBox(height: 12),
+                        _dialogTextField(
+                          label: 'Contact Number',
+                          initialValue: draft.contactNumber,
+                          keyboardType: TextInputType.phone,
+                          onChanged:
+                              (value) => updateDraft(
+                                draft.copyWith(contactNumber: value),
+                              ),
+                        ),
+                        const SizedBox(height: 12),
+                        _dialogTextField(
+                          label: 'Social Media URL',
+                          initialValue: draft.socialMediaUrl,
+                          onChanged:
+                              (value) => updateDraft(
+                                draft.copyWith(socialMediaUrl: value),
+                              ),
+                        ),
+                        const SizedBox(height: 14),
+                        _AdminFileTile(
+                          label: 'Banner Image *',
+                          fileName: draft.mediaFile?.name ?? '',
+                          helperText: 'JPG, PNG, or WebP up to 1 MB.',
+                          buttonLabel:
+                              draft.mediaFile == null
+                                  ? 'Upload image'
+                                  : 'Replace image',
+                          onPressed: () async {
+                            final file = await pickFile(type: FileType.image);
+                            if (file == null) return;
+                            if (file.bytes.length > 1024 * 1024) {
+                              setDialogState(() {
+                                validationMessage =
+                                    'Banner image is too large. Keep it at or below 1 MB.';
+                              });
+                              return;
+                            }
+                            updateDraft(draft.copyWith(mediaFile: file));
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        _AdminFileTile(
+                          label: 'Brochure PDF',
+                          fileName: draft.brochureFile?.name ?? '',
+                          helperText: 'Optional PDF brochure up to 2 MB.',
+                          buttonLabel:
+                              draft.brochureFile == null
+                                  ? 'Upload brochure'
+                                  : 'Replace brochure',
+                          onPressed: () async {
+                            final file = await pickFile(
+                              type: FileType.custom,
+                              allowedExtensions: const ['pdf'],
+                            );
+                            if (file == null) return;
+                            if (file.bytes.length > 2 * 1024 * 1024) {
+                              setDialogState(() {
+                                validationMessage =
+                                    'Brochure PDF is too large. Keep it at or below 2 MB.';
+                              });
+                              return;
+                            }
+                            updateDraft(draft.copyWith(brochureFile: file));
+                          },
+                        ),
+                        if (validationMessage != null) ...[
+                          const SizedBox(height: 12),
+                          Text(
+                            validationMessage!,
+                            style: const TextStyle(
+                              color: Color(0xFFDC2626),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed: () {
+                      final error = draft.validationMessage;
+                      if (error != null) {
+                        setDialogState(() {
+                          validationMessage = error;
+                        });
+                        return;
+                      }
+                      Navigator.of(context).pop(draft);
+                    },
+                    child: const Text('Add Banner'),
+                  ),
+                ],
+              );
+            },
+          ),
+    );
+
+    if (!mounted || result == null) {
+      return;
+    }
+
+    setState(() {
+      _isSavingNewBanner = true;
+    });
+    try {
+      await ref.read(apiClientProvider).createAppBanner(draft: result);
+      if (!mounted) return;
+      ref.invalidate(adminArenaDataProvider);
+      await ref.read(adminArenaDataProvider.future);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${result.vendorName.isEmpty ? 'App banner' : result.vendorName} banner submitted.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to create app banner: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSavingNewBanner = false;
+        });
+      }
+    }
+  }
+
+  Future<bool> _confirmTaxonomyDelete({
+    required String title,
+    required String message,
+  }) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: Text(title),
+            content: Text(message),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFFDC2626),
+                ),
+                child: const Text('Delete'),
+              ),
+            ],
+          ),
+    );
+    return result ?? false;
+  }
+
+  Future<void> _openCategoryDialog({
+    VendorTaxonomyCategoryItem? category,
+  }) async {
+    final controller = TextEditingController(text: category?.name ?? '');
+    String? validationMessage;
+
+    final result = await showDialog<String>(
+      context: context,
+      builder:
+          (context) => StatefulBuilder(
+            builder:
+                (context, setDialogState) => AlertDialog(
+                  title: Text(
+                    category == null ? 'Add Category' : 'Edit Category',
+                  ),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TextField(
+                        controller: controller,
+                        autofocus: true,
+                        textInputAction: TextInputAction.done,
+                        decoration: const InputDecoration(
+                          labelText: 'Category name',
+                          border: OutlineInputBorder(),
+                        ),
+                        onChanged: (_) {
+                          if (validationMessage != null) {
+                            setDialogState(() {
+                              validationMessage = null;
+                            });
+                          }
+                        },
+                        onSubmitted: (_) {
+                          final value = controller.text.trim();
+                          if (value.isEmpty) {
+                            setDialogState(() {
+                              validationMessage = 'Category name is required.';
+                            });
+                            return;
+                          }
+                          Navigator.of(context).pop(value);
+                        },
+                      ),
+                      if (validationMessage != null) ...[
+                        const SizedBox(height: 10),
+                        Text(
+                          validationMessage!,
+                          style: const TextStyle(
+                            color: Color(0xFFDC2626),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Cancel'),
+                    ),
+                    FilledButton(
+                      onPressed: () {
+                        final value = controller.text.trim();
+                        if (value.isEmpty) {
+                          setDialogState(() {
+                            validationMessage = 'Category name is required.';
+                          });
+                          return;
+                        }
+                        Navigator.of(context).pop(value);
+                      },
+                      child: Text(category == null ? 'Add' : 'Save'),
+                    ),
+                  ],
+                ),
+          ),
+    );
+
+    if (!mounted || result == null) {
+      return;
+    }
+
+    final savingKey = category == null ? '__new_category__' : category.id;
+    setState(() {
+      _savingTaxonomyKey = savingKey;
+    });
+
+    try {
+      if (category == null) {
+        await ref.read(apiClientProvider).createVendorCategory(name: result);
+      } else {
+        await ref
+            .read(apiClientProvider)
+            .updateVendorCategory(categoryId: category.id, name: result);
+      }
+      if (!mounted) return;
+      await _refreshVendorTaxonomy();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            category == null
+                ? 'Vendor category added.'
+                : 'Vendor category updated.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to save category: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _savingTaxonomyKey = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _deleteCategory(VendorTaxonomyCategoryItem category) async {
+    final confirmed = await _confirmTaxonomyDelete(
+      title: 'Delete category?',
+      message:
+          'This will remove "${category.name}" from the taxonomy and clear that category from any linked vendors.',
+    );
+    if (!confirmed || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _savingTaxonomyKey = category.id;
+    });
+    try {
+      await ref
+          .read(apiClientProvider)
+          .deleteVendorCategory(categoryId: category.id);
+      if (!mounted) return;
+      await _refreshVendorTaxonomy();
+      if (!mounted) return;
+      if (_selectedTaxonomyCategoryId == category.id) {
+        setState(() {
+          _selectedTaxonomyCategoryId = null;
+        });
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Vendor category deleted.')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to delete category: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _savingTaxonomyKey = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _openSubCategoryDialog(
+    List<VendorTaxonomyCategoryItem> categories, {
+    VendorTaxonomyCategoryItem? initialCategory,
+    VendorTaxonomySubCategoryItem? subCategory,
+  }) async {
+    if (categories.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Add a category first before adding a sub-category.'),
+        ),
+      );
+      return;
+    }
+
+    final controller = TextEditingController(text: subCategory?.name ?? '');
+    String? selectedCategoryId =
+        initialCategory?.id ??
+        _selectedTaxonomyCategoryId ??
+        categories.first.id;
+    String? validationMessage;
+
+    final result = await showDialog<({String categoryId, String name})>(
+      context: context,
+      builder:
+          (context) => StatefulBuilder(
+            builder:
+                (context, setDialogState) => AlertDialog(
+                  title: Text(
+                    subCategory == null
+                        ? 'Add Sub-category'
+                        : 'Edit Sub-category',
+                  ),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      DropdownButtonFormField<String>(
+                        value: selectedCategoryId,
+                        items:
+                            categories
+                                .map(
+                                  (category) => DropdownMenuItem<String>(
+                                    value: category.id,
+                                    child: Text(category.name),
+                                  ),
+                                )
+                                .toList(),
+                        onChanged: (value) {
+                          setDialogState(() {
+                            selectedCategoryId = value;
+                            validationMessage = null;
+                          });
+                        },
+                        decoration: const InputDecoration(
+                          labelText: 'Parent category',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      TextField(
+                        controller: controller,
+                        autofocus: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Sub-category name',
+                          border: OutlineInputBorder(),
+                        ),
+                        onChanged: (_) {
+                          if (validationMessage != null) {
+                            setDialogState(() {
+                              validationMessage = null;
+                            });
+                          }
+                        },
+                      ),
+                      if (validationMessage != null) ...[
+                        const SizedBox(height: 10),
+                        Text(
+                          validationMessage!,
+                          style: const TextStyle(
+                            color: Color(0xFFDC2626),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Cancel'),
+                    ),
+                    FilledButton(
+                      onPressed: () {
+                        final value = controller.text.trim();
+                        if ((selectedCategoryId ?? '').isEmpty) {
+                          setDialogState(() {
+                            validationMessage =
+                                'Please choose a parent category.';
+                          });
+                          return;
+                        }
+                        if (value.isEmpty) {
+                          setDialogState(() {
+                            validationMessage =
+                                'Sub-category name is required.';
+                          });
+                          return;
+                        }
+                        Navigator.of(
+                          context,
+                        ).pop((categoryId: selectedCategoryId!, name: value));
+                      },
+                      child: Text(subCategory == null ? 'Add' : 'Save'),
+                    ),
+                  ],
+                ),
+          ),
+    );
+
+    if (!mounted || result == null) {
+      return;
+    }
+
+    setState(() {
+      _savingTaxonomyKey =
+          subCategory == null ? '__new_sub_category__' : subCategory.id;
+    });
+
+    try {
+      if (subCategory == null) {
+        await ref
+            .read(apiClientProvider)
+            .createVendorSubCategory(
+              categoryId: result.categoryId,
+              name: result.name,
+            );
+      } else {
+        await ref
+            .read(apiClientProvider)
+            .updateVendorSubCategory(
+              subCategoryId: subCategory.id,
+              categoryId: result.categoryId,
+              name: result.name,
+            );
+      }
+      if (!mounted) return;
+      setState(() {
+        _selectedTaxonomyCategoryId = result.categoryId;
+      });
+      await _refreshVendorTaxonomy();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            subCategory == null
+                ? 'Vendor sub-category added.'
+                : 'Vendor sub-category updated.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to save sub-category: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _savingTaxonomyKey = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _deleteSubCategory(
+    VendorTaxonomyCategoryItem category,
+    VendorTaxonomySubCategoryItem subCategory,
+  ) async {
+    final confirmed = await _confirmTaxonomyDelete(
+      title: 'Delete sub-category?',
+      message:
+          'This will remove "${subCategory.name}" from "${category.name}" and clear that sub-category from linked vendors.',
+    );
+    if (!confirmed || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _savingTaxonomyKey = subCategory.id;
+    });
+    try {
+      await ref
+          .read(apiClientProvider)
+          .deleteVendorSubCategory(subCategoryId: subCategory.id);
+      if (!mounted) return;
+      await _refreshVendorTaxonomy();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vendor sub-category deleted.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to delete sub-category: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _savingTaxonomyKey = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _openVendorRegistrationDialog(
+    List<VendorTaxonomyCategoryItem> categories,
+  ) async {
+    if (categories.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Add category and sub-category first before adding a vendor.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    AdminVendorRegistrationDraft draft =
+        const AdminVendorRegistrationDraft.empty();
+    draft = draft.copyWith(
+      categoryId: categories.first.id,
+      categoryName: categories.first.name,
+      subCategoryId:
+          categories.first.subCategories.isNotEmpty
+              ? categories.first.subCategories.first.id
+              : '',
+      subCategoryName:
+          categories.first.subCategories.isNotEmpty
+              ? categories.first.subCategories.first.name
+              : '',
+    );
+    String? validationMessage;
+
+    final result = await showDialog<AdminVendorRegistrationDraft>(
+      context: context,
+      builder:
+          (context) => StatefulBuilder(
+            builder: (context, setDialogState) {
+              final selectedCategory = categories.firstWhere(
+                (item) => item.id == draft.categoryId,
+                orElse: () => categories.first,
+              );
+              final subCategories = selectedCategory.subCategories;
+              final stateOptions =
+                  _vendorStateOptionsByCountry[draft.country] ??
+                  const <String>[];
+              final cityOptions =
+                  _vendorCityOptionsByState[draft.state] ?? const <String>[];
+
+              void updateDraft(AdminVendorRegistrationDraft nextDraft) {
+                setDialogState(() {
+                  draft = nextDraft;
+                  validationMessage = null;
+                });
+              }
+
+              return AlertDialog(
+                title: const Text('Add New Vendor'),
+                content: SizedBox(
+                  width: 560,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _dialogTextField(
+                          label: 'Company name',
+                          initialValue: draft.companyName,
+                          onChanged:
+                              (value) => updateDraft(
+                                draft.copyWith(companyName: value),
+                              ),
+                        ),
+                        const SizedBox(height: 12),
+                        _dialogTextField(
+                          label: 'Contact person',
+                          initialValue: draft.contactPerson,
+                          onChanged:
+                              (value) => updateDraft(
+                                draft.copyWith(contactPerson: value),
+                              ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: DropdownButtonFormField<String>(
+                                value: draft.phoneCode,
+                                decoration: const InputDecoration(
+                                  labelText: 'Code',
+                                  border: OutlineInputBorder(),
+                                ),
+                                items:
+                                    _vendorPhoneCodeOptions
+                                        .map(
+                                          (code) => DropdownMenuItem<String>(
+                                            value: code,
+                                            child: Text(code),
+                                          ),
+                                        )
+                                        .toList(),
+                                onChanged: (value) {
+                                  if (value == null) return;
+                                  updateDraft(draft.copyWith(phoneCode: value));
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              flex: 3,
+                              child: _dialogTextField(
+                                label: 'Mobile number',
+                                initialValue: draft.phone,
+                                keyboardType: TextInputType.phone,
+                                onChanged:
+                                    (value) => updateDraft(
+                                      draft.copyWith(phone: value),
+                                    ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: DropdownButtonFormField<String>(
+                                value: draft.whatsAppCode,
+                                decoration: const InputDecoration(
+                                  labelText: 'WhatsApp code',
+                                  border: OutlineInputBorder(),
+                                ),
+                                items:
+                                    _vendorPhoneCodeOptions
+                                        .map(
+                                          (code) => DropdownMenuItem<String>(
+                                            value: code,
+                                            child: Text(code),
+                                          ),
+                                        )
+                                        .toList(),
+                                onChanged: (value) {
+                                  if (value == null) return;
+                                  updateDraft(
+                                    draft.copyWith(whatsAppCode: value),
+                                  );
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              flex: 3,
+                              child: _dialogTextField(
+                                label: 'WhatsApp number',
+                                initialValue: draft.whatsApp,
+                                keyboardType: TextInputType.phone,
+                                onChanged:
+                                    (value) => updateDraft(
+                                      draft.copyWith(whatsApp: value),
+                                    ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        _dialogTextField(
+                          label: 'Email',
+                          initialValue: draft.email,
+                          keyboardType: TextInputType.emailAddress,
+                          onChanged:
+                              (value) =>
+                                  updateDraft(draft.copyWith(email: value)),
+                        ),
+                        const SizedBox(height: 12),
+                        _dialogTextField(
+                          label: 'Primary Login ID',
+                          initialValue: draft.primaryLoginEmail,
+                          keyboardType: TextInputType.emailAddress,
+                          onChanged:
+                              (value) => updateDraft(
+                                draft.copyWith(primaryLoginEmail: value),
+                              ),
+                        ),
+                        const SizedBox(height: 12),
+                        _dialogTextField(
+                          label: 'Secondary Login ID',
+                          initialValue: draft.secondaryLoginEmail,
+                          keyboardType: TextInputType.emailAddress,
+                          onChanged:
+                              (value) => updateDraft(
+                                draft.copyWith(secondaryLoginEmail: value),
+                              ),
+                        ),
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<String>(
+                          value:
+                              draft.categoryId.isNotEmpty
+                                  ? draft.categoryId
+                                  : null,
+                          decoration: const InputDecoration(
+                            labelText: 'Category',
+                            border: OutlineInputBorder(),
+                          ),
+                          items:
+                              categories
+                                  .map(
+                                    (category) => DropdownMenuItem<String>(
+                                      value: category.id,
+                                      child: Text(category.name),
+                                    ),
+                                  )
+                                  .toList(),
+                          onChanged: (value) {
+                            if (value == null) return;
+                            final category = categories.firstWhere(
+                              (item) => item.id == value,
+                            );
+                            updateDraft(
+                              draft.copyWith(
+                                categoryId: category.id,
+                                categoryName: category.name,
+                                subCategoryId:
+                                    category.subCategories.isNotEmpty
+                                        ? category.subCategories.first.id
+                                        : '',
+                                subCategoryName:
+                                    category.subCategories.isNotEmpty
+                                        ? category.subCategories.first.name
+                                        : '',
+                              ),
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<String>(
+                          value:
+                              draft.subCategoryId.isNotEmpty
+                                  ? draft.subCategoryId
+                                  : null,
+                          decoration: const InputDecoration(
+                            labelText: 'Sub-category',
+                            border: OutlineInputBorder(),
+                          ),
+                          items:
+                              subCategories
+                                  .map(
+                                    (subCategory) => DropdownMenuItem<String>(
+                                      value: subCategory.id,
+                                      child: Text(subCategory.name),
+                                    ),
+                                  )
+                                  .toList(),
+                          onChanged: (value) {
+                            if (value == null) return;
+                            final subCategory = subCategories.firstWhere(
+                              (item) => item.id == value,
+                            );
+                            updateDraft(
+                              draft.copyWith(
+                                subCategoryId: subCategory.id,
+                                subCategoryName: subCategory.name,
+                              ),
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<String>(
+                          value: draft.country,
+                          decoration: const InputDecoration(
+                            labelText: 'Country',
+                            border: OutlineInputBorder(),
+                          ),
+                          items:
+                              _vendorCountryOptions
+                                  .map(
+                                    (country) => DropdownMenuItem<String>(
+                                      value: country,
+                                      child: Text(country),
+                                    ),
+                                  )
+                                  .toList(),
+                          onChanged: (value) {
+                            if (value == null) return;
+                            final nextState =
+                                value == 'India' &&
+                                        stateOptions.contains(draft.state)
+                                    ? draft.state
+                                    : '';
+                            updateDraft(
+                              draft.copyWith(
+                                country: value,
+                                state: nextState,
+                                city: '',
+                              ),
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<String>(
+                          value: draft.state.isNotEmpty ? draft.state : null,
+                          decoration: const InputDecoration(
+                            labelText: 'State',
+                            border: OutlineInputBorder(),
+                          ),
+                          items:
+                              stateOptions
+                                  .map(
+                                    (state) => DropdownMenuItem<String>(
+                                      value: state,
+                                      child: Text(state),
+                                    ),
+                                  )
+                                  .toList(),
+                          onChanged: (value) {
+                            if (value == null) return;
+                            updateDraft(draft.copyWith(state: value, city: ''));
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<String>(
+                          value: draft.city.isNotEmpty ? draft.city : null,
+                          decoration: const InputDecoration(
+                            labelText: 'City',
+                            border: OutlineInputBorder(),
+                          ),
+                          items:
+                              cityOptions
+                                  .map(
+                                    (city) => DropdownMenuItem<String>(
+                                      value: city,
+                                      child: Text(city),
+                                    ),
+                                  )
+                                  .toList(),
+                          onChanged: (value) {
+                            if (value == null) return;
+                            updateDraft(draft.copyWith(city: value));
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        _dialogTextField(
+                          label: 'Website',
+                          initialValue: draft.website,
+                          keyboardType: TextInputType.url,
+                          onChanged:
+                              (value) =>
+                                  updateDraft(draft.copyWith(website: value)),
+                        ),
+                        const SizedBox(height: 12),
+                        _dialogTextField(
+                          label: 'Facebook Page',
+                          initialValue: draft.facebookUrl,
+                          keyboardType: TextInputType.url,
+                          onChanged:
+                              (value) => updateDraft(
+                                draft.copyWith(facebookUrl: value),
+                              ),
+                        ),
+                        const SizedBox(height: 12),
+                        _dialogTextField(
+                          label: 'Instagram Page',
+                          initialValue: draft.instagramUrl,
+                          keyboardType: TextInputType.url,
+                          onChanged:
+                              (value) => updateDraft(
+                                draft.copyWith(instagramUrl: value),
+                              ),
+                        ),
+                        const SizedBox(height: 12),
+                        _dialogTextField(
+                          label: 'YouTube Channel',
+                          initialValue: draft.youtubeUrl,
+                          keyboardType: TextInputType.url,
+                          onChanged:
+                              (value) => updateDraft(
+                                draft.copyWith(youtubeUrl: value),
+                              ),
+                        ),
+                        const SizedBox(height: 12),
+                        _dialogTextField(
+                          label: 'LinkedIn Page',
+                          initialValue: draft.linkedinUrl,
+                          keyboardType: TextInputType.url,
+                          onChanged:
+                              (value) => updateDraft(
+                                draft.copyWith(linkedinUrl: value),
+                              ),
+                        ),
+                        const SizedBox(height: 12),
+                        _dialogTextField(
+                          label: 'X / Twitter Page',
+                          initialValue: draft.xUrl,
+                          keyboardType: TextInputType.url,
+                          onChanged:
+                              (value) =>
+                                  updateDraft(draft.copyWith(xUrl: value)),
+                        ),
+                        const SizedBox(height: 12),
+                        _dialogTextField(
+                          label: 'Address',
+                          initialValue: draft.address,
+                          maxLines: 2,
+                          onChanged:
+                              (value) =>
+                                  updateDraft(draft.copyWith(address: value)),
+                        ),
+                        const SizedBox(height: 12),
+                        _dialogTextField(
+                          label: 'Zipcode / Pincode',
+                          initialValue: draft.zipcode,
+                          keyboardType: TextInputType.number,
+                          onChanged:
+                              (value) =>
+                                  updateDraft(draft.copyWith(zipcode: value)),
+                        ),
+                        if (validationMessage != null) ...[
+                          const SizedBox(height: 12),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              validationMessage!,
+                              style: const TextStyle(
+                                color: Color(0xFFDC2626),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed: () {
+                      final message = draft.validationMessage;
+                      if (message != null) {
+                        setDialogState(() {
+                          validationMessage = message;
+                        });
+                        return;
+                      }
+                      Navigator.of(context).pop(draft);
+                    },
+                    child: const Text('Save Vendor'),
+                  ),
+                ],
+              );
+            },
+          ),
+    );
+
+    if (!mounted || result == null) {
+      return;
+    }
+
+    setState(() {
+      _savingVendorRegistrationId = '__new_vendor__';
+    });
+    try {
+      await ref.read(apiClientProvider).createVendorRecord(draft: result);
+      if (!mounted) return;
+      ref.invalidate(adminArenaDataProvider);
+      ref.invalidate(vendorDirectoryProvider);
+      await ref.read(adminArenaDataProvider.future);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Vendor created successfully and added to registration queue.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to save vendor: $error')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _savingVendorRegistrationId = null;
+        });
+      }
+    }
+  }
+
+  Widget _dialogTextField({
+    required String label,
+    required String initialValue,
+    required ValueChanged<String> onChanged,
+    TextInputType? keyboardType,
+    int maxLines = 1,
+  }) {
+    return _StableTextFormField(
+      value: initialValue,
+      label: label,
+      keyboardType: keyboardType,
+      maxLines: maxLines,
+      onChanged: onChanged,
+    );
+  }
+
+  String _readVendorNoteValue(String notes, String label) {
+    if (notes.trim().isEmpty) {
+      return '';
+    }
+    final pattern = RegExp('${RegExp.escape(label)}:\\s*(.*)');
+    final match = pattern.firstMatch(notes);
+    return match?.group(1)?.trim() ?? '';
+  }
+
+  AdminVendorApprovalDraft _buildVendorApprovalDraft(
+    AdminVendorAccessItem vendor,
+  ) {
+    return AdminVendorApprovalDraft(
+      planName: _readVendorNoteValue(vendor.notes, 'Plan Name'),
+      openingTime: _readVendorNoteValue(vendor.notes, 'Opening Time'),
+      closingTime: _readVendorNoteValue(vendor.notes, 'Closing Time'),
+      membershipPlan:
+          vendor.membershipPlan.trim().isNotEmpty ? vendor.membershipPlan : '',
+      paymentAmount:
+          vendor.paymentAmount.trim().isNotEmpty ? vendor.paymentAmount : '',
+      onboardingStartAt:
+          vendor.onboardingStartDate.length >= 10
+              ? vendor.onboardingStartDate.substring(0, 10)
+              : vendor.onboardingStartDate,
+      onboardingEndAt:
+          vendor.onboardingEndDate.length >= 10
+              ? vendor.onboardingEndDate.substring(0, 10)
+              : vendor.onboardingEndDate,
+      paymentDueDate:
+          vendor.paymentDueDate.length >= 10
+              ? vendor.paymentDueDate.substring(0, 10)
+              : vendor.paymentDueDate,
+      gstNumber: _readVendorNoteValue(vendor.notes, 'GST Number'),
+      isRestaurant:
+          _readVendorNoteValue(vendor.notes, 'Is Restaurant') == 'Yes',
+      paymentMode:
+          _readVendorNoteValue(vendor.notes, 'Payment Mode').trim().isEmpty
+              ? 'Online/NEFT/IMPS'
+              : _readVendorNoteValue(vendor.notes, 'Payment Mode'),
+      bankName: _readVendorNoteValue(vendor.notes, 'Bank Name'),
+      transactionId: _readVendorNoteValue(vendor.notes, 'Transaction ID'),
+      paymentDescription: _readVendorNoteValue(
+        vendor.notes,
+        'Payment Description',
+      ),
+      googleLocation: _readVendorNoteValue(vendor.notes, 'Google Location'),
+      idProof: null,
+      locationProof: null,
+      companyBrochure: null,
+      profilePhoto: null,
+      visitingCard: null,
+    );
+  }
+
+  Future<PlatformFile?> _pickSingleFile({
+    List<String>? allowedExtensions,
+  }) async {
+    final result = await FilePicker.platform.pickFiles(
+      allowMultiple: false,
+      type: allowedExtensions == null ? FileType.any : FileType.custom,
+      allowedExtensions: allowedExtensions,
+      withData: false,
+    );
+    return result?.files.single;
+  }
+
+  Future<void> _openVendorApprovalDialog(AdminVendorAccessItem vendor) async {
+    var draft = _buildVendorApprovalDraft(vendor);
+    String? validationMessage;
+
+    Future<void> submit(MemberAccessStatus status) async {
+      if (status == MemberAccessStatus.approved) {
+        final error = draft.validationMessage;
+        if (error != null) {
+          validationMessage = error;
+          return;
+        }
+      }
+
+      Navigator.of(context).pop((draft: draft, status: status));
+    }
+
+    final result = await showDialog<
+      ({AdminVendorApprovalDraft draft, MemberAccessStatus status})
+    >(
+      context: context,
+      builder:
+          (context) => StatefulBuilder(
+            builder: (context, setDialogState) {
+              Future<void> assignFile(
+                String key, {
+                List<String>? extensions,
+              }) async {
+                final file = await _pickSingleFile(
+                  allowedExtensions: extensions,
+                );
+                if (file == null) return;
+                setDialogState(() {
+                  switch (key) {
+                    case 'idProof':
+                      draft = draft.copyWith(idProof: file);
+                      break;
+                    case 'locationProof':
+                      draft = draft.copyWith(locationProof: file);
+                      break;
+                    case 'companyBrochure':
+                      draft = draft.copyWith(companyBrochure: file);
+                      break;
+                    case 'profilePhoto':
+                      draft = draft.copyWith(profilePhoto: file);
+                      break;
+                    case 'visitingCard':
+                      draft = draft.copyWith(visitingCard: file);
+                      break;
+                  }
+                  validationMessage = null;
+                });
+              }
+
+              Widget dateField(
+                String label,
+                String value,
+                ValueChanged<String> onChanged,
+              ) {
+                return _StableTextFormField(
+                  value: value,
+                  label: label,
+                  onChanged: onChanged,
+                );
+              }
+
+              return AlertDialog(
+                title: Text('Review ${vendor.displayName}'),
+                content: SizedBox(
+                  width: 620,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      children: [
+                        DropdownButtonFormField<String>(
+                          value:
+                              draft.planName.isNotEmpty ? draft.planName : null,
+                          decoration: const InputDecoration(
+                            labelText: 'Plan Name *',
+                            border: OutlineInputBorder(),
+                          ),
+                          items:
+                              _vendorPlanOptions
+                                  .map(
+                                    (plan) => DropdownMenuItem<String>(
+                                      value: plan,
+                                      child: Text(plan),
+                                    ),
+                                  )
+                                  .toList(),
+                          onChanged: (value) {
+                            setDialogState(() {
+                              draft = draft.copyWith(planName: value ?? '');
+                              validationMessage = null;
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        _dialogTextField(
+                          label: 'Membership Plan',
+                          initialValue: draft.membershipPlan,
+                          onChanged: (value) {
+                            setDialogState(() {
+                              draft = draft.copyWith(membershipPlan: value);
+                              validationMessage = null;
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _dialogTextField(
+                                label: 'Opening Time',
+                                initialValue: draft.openingTime,
+                                onChanged: (value) {
+                                  setDialogState(() {
+                                    draft = draft.copyWith(openingTime: value);
+                                    validationMessage = null;
+                                  });
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _dialogTextField(
+                                label: 'Closing Time',
+                                initialValue: draft.closingTime,
+                                onChanged: (value) {
+                                  setDialogState(() {
+                                    draft = draft.copyWith(closingTime: value);
+                                    validationMessage = null;
+                                  });
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _dialogTextField(
+                                label: 'Payment Amount',
+                                initialValue: draft.paymentAmount,
+                                onChanged: (value) {
+                                  setDialogState(() {
+                                    draft = draft.copyWith(
+                                      paymentAmount: value,
+                                    );
+                                    validationMessage = null;
+                                  });
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _dialogTextField(
+                                label: 'GST Number',
+                                initialValue: draft.gstNumber,
+                                onChanged: (value) {
+                                  setDialogState(() {
+                                    draft = draft.copyWith(gstNumber: value);
+                                    validationMessage = null;
+                                  });
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: dateField(
+                                'Start Date *',
+                                draft.onboardingStartAt,
+                                (value) {
+                                  setDialogState(() {
+                                    draft = draft.copyWith(
+                                      onboardingStartAt: value,
+                                    );
+                                    validationMessage = null;
+                                  });
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: dateField(
+                                'End Date *',
+                                draft.onboardingEndAt,
+                                (value) {
+                                  setDialogState(() {
+                                    draft = draft.copyWith(
+                                      onboardingEndAt: value,
+                                    );
+                                    validationMessage = null;
+                                  });
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: dateField(
+                                'Payment Due',
+                                draft.paymentDueDate,
+                                (value) {
+                                  setDialogState(() {
+                                    draft = draft.copyWith(
+                                      paymentDueDate: value,
+                                    );
+                                    validationMessage = null;
+                                  });
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: DropdownButtonFormField<String>(
+                                value: draft.paymentMode,
+                                decoration: const InputDecoration(
+                                  labelText: 'Payment Mode *',
+                                  border: OutlineInputBorder(),
+                                ),
+                                items:
+                                    _vendorPaymentModeOptions
+                                        .map(
+                                          (mode) => DropdownMenuItem<String>(
+                                            value: mode,
+                                            child: Text(mode),
+                                          ),
+                                        )
+                                        .toList(),
+                                onChanged: (value) {
+                                  setDialogState(() {
+                                    draft = draft.copyWith(
+                                      paymentMode: value ?? '',
+                                    );
+                                    validationMessage = null;
+                                  });
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _dialogTextField(
+                                label: 'Bank Name *',
+                                initialValue: draft.bankName,
+                                onChanged: (value) {
+                                  setDialogState(() {
+                                    draft = draft.copyWith(bankName: value);
+                                    validationMessage = null;
+                                  });
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _dialogTextField(
+                                label: 'Transaction ID *',
+                                initialValue: draft.transactionId,
+                                onChanged: (value) {
+                                  setDialogState(() {
+                                    draft = draft.copyWith(
+                                      transactionId: value,
+                                    );
+                                    validationMessage = null;
+                                  });
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        SwitchListTile.adaptive(
+                          contentPadding: EdgeInsets.zero,
+                          value: draft.isRestaurant,
+                          title: const Text('Is Restaurant?'),
+                          onChanged: (value) {
+                            setDialogState(() {
+                              draft = draft.copyWith(isRestaurant: value);
+                              validationMessage = null;
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        _dialogTextField(
+                          label: 'Payment Description',
+                          initialValue: draft.paymentDescription,
+                          maxLines: 2,
+                          onChanged: (value) {
+                            setDialogState(() {
+                              draft = draft.copyWith(paymentDescription: value);
+                              validationMessage = null;
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        _dialogTextField(
+                          label: 'Google Location',
+                          initialValue: draft.googleLocation,
+                          onChanged: (value) {
+                            setDialogState(() {
+                              draft = draft.copyWith(googleLocation: value);
+                              validationMessage = null;
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        _filePickerRow(
+                          label: 'ID Proof',
+                          fileName: draft.idProof?.name ?? '',
+                          onPick: () => assignFile('idProof'),
+                        ),
+                        _filePickerRow(
+                          label: 'Location Proof',
+                          fileName: draft.locationProof?.name ?? '',
+                          onPick: () => assignFile('locationProof'),
+                        ),
+                        _filePickerRow(
+                          label: 'Company Profile / Brochure',
+                          fileName: draft.companyBrochure?.name ?? '',
+                          onPick:
+                              () => assignFile(
+                                'companyBrochure',
+                                extensions: ['pdf', 'jpg', 'jpeg', 'png'],
+                              ),
+                        ),
+                        _filePickerRow(
+                          label: 'Profile Photo',
+                          fileName: draft.profilePhoto?.name ?? '',
+                          onPick:
+                              () => assignFile(
+                                'profilePhoto',
+                                extensions: ['jpg', 'jpeg', 'png', 'webp'],
+                              ),
+                        ),
+                        _filePickerRow(
+                          label: 'Visiting Card',
+                          fileName: draft.visitingCard?.name ?? '',
+                          onPick:
+                              () => assignFile(
+                                'visitingCard',
+                                extensions: ['pdf', 'jpg', 'jpeg', 'png'],
+                              ),
+                        ),
+                        if (validationMessage != null) ...[
+                          const SizedBox(height: 12),
+                          Text(
+                            validationMessage!,
+                            style: const TextStyle(
+                              color: Color(0xFFDC2626),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                actions: [
+                  SizedBox(
+                    width: double.maxFinite,
+                    child: Wrap(
+                      alignment: WrapAlignment.end,
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: [
+                        SizedBox(
+                          width: 120,
+                          child: TextButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: const Text('Close'),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 120,
+                          child: OutlinedButton(
+                            onPressed:
+                                () => submit(MemberAccessStatus.suspended),
+                            child: const Text('Suspend'),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 120,
+                          child: OutlinedButton(
+                            onPressed:
+                                () => submit(MemberAccessStatus.cancelled),
+                            child: const Text('Cancel'),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 120,
+                          child: FilledButton(
+                            onPressed:
+                                () => submit(MemberAccessStatus.approved),
+                            child: const Text('Approve'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+    );
+
+    if (!mounted || result == null) {
+      return;
+    }
+
+    setState(() {
+      _savingVendorApprovalId = vendor.id;
+    });
+    try {
+      await ref
+          .read(apiClientProvider)
+          .saveVendorApproval(
+            vendorId: vendor.id,
+            draft: result.draft,
+            status: result.status,
+          );
+      if (!mounted) return;
+      ref.invalidate(adminArenaDataProvider);
+      await ref.read(adminArenaDataProvider.future);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.status == MemberAccessStatus.approved
+                ? '${vendor.displayName} approved.'
+                : result.status == MemberAccessStatus.suspended
+                ? '${vendor.displayName} suspended.'
+                : '${vendor.displayName} cancelled.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update vendor status: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _savingVendorApprovalId = null;
+        });
+      }
+    }
+  }
+
+  Widget _filePickerRow({
+    required String label,
+    required String fileName,
+    required VoidCallback onPick,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              fileName.isEmpty ? label : '$label: $fileName',
+              style: const TextStyle(fontSize: 13, color: Color(0xFF374151)),
+            ),
+          ),
+          TextButton.icon(
+            onPressed: onPick,
+            icon: const Icon(Icons.attach_file_rounded),
+            label: const Text('Choose'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -289,6 +2436,13 @@ class _VendorArenaPanelState extends ConsumerState<VendorArenaPanel> {
     if (widget.viewerRole.isVendor) {
       return _VendorSelfServicePanel(onOpenProfile: widget.onOpenProfile);
     }
+    if (widget.viewerRole.isAdmin) {
+      return _buildAdminVendorArena();
+    }
+    return _buildVendorDirectory();
+  }
+
+  Widget _buildVendorDirectory() {
     final vendorsAsync = ref.watch(vendorDirectoryProvider);
     return vendorsAsync.when(
       loading: () => const _LoadingState(),
@@ -443,6 +2597,8 @@ class _VendorArenaPanelState extends ConsumerState<VendorArenaPanel> {
             if (sortedCategories.isNotEmpty) ...[
               const SizedBox(height: 18),
               Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(28),
@@ -455,129 +2611,162 @@ class _VendorArenaPanelState extends ConsumerState<VendorArenaPanel> {
                     ),
                   ],
                 ),
-                child: ExpansionTile(
-                  tilePadding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 6,
-                  ),
-                  childrenPadding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(28),
-                  ),
-                  collapsedShape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(28),
-                  ),
-                  title: const Text(
-                    'Categories And Sub Categories',
-                    style: TextStyle(
-                      color: Color(0xFF171717),
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  subtitle: Text(
-                    '${sortedCategories.length} categories available',
-                    style: const TextStyle(
-                      color: Color(0xFF6B7280),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    for (final entry in sortedCategories) ...[
+                    const Text(
+                      'Categories And Sub Categories',
+                      style: TextStyle(
+                        color: Color(0xFF171717),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${sortedCategories.length} categories available',
+                      style: const TextStyle(
+                        color: Color(0xFF6B7280),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    for (final entry in sortedCategories)
                       Container(
                         width: double.infinity,
-                        margin: const EdgeInsets.only(top: 10),
-                        padding: const EdgeInsets.all(14),
+                        margin: const EdgeInsets.only(bottom: 10),
                         decoration: BoxDecoration(
                           color: const Color(0xFFF8FAFC),
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(color: const Color(0xFFE2E8F0)),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            InkWell(
-                              onTap: () {
-                                setState(() {
-                                  if (_selectedCategory == entry.key &&
-                                      _selectedSubCategory == null) {
-                                    _selectedCategory = null;
-                                  } else {
-                                    _selectedCategory = entry.key;
-                                    _selectedSubCategory = null;
-                                  }
-                                });
-                              },
-                              borderRadius: BorderRadius.circular(14),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 2,
-                                ),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        entry.key,
-                                        style: const TextStyle(
-                                          color: Color(0xFF171717),
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w800,
-                                        ),
-                                      ),
-                                    ),
-                                    if (_selectedCategory == entry.key &&
-                                        _selectedSubCategory == null)
-                                      const Icon(
-                                        Icons.check_circle_rounded,
-                                        color: Color(0xFF7C3AED),
-                                        size: 20,
-                                      ),
-                                  ],
+                        child: ExpansionTile(
+                          tilePadding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 2,
+                          ),
+                          childrenPadding: const EdgeInsets.fromLTRB(
+                            14,
+                            0,
+                            14,
+                            14,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          collapsedShape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          initiallyExpanded: _selectedCategory == entry.key,
+                          title: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  entry.key,
+                                  style: const TextStyle(
+                                    color: Color(0xFF171717),
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w800,
+                                  ),
                                 ),
                               ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(999),
+                                  border: Border.all(
+                                    color: const Color(0xFFE2E8F0),
+                                  ),
+                                ),
+                                child: Text(
+                                  '${vendors.where((vendor) {
+                                    final category = vendor.category.trim();
+                                    final categoryKey = category.isEmpty ? 'Uncategorized' : category;
+                                    return categoryKey.toLowerCase() == entry.key.toLowerCase();
+                                  }).length}',
+                                  style: const TextStyle(
+                                    color: Color(0xFF475569),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          subtitle: Text(
+                            entry.value.isEmpty
+                                ? 'No sub categories'
+                                : '${entry.value.length} sub categories',
+                            style: const TextStyle(
+                              color: Color(0xFF6B7280),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
                             ),
-                            if (entry.value.isNotEmpty) ...[
-                              const SizedBox(height: 10),
-                              Wrap(
+                          ),
+                          children: [
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Wrap(
                                 spacing: 8,
                                 runSpacing: 8,
-                                children:
-                                    (entry.value.toList()..sort(
-                                          (left, right) => left
-                                              .toLowerCase()
-                                              .compareTo(right.toLowerCase()),
-                                        ))
-                                        .map(
-                                          (subCategory) => _DirectoryFilterChip(
-                                            label: subCategory,
-                                            icon:
-                                                Icons.subdirectory_arrow_right,
-                                            selected:
-                                                _selectedCategory ==
-                                                    entry.key &&
-                                                _selectedSubCategory ==
-                                                    subCategory,
-                                            onTap: () {
-                                              setState(() {
-                                                if (_selectedCategory ==
-                                                        entry.key &&
-                                                    _selectedSubCategory ==
-                                                        subCategory) {
-                                                  _selectedSubCategory = null;
-                                                } else {
-                                                  _selectedCategory = entry.key;
-                                                  _selectedSubCategory =
-                                                      subCategory;
-                                                }
-                                              });
-                                            },
-                                          ),
-                                        )
-                                        .toList(),
+                                children: [
+                                  _DirectoryFilterChip(
+                                    label: 'All in ${entry.key}',
+                                    icon: Icons.category_rounded,
+                                    selected:
+                                        _selectedCategory == entry.key &&
+                                        _selectedSubCategory == null,
+                                    onTap: () {
+                                      setState(() {
+                                        if (_selectedCategory == entry.key &&
+                                            _selectedSubCategory == null) {
+                                          _selectedCategory = null;
+                                        } else {
+                                          _selectedCategory = entry.key;
+                                          _selectedSubCategory = null;
+                                        }
+                                      });
+                                    },
+                                  ),
+                                  ...(entry.value.toList()..sort(
+                                        (left, right) => left
+                                            .toLowerCase()
+                                            .compareTo(right.toLowerCase()),
+                                      ))
+                                      .map(
+                                        (subCategory) => _DirectoryFilterChip(
+                                          label: subCategory,
+                                          icon: Icons.subdirectory_arrow_right,
+                                          selected:
+                                              _selectedCategory == entry.key &&
+                                              _selectedSubCategory ==
+                                                  subCategory,
+                                          onTap: () {
+                                            setState(() {
+                                              if (_selectedCategory ==
+                                                      entry.key &&
+                                                  _selectedSubCategory ==
+                                                      subCategory) {
+                                                _selectedSubCategory = null;
+                                              } else {
+                                                _selectedCategory = entry.key;
+                                                _selectedSubCategory =
+                                                    subCategory;
+                                              }
+                                            });
+                                          },
+                                        ),
+                                      ),
+                                ],
                               ),
-                            ] else ...[
-                              const SizedBox(height: 8),
+                            ),
+                            if (entry.value.isEmpty) ...[
+                              const SizedBox(height: 10),
                               const Text(
                                 'No sub category added yet.',
                                 style: TextStyle(
@@ -590,7 +2779,6 @@ class _VendorArenaPanelState extends ConsumerState<VendorArenaPanel> {
                           ],
                         ),
                       ),
-                    ],
                   ],
                 ),
               ),
@@ -611,6 +2799,203 @@ class _VendorArenaPanelState extends ConsumerState<VendorArenaPanel> {
                   child: _VendorDirectoryCard(vendor: vendor),
                 ),
               ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildAdminVendorArena() {
+    if (widget.section == VendorArenaSection.category ||
+        widget.section == VendorArenaSection.subCategory) {
+      final taxonomyAsync = ref.watch(vendorTaxonomyProvider);
+      final vendorsAsync = ref.watch(vendorDirectoryProvider);
+      return taxonomyAsync.when(
+        loading: () => const _LoadingState(),
+        error:
+            (error, _) => _ErrorState(
+              title: 'Could not load vendor taxonomy',
+              message: error.toString(),
+              onRetry: _refresh,
+            ),
+        data: (categories) {
+          return vendorsAsync.when(
+            loading: () => const _LoadingState(),
+            error:
+                (error, _) => _ErrorState(
+                  title: 'Could not load vendors',
+                  message: error.toString(),
+                  onRetry: _refresh,
+                ),
+            data: (vendors) {
+              VendorTaxonomyCategoryItem? selectedCategory;
+              for (final item in categories) {
+                if (item.id == _selectedTaxonomyCategoryId) {
+                  selectedCategory = item;
+                  break;
+                }
+              }
+              selectedCategory ??=
+                  categories.isNotEmpty ? categories.first : null;
+              final effectiveSelectedCategory = selectedCategory;
+              if (effectiveSelectedCategory != null &&
+                  _selectedTaxonomyCategoryId != effectiveSelectedCategory.id) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) {
+                    setState(() {
+                      _selectedTaxonomyCategoryId =
+                          effectiveSelectedCategory.id;
+                    });
+                  }
+                });
+              }
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: _refresh,
+                      icon: const Icon(Icons.refresh_rounded),
+                      label: const Text('Refresh'),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  _VendorAdminSectionView(
+                    currentLabel: widget.section.label,
+                    onNavigateToVendorArena:
+                        () => widget.onSectionSelected(
+                          VendorArenaNavigation.defaultSection(
+                            widget.viewerRole,
+                          ),
+                        ),
+                    child:
+                        widget.section == VendorArenaSection.category
+                            ? _VendorCategoryAdminWorkspace(
+                              categories: categories,
+                              vendors: vendors,
+                              savingKey: _savingTaxonomyKey,
+                              onAddCategory: () => _openCategoryDialog(),
+                              onEditCategory:
+                                  (category) =>
+                                      _openCategoryDialog(category: category),
+                              onDeleteCategory: _deleteCategory,
+                            )
+                            : _VendorSubCategoryAdminWorkspace(
+                              categories: categories,
+                              vendors: vendors,
+                              selectedCategoryId: effectiveSelectedCategory?.id,
+                              savingKey: _savingTaxonomyKey,
+                              onSelectCategory:
+                                  (categoryId) => setState(
+                                    () =>
+                                        _selectedTaxonomyCategoryId =
+                                            categoryId,
+                                  ),
+                              onAddSubCategory:
+                                  () => _openSubCategoryDialog(
+                                    categories,
+                                    initialCategory: effectiveSelectedCategory,
+                                  ),
+                              onEditSubCategory:
+                                  (category, subCategory) =>
+                                      _openSubCategoryDialog(
+                                        categories,
+                                        initialCategory: category,
+                                        subCategory: subCategory,
+                                      ),
+                              onDeleteSubCategory: _deleteSubCategory,
+                            ),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+    }
+
+    final adminArenaDataAsync = ref.watch(adminArenaDataProvider);
+    final taxonomyAsync = ref.watch(vendorTaxonomyProvider);
+    return adminArenaDataAsync.when(
+      loading: () => const _LoadingState(),
+      error:
+          (error, _) => _ErrorState(
+            title: 'Could not load vendor admin workspace',
+            message: error.toString(),
+            onRetry: _refresh,
+          ),
+      data: (data) {
+        final pendingVendors =
+            data.vendors
+                .where(
+                  (vendor) => vendor.accessStatus == MemberAccessStatus.pending,
+                )
+                .toList();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: _refresh,
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Refresh'),
+              ),
+            ),
+            const SizedBox(height: 8),
+            _VendorAdminSectionView(
+              currentLabel: widget.section.label,
+              onNavigateToVendorArena:
+                  () => widget.onSectionSelected(
+                    VendorArenaNavigation.defaultSection(widget.viewerRole),
+                  ),
+              child: switch (widget.section) {
+                VendorArenaSection.vendor => _buildVendorDirectory(),
+                VendorArenaSection.vendorRegistration => taxonomyAsync.when(
+                  loading: () => const _LoadingState(),
+                  error:
+                      (error, _) => _ErrorState(
+                        title: 'Could not load vendor registration form',
+                        message: error.toString(),
+                        onRetry: _refresh,
+                      ),
+                  data:
+                      (categories) => _AdminVendorRegistrationWorkspace(
+                        pendingCount: pendingVendors.length,
+                        categories: categories,
+                        isSaving: _savingVendorRegistrationId != null,
+                        onAddNew:
+                            () => _openVendorRegistrationDialog(categories),
+                      ),
+                ),
+                VendorArenaSection.vendorStatus => _AdminVendorAccessWorkspace(
+                  title: 'Vendor Status',
+                  subtitle:
+                      'Review and update the current access state for all vendor records.',
+                  emptyTitle: 'No vendors found',
+                  emptySubtitle:
+                      'Vendor status records will appear here once vendors are registered.',
+                  vendors: data.vendors,
+                  updatingVendorId: _updatingVendorId,
+                  reviewingVendorId: _savingVendorApprovalId,
+                  onUpdateVendorAccess: _updateVendorAccess,
+                  onEditVendor: _openVendorApprovalDialog,
+                ),
+                VendorArenaSection.appBanner => _AdminBannerAccessWorkspace(
+                  banners: data.appBanners,
+                  vendors: data.vendors,
+                  updatingBannerId: _updatingBannerId,
+                  isSavingNewBanner: _isSavingNewBanner,
+                  onAddBanner: () => _openAppBannerDialog(data.vendors),
+                  onEditBanner: _openBannerModerationDialog,
+                  onUpdateBannerStatus: _updateBannerStatus,
+                ),
+                _ => const SizedBox.shrink(),
+              },
+            ),
           ],
         );
       },
@@ -848,6 +3233,13 @@ class _EventsArenaPanelState extends ConsumerState<EventsArenaPanel> {
   }
 
   Future<void> _saveEvent(AdminEventDraft draft) async {
+    final validationMessage = draft.validationMessage;
+    if (validationMessage != null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(validationMessage)));
+      return;
+    }
     setState(() {
       _savingEventId = draft.id.isEmpty ? '__new__' : draft.id;
     });
@@ -859,7 +3251,11 @@ class _EventsArenaPanelState extends ConsumerState<EventsArenaPanel> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(draft.id.isEmpty ? 'Event created.' : 'Event updated.'),
+          content: Text(
+            draft.id.isEmpty
+                ? 'Event created and added to the live schedule.'
+                : 'Event changes saved successfully.',
+          ),
         ),
       );
     } catch (error) {
@@ -991,6 +3387,7 @@ class _EventsArenaPanelState extends ConsumerState<EventsArenaPanel> {
           EventsArenaSection.event => _EventsArenaTimelineSection(
             events: data.events,
             eventTypes: data.eventTypes,
+            canManage: widget.viewerRole.isAdmin,
             savingEventId: _savingEventId,
             onSaveEvent: _saveEvent,
             onDeleteEvent: _deleteEvent,
@@ -1095,17 +3492,6 @@ class _DashboardPanelState extends ConsumerState<DashboardPanel> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _DashboardAssociationHeader(associationName: data.associationName),
-            const SizedBox(height: 14),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: _refresh,
-                icon: const Icon(Icons.refresh_rounded),
-                label: const Text('Refresh'),
-              ),
-            ),
-            const SizedBox(height: 8),
             _DashboardAppBannerCarousel(
               items: data.appBanners,
               pageController: _bannerPageController,
@@ -1116,36 +3502,47 @@ class _DashboardPanelState extends ConsumerState<DashboardPanel> {
                 });
               },
             ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                const Text(
-                  'Vendors',
-                  style: TextStyle(
-                    color: Color(0xFF171717),
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const Spacer(),
-                TextButton(
-                  onPressed: widget.onOpenVendorArena,
-                  style: TextButton.styleFrom(
-                    foregroundColor: const Color(0xFF7C3AED),
-                    padding: EdgeInsets.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    minimumSize: const Size(0, 0),
-                  ),
-                  child: const Text(
-                    'See all',
-                    style: TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                ),
-              ],
-            ),
             const SizedBox(height: 10),
-            _DashboardVendorCarousel(vendors: data.featuredVendors),
-            const SizedBox(height: 22),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: _refresh,
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Refresh'),
+              ),
+            ),
+            const SizedBox(height: 16),
+            if (!widget.viewerRole.isVendor) ...[
+              Row(
+                children: [
+                  const Text(
+                    'Vendors',
+                    style: TextStyle(
+                      color: Color(0xFF171717),
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: widget.onOpenVendorArena,
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF7C3AED),
+                      padding: EdgeInsets.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      minimumSize: const Size(0, 0),
+                    ),
+                    child: const Text(
+                      'See all',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              _DashboardVendorCarousel(vendors: data.featuredVendors),
+              const SizedBox(height: 22),
+            ],
             _DashboardCommitteeCarousel(
               members: data.committeeMembers,
               pageController: _committeePageController,
@@ -1207,7 +3604,7 @@ class _DashboardArenaGrid extends StatelessWidget {
       ({String label, IconData icon, List<Color> colors, VoidCallback onTap})
     >[
       (
-        label: 'Association',
+        label: viewerRole.isVendor ? 'Association' : 'Association',
         icon: Icons.apartment_rounded,
         colors: const [Color(0xFF0F2D7A), Color(0xFF1D4ED8)],
         onTap: onOpenAssociationProfile,
@@ -1226,13 +3623,13 @@ class _DashboardArenaGrid extends StatelessWidget {
       ),
       if (!viewerRole.isMember)
         (
-          label: 'Member',
+          label: viewerRole.isVendor ? 'Members' : 'Members',
           icon: Icons.people_alt_rounded,
           colors: const [Color(0xFF065F46), Color(0xFF10B981)],
           onTap: onOpenMemberArena,
         ),
       (
-        label: viewerRole.isVendor ? 'My Vendor' : 'Vendor',
+        label: viewerRole.isVendor ? 'My Vendor' : 'Vendors',
         icon: Icons.storefront_rounded,
         colors: const [Color(0xFF9A3412), Color(0xFFF59E0B)],
         onTap: onOpenVendorArena,
@@ -1250,7 +3647,7 @@ class _DashboardArenaGrid extends StatelessWidget {
         onTap: onOpenTimeline,
       ),
       (
-        label: 'Profile',
+        label: viewerRole.isVendor ? 'Account' : 'Profile',
         icon: Icons.person_rounded,
         colors: const [Color(0xFF374151), Color(0xFF111827)],
         onTap: onOpenProfile,
@@ -1407,112 +3804,1103 @@ class _DashboardArenaCard extends StatelessWidget {
   }
 }
 
-class _DashboardAssociationHeader extends StatelessWidget {
-  const _DashboardAssociationHeader({required this.associationName});
+class _VendorCategoryAdminWorkspace extends StatelessWidget {
+  const _VendorCategoryAdminWorkspace({
+    required this.categories,
+    required this.vendors,
+    required this.savingKey,
+    required this.onAddCategory,
+    required this.onEditCategory,
+    required this.onDeleteCategory,
+  });
 
-  final String associationName;
+  final List<VendorTaxonomyCategoryItem> categories;
+  final List<DashboardVendorItem> vendors;
+  final String? savingKey;
+  final VoidCallback onAddCategory;
+  final ValueChanged<VendorTaxonomyCategoryItem> onEditCategory;
+  final ValueChanged<VendorTaxonomyCategoryItem> onDeleteCategory;
+
+  int _vendorCountForCategory(String categoryName) {
+    return vendors.where((vendor) {
+      return vendor.category.trim().toLowerCase() == categoryName.toLowerCase();
+    }).length;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final resolvedAssociationName =
-        associationName.trim().isEmpty ? 'NIMA' : associationName.trim();
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Colors.white, Color(0xFFFFF2F2)],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Expanded(
+              child: _SectionHeader(
+                title: 'Category',
+                subtitle:
+                    'Create, rename, and remove the vendor categories used across the admin and registration flows.',
+              ),
+            ),
+            const SizedBox(width: 12),
+            FilledButton.icon(
+              onPressed: savingKey == '__new_category__' ? null : onAddCategory,
+              icon:
+                  savingKey == '__new_category__'
+                      ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                      : const Icon(Icons.add_rounded),
+              label: const Text('Add category'),
+            ),
+          ],
         ),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFF0DCDD)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x12000000),
-            blurRadius: 18,
-            offset: Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          const _NimaBrandLockup(wordmarkWidth: 190, compact: true),
-          const SizedBox(height: 14),
-          Text(
-            resolvedAssociationName,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: _nimaInk,
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              height: 1.2,
-            ),
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            'Official member dashboard',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: _nimaMuted,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
+        const SizedBox(height: 14),
+        if (categories.isEmpty)
+          const _EmptyStateCard(
+            title: 'No categories found',
+            subtitle:
+                'Add the first vendor category here and it will become available in the vendor registration flow.',
+          )
+        else
+          ...categories.map((category) {
+            final vendorCount = _vendorCountForCategory(category.name);
+            final isSaving = savingKey == category.id;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 14),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: const Color(0xFFE5E7EB)),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x0A0F172A),
+                      blurRadius: 18,
+                      offset: Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                category.name,
+                                style: const TextStyle(
+                                  color: Color(0xFF171717),
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                '${category.subCategories.length} sub-categories linked',
+                                style: const TextStyle(
+                                  color: Color(0xFF6B7280),
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: Text(
+                            '$vendorCount vendors',
+                            style: const TextStyle(
+                              color: Color(0xFF475569),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (category.subCategories.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children:
+                            category.subCategories
+                                .map(
+                                  (item) => _DirectoryFilterChip(
+                                    label: item.name,
+                                    icon: Icons.subdirectory_arrow_right,
+                                    selected: false,
+                                    onTap: () {},
+                                  ),
+                                )
+                                .toList(),
+                      ),
+                    ],
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed:
+                              isSaving ? null : () => onEditCategory(category),
+                          icon:
+                              isSaving
+                                  ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                  : const Icon(Icons.edit_outlined),
+                          label: const Text('Edit'),
+                        ),
+                        const SizedBox(width: 10),
+                        OutlinedButton.icon(
+                          onPressed:
+                              isSaving
+                                  ? null
+                                  : () => onDeleteCategory(category),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFFDC2626),
+                          ),
+                          icon: const Icon(Icons.delete_outline_rounded),
+                          label: const Text('Delete'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
+      ],
     );
   }
 }
 
-class TimelinePanel extends ConsumerWidget {
-  const TimelinePanel({super.key});
+class _VendorSubCategoryAdminWorkspace extends StatelessWidget {
+  const _VendorSubCategoryAdminWorkspace({
+    required this.categories,
+    required this.vendors,
+    required this.selectedCategoryId,
+    required this.savingKey,
+    required this.onSelectCategory,
+    required this.onAddSubCategory,
+    required this.onEditSubCategory,
+    required this.onDeleteSubCategory,
+  });
+
+  final List<VendorTaxonomyCategoryItem> categories;
+  final List<DashboardVendorItem> vendors;
+  final String? selectedCategoryId;
+  final String? savingKey;
+  final ValueChanged<String?> onSelectCategory;
+  final VoidCallback onAddSubCategory;
+  final void Function(
+    VendorTaxonomyCategoryItem category,
+    VendorTaxonomySubCategoryItem subCategory,
+  )
+  onEditSubCategory;
+  final void Function(
+    VendorTaxonomyCategoryItem category,
+    VendorTaxonomySubCategoryItem subCategory,
+  )
+  onDeleteSubCategory;
+
+  int _vendorCountForSubCategory(String categoryName, String subCategoryName) {
+    return vendors.where((vendor) {
+      return vendor.category.trim().toLowerCase() ==
+              categoryName.toLowerCase() &&
+          vendor.vendorType.trim().toLowerCase() ==
+              subCategoryName.toLowerCase();
+    }).length;
+  }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final dashboardDataAsync = ref.watch(dashboardDataProvider);
+  Widget build(BuildContext context) {
+    VendorTaxonomyCategoryItem? selectedCategory;
+    for (final category in categories) {
+      if (category.id == selectedCategoryId) {
+        selectedCategory = category;
+        break;
+      }
+    }
+    selectedCategory ??= categories.isNotEmpty ? categories.first : null;
 
-    Future<void> refresh() async {
-      ref.invalidate(dashboardDataProvider);
-      await ref.read(dashboardDataProvider.future);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Expanded(
+              child: _SectionHeader(
+                title: 'Sub-category',
+                subtitle:
+                    'Choose a parent category, then maintain the linked sub-categories used by vendor registration.',
+              ),
+            ),
+            const SizedBox(width: 12),
+            FilledButton.icon(
+              onPressed:
+                  categories.isEmpty || savingKey == '__new_sub_category__'
+                      ? null
+                      : onAddSubCategory,
+              icon:
+                  savingKey == '__new_sub_category__'
+                      ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                      : const Icon(Icons.add_rounded),
+              label: const Text('Add sub-category'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        if (categories.isEmpty)
+          const _EmptyStateCard(
+            title: 'No categories available yet',
+            subtitle:
+                'Create a category first, then you can attach sub-categories to it here.',
+          )
+        else ...[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: const Color(0xFFE5E7EB)),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x0A0F172A),
+                  blurRadius: 18,
+                  offset: Offset(0, 10),
+                ),
+              ],
+            ),
+            child: DropdownButtonFormField<String>(
+              value: selectedCategory?.id,
+              decoration: const InputDecoration(
+                labelText: 'Parent category',
+                border: OutlineInputBorder(),
+              ),
+              items:
+                  categories
+                      .map(
+                        (category) => DropdownMenuItem<String>(
+                          value: category.id,
+                          child: Text(category.name),
+                        ),
+                      )
+                      .toList(),
+              onChanged: onSelectCategory,
+            ),
+          ),
+          const SizedBox(height: 14),
+          if (selectedCategory == null ||
+              selectedCategory.subCategories.isEmpty)
+            _EmptyStateCard(
+              title: 'No sub-categories found',
+              subtitle:
+                  selectedCategory == null
+                      ? 'Select a category to manage its sub-categories.'
+                      : 'Add the first sub-category under ${selectedCategory.name}.',
+            )
+          else
+            ...selectedCategory.subCategories.map((subCategory) {
+              final isSaving = savingKey == subCategory.id;
+              final vendorCount = _vendorCountForSubCategory(
+                selectedCategory!.name,
+                subCategory.name,
+              );
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 14),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: const Color(0xFFE5E7EB)),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x0A0F172A),
+                        blurRadius: 18,
+                        offset: Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  subCategory.name,
+                                  style: const TextStyle(
+                                    color: Color(0xFF171717),
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  selectedCategory.name,
+                                  style: const TextStyle(
+                                    color: Color(0xFF6B7280),
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(
+                                color: const Color(0xFFE2E8F0),
+                              ),
+                            ),
+                            child: Text(
+                              '$vendorCount vendors',
+                              style: const TextStyle(
+                                color: Color(0xFF475569),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed:
+                                isSaving
+                                    ? null
+                                    : () => onEditSubCategory(
+                                      selectedCategory!,
+                                      subCategory,
+                                    ),
+                            icon:
+                                isSaving
+                                    ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                    : const Icon(Icons.edit_outlined),
+                            label: const Text('Edit'),
+                          ),
+                          const SizedBox(width: 10),
+                          OutlinedButton.icon(
+                            onPressed:
+                                isSaving
+                                    ? null
+                                    : () => onDeleteSubCategory(
+                                      selectedCategory!,
+                                      subCategory,
+                                    ),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFFDC2626),
+                            ),
+                            icon: const Icon(Icons.delete_outline_rounded),
+                            label: const Text('Delete'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+        ],
+      ],
+    );
+  }
+}
+
+class TimelinePanel extends ConsumerStatefulWidget {
+  const TimelinePanel({super.key, required this.viewerRole});
+
+  final AppViewerRole viewerRole;
+
+  @override
+  ConsumerState<TimelinePanel> createState() => _TimelinePanelState();
+}
+
+class _TimelinePanelState extends ConsumerState<TimelinePanel> {
+  final TextEditingController _searchController = TextEditingController();
+  String _query = '';
+  String? _selectedSourceType;
+  bool _isSavingTimeline = false;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _refresh() async {
+    ref.invalidate(dashboardDataProvider);
+    if (widget.viewerRole.isAdmin) {
+      ref.invalidate(adminArenaDataProvider);
+      await Future.wait([
+        ref.read(dashboardDataProvider.future),
+        ref.read(adminArenaDataProvider.future),
+      ]);
+      return;
+    }
+    await ref.read(dashboardDataProvider.future);
+  }
+
+  Widget _dialogTextField({
+    required String label,
+    required String initialValue,
+    required ValueChanged<String> onChanged,
+    int maxLines = 1,
+    TextInputType? keyboardType,
+  }) {
+    return _StableTextFormField(
+      value: initialValue,
+      label: label,
+      keyboardType: keyboardType,
+      minLines: maxLines > 1 ? maxLines : 1,
+      maxLines: maxLines,
+      onChanged: onChanged,
+    );
+  }
+
+  Future<void> _openTimelineComposer({
+    required List<AdminMemberAccessItem> members,
+    required List<AdminVendorAccessItem> vendors,
+    required TenantContext? tenant,
+    MemberDirectoryItem? lockedMember,
+    DashboardVendorItem? lockedVendor,
+  }) async {
+    final isMemberLocked = lockedMember != null;
+    final isVendorLocked = lockedVendor != null;
+    var draft =
+        isMemberLocked
+            ? AdminTimelineDraft.empty().copyWith(
+              sourceType: 'MEMBER',
+              memberId: lockedMember.id,
+              postedBy: lockedMember.name,
+              contactNumber: lockedMember.phone,
+            )
+            : isVendorLocked
+            ? AdminTimelineDraft.empty().copyWith(
+              sourceType: 'VENDOR',
+              vendorId: lockedVendor.id,
+              postedBy: lockedVendor.displayName,
+              contactNumber: lockedVendor.phone,
+            )
+            : AdminTimelineDraft.empty().copyWith(
+              postedBy:
+                  tenant?.associationName.trim().isNotEmpty == true
+                      ? tenant!.associationName
+                      : 'Association Admin',
+            );
+    String? validationMessage;
+
+    Future<AssociationUploadFile?> pickFile({
+      required FileType type,
+      List<String>? allowedExtensions,
+    }) async {
+      final result = await FilePicker.platform.pickFiles(
+        allowMultiple: false,
+        type: type,
+        allowedExtensions: allowedExtensions,
+        withData: true,
+      );
+      final file = result?.files.single;
+      if (file == null || file.bytes == null) {
+        return null;
+      }
+      return AssociationUploadFile.fromPlatformFile(file);
     }
 
-    return dashboardDataAsync.when(
-      loading: () => const _LoadingState(),
-      error:
-          (error, _) => _ErrorState(
-            title: 'Could not load timeline',
-            message: error.toString(),
-            onRetry: refresh,
-          ),
-      data:
-          (data) => Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton.icon(
-                  onPressed: refresh,
-                  icon: const Icon(Icons.refresh_rounded),
-                  label: const Text('Refresh'),
+    final result = await showDialog<AdminTimelineDraft>(
+      context: context,
+      builder:
+          (context) => StatefulBuilder(
+            builder: (context, setDialogState) {
+              void updateDraft(AdminTimelineDraft nextDraft) {
+                setDialogState(() {
+                  draft = nextDraft;
+                  validationMessage = null;
+                });
+              }
+
+              final sourceType =
+                  isMemberLocked
+                      ? 'MEMBER'
+                      : isVendorLocked
+                      ? 'VENDOR'
+                      : draft.sourceType.trim().toUpperCase();
+
+              return AlertDialog(
+                title: Text(
+                  isMemberLocked
+                      ? 'Add Member Timeline Post'
+                      : isVendorLocked
+                      ? 'Add Vendor Timeline Post'
+                      : 'Add New Timeline Post',
                 ),
+                content: SizedBox(
+                  width: 620,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (!isMemberLocked && !isVendorLocked)
+                          DropdownButtonFormField<String>(
+                            value: sourceType,
+                            decoration: const InputDecoration(
+                              labelText: 'Source Type',
+                              border: OutlineInputBorder(),
+                            ),
+                            items: const [
+                              DropdownMenuItem(
+                                value: 'ASSOCIATION',
+                                child: Text('Association'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'MEMBER',
+                                child: Text('Member'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'VENDOR',
+                                child: Text('Vendor'),
+                              ),
+                            ],
+                            onChanged: (value) {
+                              if (value == null) return;
+                              updateDraft(
+                                draft.copyWith(
+                                  sourceType: value,
+                                  memberId:
+                                      value == 'MEMBER' ? draft.memberId : '',
+                                  vendorId:
+                                      value == 'VENDOR' ? draft.vendorId : '',
+                                ),
+                              );
+                            },
+                          ),
+                        if (isMemberLocked || isVendorLocked) ...[
+                          InputDecorator(
+                            decoration: const InputDecoration(
+                              labelText: 'Posting Profile',
+                              border: OutlineInputBorder(),
+                            ),
+                            child: Text(
+                              isMemberLocked
+                                  ? lockedMember.name
+                                  : lockedVendor!.displayName,
+                            ),
+                          ),
+                        ] else if (sourceType == 'MEMBER') ...[
+                          const SizedBox(height: 12),
+                          DropdownButtonFormField<String>(
+                            value:
+                                draft.memberId.isNotEmpty
+                                    ? draft.memberId
+                                    : null,
+                            decoration: const InputDecoration(
+                              labelText: 'Member *',
+                              border: OutlineInputBorder(),
+                            ),
+                            items:
+                                members
+                                    .map(
+                                      (member) => DropdownMenuItem<String>(
+                                        value: member.id,
+                                        child: Text(member.name),
+                                      ),
+                                    )
+                                    .toList(),
+                            onChanged: (value) {
+                              updateDraft(
+                                draft.copyWith(memberId: value ?? ''),
+                              );
+                            },
+                          ),
+                        ],
+                        if (sourceType == 'VENDOR') ...[
+                          const SizedBox(height: 12),
+                          DropdownButtonFormField<String>(
+                            value:
+                                draft.vendorId.isNotEmpty
+                                    ? draft.vendorId
+                                    : null,
+                            decoration: const InputDecoration(
+                              labelText: 'Vendor *',
+                              border: OutlineInputBorder(),
+                            ),
+                            items:
+                                vendors
+                                    .map(
+                                      (vendor) => DropdownMenuItem<String>(
+                                        value: vendor.id,
+                                        child: Text(vendor.displayName),
+                                      ),
+                                    )
+                                    .toList(),
+                            onChanged: (value) {
+                              updateDraft(
+                                draft.copyWith(vendorId: value ?? ''),
+                              );
+                            },
+                          ),
+                        ],
+                        if (!isMemberLocked && !isVendorLocked) ...[
+                          const SizedBox(height: 12),
+                          _dialogTextField(
+                            label: 'Posted By',
+                            initialValue: draft.postedBy,
+                            onChanged:
+                                (value) => updateDraft(
+                                  draft.copyWith(postedBy: value),
+                                ),
+                          ),
+                        ],
+                        const SizedBox(height: 12),
+                        _dialogTextField(
+                          label: 'Caption *',
+                          initialValue: draft.caption,
+                          maxLines: 4,
+                          onChanged:
+                              (value) =>
+                                  updateDraft(draft.copyWith(caption: value)),
+                        ),
+                        const SizedBox(height: 12),
+                        _dialogTextField(
+                          label: 'Contact Number',
+                          initialValue: draft.contactNumber,
+                          keyboardType: TextInputType.phone,
+                          onChanged:
+                              (value) => updateDraft(
+                                draft.copyWith(contactNumber: value),
+                              ),
+                        ),
+                        const SizedBox(height: 12),
+                        _dialogTextField(
+                          label: 'Landing Page URL',
+                          initialValue: draft.landingPageUrl,
+                          onChanged:
+                              (value) => updateDraft(
+                                draft.copyWith(landingPageUrl: value),
+                              ),
+                        ),
+                        const SizedBox(height: 12),
+                        _dialogTextField(
+                          label: 'YouTube URL',
+                          initialValue: draft.youtubeUrl,
+                          onChanged:
+                              (value) => updateDraft(
+                                draft.copyWith(youtubeUrl: value),
+                              ),
+                        ),
+                        const SizedBox(height: 12),
+                        _dialogTextField(
+                          label: 'Facebook URL',
+                          initialValue: draft.facebookUrl,
+                          onChanged:
+                              (value) => updateDraft(
+                                draft.copyWith(facebookUrl: value),
+                              ),
+                        ),
+                        const SizedBox(height: 14),
+                        _AdminFileTile(
+                          label: 'Post Image',
+                          fileName: draft.imageFile?.name ?? '',
+                          helperText: 'Optional image for the timeline card.',
+                          buttonLabel:
+                              draft.imageFile == null
+                                  ? 'Upload image'
+                                  : 'Replace image',
+                          onPressed: () async {
+                            final file = await pickFile(type: FileType.image);
+                            if (file == null) return;
+                            updateDraft(draft.copyWith(imageFile: file));
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        _AdminFileTile(
+                          label: 'PDF Brochure',
+                          fileName: draft.brochureFile?.name ?? '',
+                          helperText: 'Optional brochure for downloads.',
+                          buttonLabel:
+                              draft.brochureFile == null
+                                  ? 'Upload brochure'
+                                  : 'Replace brochure',
+                          onPressed: () async {
+                            final file = await pickFile(
+                              type: FileType.custom,
+                              allowedExtensions: const ['pdf'],
+                            );
+                            if (file == null) return;
+                            updateDraft(draft.copyWith(brochureFile: file));
+                          },
+                        ),
+                        if (validationMessage != null) ...[
+                          const SizedBox(height: 12),
+                          Text(
+                            validationMessage!,
+                            style: const TextStyle(
+                              color: Color(0xFFDC2626),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed: () {
+                      final error = draft.validationMessage;
+                      if (error != null) {
+                        setDialogState(() {
+                          validationMessage = error;
+                        });
+                        return;
+                      }
+                      Navigator.of(context).pop(draft);
+                    },
+                    child: const Text('Create'),
+                  ),
+                ],
+              );
+            },
+          ),
+    );
+
+    if (!mounted || result == null) {
+      return;
+    }
+
+    setState(() {
+      _isSavingTimeline = true;
+    });
+    try {
+      await ref.read(apiClientProvider).createTimelinePost(draft: result);
+      if (!mounted) return;
+      await _refresh();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Timeline post created.')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to create timeline post: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSavingTimeline = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dashboardDataAsync = ref.watch(dashboardDataProvider);
+    final memberDataAsync =
+        widget.viewerRole.isMember
+            ? ref.watch(memberArenaDataProvider(widget.viewerRole))
+            : null;
+    final vendorDataAsync =
+        widget.viewerRole.isVendor ? ref.watch(vendorDirectoryProvider) : null;
+    final adminDataAsync =
+        widget.viewerRole.isAdmin ? ref.watch(adminArenaDataProvider) : null;
+    final tenant = ref.watch(tenantProvider).valueOrNull;
+    final session = ref.watch(sessionProvider);
+
+    if (dashboardDataAsync.isLoading ||
+        (widget.viewerRole.isMember && (memberDataAsync?.isLoading ?? false)) ||
+        (widget.viewerRole.isVendor && (vendorDataAsync?.isLoading ?? false)) ||
+        (widget.viewerRole.isAdmin && (adminDataAsync?.isLoading ?? false))) {
+      return const _LoadingState();
+    }
+
+    if (dashboardDataAsync.hasError) {
+      return _ErrorState(
+        title: 'Could not load timeline',
+        message: dashboardDataAsync.error.toString(),
+        onRetry: _refresh,
+      );
+    }
+
+    if (widget.viewerRole.isMember && (memberDataAsync?.hasError ?? false)) {
+      return _ErrorState(
+        title: 'Could not load timeline',
+        message: memberDataAsync!.error.toString(),
+        onRetry: _refresh,
+      );
+    }
+
+    if (widget.viewerRole.isVendor && (vendorDataAsync?.hasError ?? false)) {
+      return _ErrorState(
+        title: 'Could not load timeline',
+        message: vendorDataAsync!.error.toString(),
+        onRetry: _refresh,
+      );
+    }
+
+    if (widget.viewerRole.isAdmin && (adminDataAsync?.hasError ?? false)) {
+      return _ErrorState(
+        title: 'Could not load timeline',
+        message: adminDataAsync!.error.toString(),
+        onRetry: _refresh,
+      );
+    }
+
+    final dashboardData = dashboardDataAsync.requireValue;
+    if (!widget.viewerRole.isAdmin) {
+      MemberDirectoryItem? currentMember;
+      DashboardVendorItem? currentVendor;
+      if (widget.viewerRole.isMember) {
+        final normalizedUsername = session.username.trim().toLowerCase();
+        for (final member in memberDataAsync!.requireValue.members) {
+          if (member.email.trim().toLowerCase() == normalizedUsername) {
+            currentMember = member;
+            break;
+          }
+        }
+      } else if (widget.viewerRole.isVendor) {
+        final normalizedUsername = session.username.trim().toLowerCase();
+        for (final vendor in vendorDataAsync!.requireValue) {
+          if (vendor.email.trim().toLowerCase() == normalizedUsername) {
+            currentVendor = vendor;
+            break;
+          }
+        }
+      }
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              if (widget.viewerRole.isMember || widget.viewerRole.isVendor) ...[
+                FilledButton.icon(
+                  onPressed:
+                      _isSavingTimeline ||
+                              (widget.viewerRole.isMember &&
+                                  currentMember == null) ||
+                              (widget.viewerRole.isVendor &&
+                                  currentVendor == null)
+                          ? null
+                          : () => _openTimelineComposer(
+                            members: const [],
+                            vendors: const [],
+                            tenant: tenant,
+                            lockedMember: currentMember,
+                            lockedVendor: currentVendor,
+                          ),
+                  icon:
+                      _isSavingTimeline
+                          ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                          : const Icon(Icons.add_circle_outline_rounded),
+                  label: const Text('Add New'),
+                ),
+                const SizedBox(width: 10),
+              ],
+              TextButton.icon(
+                onPressed: _refresh,
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Refresh'),
               ),
-              const SizedBox(height: 8),
-              _TimelineStackFeed(posts: data.timelinePosts),
             ],
           ),
+          if (widget.viewerRole.isMember && currentMember == null) ...[
+            const SizedBox(height: 12),
+            const _EmptyStateCard(
+              title: 'Member profile not linked',
+              subtitle:
+                  'We could not match this login to a member record for timeline posting yet.',
+            ),
+          ] else if (widget.viewerRole.isVendor && currentVendor == null) ...[
+            const SizedBox(height: 12),
+            const _EmptyStateCard(
+              title: 'Vendor profile not linked',
+              subtitle:
+                  'We could not match this login to a vendor record for timeline posting yet.',
+            ),
+          ],
+          const SizedBox(height: 8),
+          _TimelineStackFeed(posts: dashboardData.timelinePosts),
+        ],
+      );
+    }
+
+    final adminData = adminDataAsync!.requireValue;
+    final filteredPosts =
+        adminData.timelinePosts.where((post) {
+            final sourceType = post.sourceType.trim().toUpperCase();
+            if (_selectedSourceType != null &&
+                sourceType != _selectedSourceType) {
+              return false;
+            }
+            final normalizedQuery = _query.trim().toLowerCase();
+            if (normalizedQuery.isEmpty) {
+              return true;
+            }
+            return [
+              post.sourceType,
+              post.sourceName,
+              post.postedBy,
+              post.caption,
+              post.contactNumber,
+            ].any(
+              (value) => value.trim().toLowerCase().contains(normalizedQuery),
+            );
+          }).toList()
+          ..sort((left, right) => right.createdAt.compareTo(left.createdAt));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Expanded(
+              child: _SectionHeader(
+                title: 'Timeline',
+                subtitle:
+                    'Browse all association, member, and vendor posts in one place, then add a new post when needed.',
+              ),
+            ),
+            const SizedBox(width: 12),
+            FilledButton.icon(
+              onPressed:
+                  _isSavingTimeline
+                      ? null
+                      : () => _openTimelineComposer(
+                        members: adminData.members,
+                        vendors: adminData.vendors,
+                        tenant: tenant,
+                      ),
+              icon:
+                  _isSavingTimeline
+                      ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                      : const Icon(Icons.add_circle_outline_rounded),
+              label: const Text('Add New'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        _AdminToolbarSearch(
+          controller: _searchController,
+          hintText: 'Search source, posted by, or caption...',
+          onChanged: (value) => setState(() => _query = value),
+        ),
+        const SizedBox(height: 12),
+        _AdminToolbarDropdown<String?>(
+          value: _selectedSourceType,
+          icon: Icons.tune_rounded,
+          labelText: 'Timeline source',
+          items: const [
+            DropdownMenuItem<String?>(value: null, child: Text('All')),
+            DropdownMenuItem<String?>(
+              value: 'ASSOCIATION',
+              child: Text('Association'),
+            ),
+            DropdownMenuItem<String?>(value: 'MEMBER', child: Text('Member')),
+            DropdownMenuItem<String?>(value: 'VENDOR', child: Text('Vendor')),
+          ],
+          onChanged: (value) {
+            setState(() {
+              _selectedSourceType = value;
+            });
+          },
+        ),
+        const SizedBox(height: 14),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton.icon(
+            onPressed: _refresh,
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Refresh'),
+          ),
+        ),
+        const SizedBox(height: 8),
+        if (filteredPosts.isEmpty)
+          _EmptyStateCard(
+            title: 'No timeline posts found',
+            subtitle:
+                _query.trim().isNotEmpty || _selectedSourceType != null
+                    ? 'No timeline posts match the current source or search filter.'
+                    : 'Create a timeline post to start filling the feed.',
+          )
+        else
+          ...filteredPosts.map(
+            (post) => Padding(
+              padding: const EdgeInsets.only(bottom: 14),
+              child: _TimelineBrowseCard(post: post),
+            ),
+          ),
+      ],
     );
   }
 }
 
 class _AdminArenaPanelState extends ConsumerState<AdminArenaPanel> {
-  final TextEditingController _searchController = TextEditingController();
-  String _query = '';
   String? _updatingMemberId;
   String? _updatingPostId;
-  String? _updatingVendorId;
   String? _updatingBannerId;
   String? _updatingTimelineId;
+  bool _isSavingNewBanner = false;
   String? _savingEventId;
 
   @override
@@ -1521,12 +4909,6 @@ class _AdminArenaPanelState extends ConsumerState<AdminArenaPanel> {
     if (oldWidget.section != widget.section) {
       setState(() {});
     }
-  }
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
   }
 
   Future<void> _refresh() async {
@@ -1646,42 +5028,6 @@ class _AdminArenaPanelState extends ConsumerState<AdminArenaPanel> {
     }
   }
 
-  Future<void> _updateVendorAccess(
-    AdminVendorAccessItem vendor,
-    MemberAccessStatus status,
-  ) async {
-    setState(() {
-      _updatingVendorId = vendor.id;
-    });
-
-    try {
-      await ref
-          .read(apiClientProvider)
-          .updateVendorAccess(vendorId: vendor.id, status: status);
-      if (!mounted) return;
-      await _refresh();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '${vendor.displayName} marked ${status.label.toLowerCase()}.',
-          ),
-        ),
-      );
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update vendor access: $error')),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _updatingVendorId = null;
-        });
-      }
-    }
-  }
-
   Future<void> _updateBannerStatus(
     AdminAppBannerItem banner,
     BannerReviewStatus status,
@@ -1769,6 +5115,465 @@ class _AdminArenaPanelState extends ConsumerState<AdminArenaPanel> {
     }
   }
 
+  AdminBannerModerationDraft _buildBannerModerationDraft(
+    AdminAppBannerItem banner,
+  ) {
+    return AdminBannerModerationDraft(
+      status: banner.reviewStatus,
+      paymentReceived: banner.paymentReceived,
+      paymentMode: banner.paymentMode,
+      paymentRemarks: banner.paymentRemarks,
+      displayIndex: banner.displayIndex > 0 ? '${banner.displayIndex}' : '',
+      displayStart: banner.displayStart,
+      displayEnd: banner.displayEnd,
+    );
+  }
+
+  Future<void> _openBannerModerationDialog(AdminAppBannerItem banner) async {
+    var draft = _buildBannerModerationDraft(banner);
+    String? validationMessage;
+
+    final result = await showDialog<AdminBannerModerationDraft>(
+      context: context,
+      builder:
+          (context) => StatefulBuilder(
+            builder: (context, setDialogState) {
+              void updateDraft(AdminBannerModerationDraft nextDraft) {
+                setDialogState(() {
+                  draft = nextDraft;
+                  validationMessage = null;
+                });
+              }
+
+              Future<void> submit() async {
+                final error = draft.validationMessage;
+                if (error != null) {
+                  setDialogState(() {
+                    validationMessage = error;
+                  });
+                  return;
+                }
+                Navigator.of(context).pop(draft);
+              }
+
+              return AlertDialog(
+                title: Text(
+                  banner.vendorName.isEmpty
+                      ? 'Review Banner'
+                      : 'Review ${banner.vendorName}',
+                ),
+                content: SizedBox(
+                  width: 560,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        DropdownButtonFormField<BannerReviewStatus>(
+                          value: draft.status,
+                          decoration: const InputDecoration(
+                            labelText: 'Banner status',
+                            border: OutlineInputBorder(),
+                          ),
+                          items:
+                              BannerReviewStatus.values
+                                  .map(
+                                    (status) =>
+                                        DropdownMenuItem<BannerReviewStatus>(
+                                          value: status,
+                                          child: Text(status.label),
+                                        ),
+                                  )
+                                  .toList(),
+                          onChanged: (value) {
+                            if (value == null) return;
+                            updateDraft(draft.copyWith(status: value));
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        SwitchListTile.adaptive(
+                          contentPadding: EdgeInsets.zero,
+                          value: draft.paymentReceived,
+                          title: const Text('Payment received'),
+                          onChanged:
+                              (value) => updateDraft(
+                                draft.copyWith(paymentReceived: value),
+                              ),
+                        ),
+                        const SizedBox(height: 12),
+                        _adminDialogTextField(
+                          label: 'Payment Mode',
+                          initialValue: draft.paymentMode,
+                          onChanged:
+                              (value) => updateDraft(
+                                draft.copyWith(paymentMode: value),
+                              ),
+                        ),
+                        const SizedBox(height: 12),
+                        _adminDialogTextField(
+                          label: 'Payment Remarks',
+                          initialValue: draft.paymentRemarks,
+                          maxLines: 2,
+                          onChanged:
+                              (value) => updateDraft(
+                                draft.copyWith(paymentRemarks: value),
+                              ),
+                        ),
+                        const SizedBox(height: 12),
+                        _adminDialogTextField(
+                          label: 'Banner Slot',
+                          initialValue: draft.displayIndex,
+                          keyboardType: TextInputType.number,
+                          onChanged:
+                              (value) => updateDraft(
+                                draft.copyWith(displayIndex: value),
+                              ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _adminDialogTextField(
+                                label: 'Display Start',
+                                initialValue: draft.displayStart,
+                                onChanged:
+                                    (value) => updateDraft(
+                                      draft.copyWith(displayStart: value),
+                                    ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _adminDialogTextField(
+                                label: 'Display End',
+                                initialValue: draft.displayEnd,
+                                onChanged:
+                                    (value) => updateDraft(
+                                      draft.copyWith(displayEnd: value),
+                                    ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (validationMessage != null) ...[
+                          const SizedBox(height: 12),
+                          Text(
+                            validationMessage!,
+                            style: const TextStyle(
+                              color: Color(0xFFDC2626),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Close'),
+                  ),
+                  FilledButton(onPressed: submit, child: const Text('Save')),
+                ],
+              );
+            },
+          ),
+    );
+
+    if (!mounted || result == null) {
+      return;
+    }
+
+    setState(() {
+      _updatingBannerId = banner.id;
+    });
+    try {
+      await ref
+          .read(apiClientProvider)
+          .updateAppBannerModeration(
+            bannerId: banner.id,
+            status: result.status,
+            paymentReceived: result.paymentReceived,
+            paymentMode: result.paymentMode.trim(),
+            paymentRemarks: result.paymentRemarks.trim(),
+            displayIndex: int.tryParse(result.displayIndex.trim()) ?? 1,
+            displayStart: result.displayStart.trim(),
+            displayEnd: result.displayEnd.trim(),
+          );
+      if (!mounted) return;
+      await _refresh();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${banner.vendorName.isEmpty ? 'Banner' : banner.vendorName} updated.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update banner moderation: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _updatingBannerId = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _openAppBannerDialog(List<AdminVendorAccessItem> vendors) async {
+    if (vendors.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Add at least one vendor before creating a banner.'),
+        ),
+      );
+      return;
+    }
+
+    AdminAppBannerDraft draft = AdminAppBannerDraft.empty().copyWith(
+      vendorId: vendors.first.id,
+      vendorName: vendors.first.displayName,
+      contactNumber: vendors.first.phone,
+    );
+    String? validationMessage;
+
+    Future<AssociationUploadFile?> pickFile({
+      required FileType type,
+      List<String>? allowedExtensions,
+    }) async {
+      final result = await FilePicker.platform.pickFiles(
+        allowMultiple: false,
+        type: type,
+        allowedExtensions: allowedExtensions,
+        withData: true,
+      );
+      final file = result?.files.single;
+      if (file == null || file.bytes == null) {
+        return null;
+      }
+      return AssociationUploadFile.fromPlatformFile(file);
+    }
+
+    final result = await showDialog<AdminAppBannerDraft>(
+      context: context,
+      builder:
+          (context) => StatefulBuilder(
+            builder: (context, setDialogState) {
+              void updateDraft(AdminAppBannerDraft nextDraft) {
+                setDialogState(() {
+                  draft = nextDraft;
+                  validationMessage = null;
+                });
+              }
+
+              return AlertDialog(
+                title: const Text('Add New App Banner'),
+                content: SizedBox(
+                  width: 560,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        DropdownButtonFormField<String>(
+                          value:
+                              draft.vendorId.isNotEmpty ? draft.vendorId : null,
+                          decoration: const InputDecoration(
+                            labelText: 'Vendor *',
+                            border: OutlineInputBorder(),
+                          ),
+                          items:
+                              vendors
+                                  .map(
+                                    (vendor) => DropdownMenuItem<String>(
+                                      value: vendor.id,
+                                      child: Text(vendor.displayName),
+                                    ),
+                                  )
+                                  .toList(),
+                          onChanged: (value) {
+                            if (value == null) return;
+                            final selectedVendor = vendors.firstWhere(
+                              (vendor) => vendor.id == value,
+                              orElse: () => vendors.first,
+                            );
+                            updateDraft(
+                              draft.copyWith(
+                                vendorId: selectedVendor.id,
+                                vendorName: selectedVendor.displayName,
+                                contactNumber: selectedVendor.phone,
+                              ),
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        _adminDialogTextField(
+                          label: 'Short Text *',
+                          initialValue: draft.shortText,
+                          maxLines: 3,
+                          onChanged:
+                              (value) =>
+                                  updateDraft(draft.copyWith(shortText: value)),
+                        ),
+                        const SizedBox(height: 12),
+                        _adminDialogTextField(
+                          label: 'Contact Number',
+                          initialValue: draft.contactNumber,
+                          keyboardType: TextInputType.phone,
+                          onChanged:
+                              (value) => updateDraft(
+                                draft.copyWith(contactNumber: value),
+                              ),
+                        ),
+                        const SizedBox(height: 12),
+                        _adminDialogTextField(
+                          label: 'Social Media URL',
+                          initialValue: draft.socialMediaUrl,
+                          onChanged:
+                              (value) => updateDraft(
+                                draft.copyWith(socialMediaUrl: value),
+                              ),
+                        ),
+                        const SizedBox(height: 14),
+                        _AdminFileTile(
+                          label: 'Banner Image *',
+                          fileName: draft.mediaFile?.name ?? '',
+                          helperText: 'JPG, PNG, or WebP up to 1 MB.',
+                          buttonLabel:
+                              draft.mediaFile == null
+                                  ? 'Upload image'
+                                  : 'Replace image',
+                          onPressed: () async {
+                            final file = await pickFile(type: FileType.image);
+                            if (file == null) return;
+                            if (file.bytes.length > 1024 * 1024) {
+                              setDialogState(() {
+                                validationMessage =
+                                    'Banner image is too large. Keep it at or below 1 MB.';
+                              });
+                              return;
+                            }
+                            updateDraft(draft.copyWith(mediaFile: file));
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        _AdminFileTile(
+                          label: 'Brochure PDF',
+                          fileName: draft.brochureFile?.name ?? '',
+                          helperText: 'Optional PDF brochure up to 2 MB.',
+                          buttonLabel:
+                              draft.brochureFile == null
+                                  ? 'Upload brochure'
+                                  : 'Replace brochure',
+                          onPressed: () async {
+                            final file = await pickFile(
+                              type: FileType.custom,
+                              allowedExtensions: const ['pdf'],
+                            );
+                            if (file == null) return;
+                            if (file.bytes.length > 2 * 1024 * 1024) {
+                              setDialogState(() {
+                                validationMessage =
+                                    'Brochure PDF is too large. Keep it at or below 2 MB.';
+                              });
+                              return;
+                            }
+                            updateDraft(draft.copyWith(brochureFile: file));
+                          },
+                        ),
+                        if (validationMessage != null) ...[
+                          const SizedBox(height: 12),
+                          Text(
+                            validationMessage!,
+                            style: const TextStyle(
+                              color: Color(0xFFDC2626),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed: () {
+                      final error = draft.validationMessage;
+                      if (error != null) {
+                        setDialogState(() {
+                          validationMessage = error;
+                        });
+                        return;
+                      }
+                      Navigator.of(context).pop(draft);
+                    },
+                    child: const Text('Add Banner'),
+                  ),
+                ],
+              );
+            },
+          ),
+    );
+
+    if (!mounted || result == null) {
+      return;
+    }
+
+    setState(() {
+      _isSavingNewBanner = true;
+    });
+    try {
+      await ref.read(apiClientProvider).createAppBanner(draft: result);
+      if (!mounted) return;
+      await _refresh();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${result.vendorName.isEmpty ? 'App banner' : result.vendorName} banner submitted.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to create app banner: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSavingNewBanner = false;
+        });
+      }
+    }
+  }
+
+  Widget _adminDialogTextField({
+    required String label,
+    required String initialValue,
+    required ValueChanged<String> onChanged,
+    TextInputType? keyboardType,
+    int maxLines = 1,
+  }) {
+    return _StableTextFormField(
+      value: initialValue,
+      label: label,
+      keyboardType: keyboardType,
+      maxLines: maxLines,
+      onChanged: onChanged,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final adminArenaDataAsync = ref.watch(adminArenaDataProvider);
@@ -1782,7 +5587,8 @@ class _AdminArenaPanelState extends ConsumerState<AdminArenaPanel> {
             onRetry: _refresh,
           ),
       data: (data) {
-        final normalizedQuery = _query.trim().toLowerCase();
+        final tenant = ref.watch(tenantProvider).valueOrNull;
+        const normalizedQuery = '';
         final filteredMembers =
             data.members.where((member) {
               if (normalizedQuery.isEmpty) {
@@ -1820,21 +5626,6 @@ class _AdminArenaPanelState extends ConsumerState<AdminArenaPanel> {
                 event.summary,
               ].join(' ').toLowerCase().contains(normalizedQuery);
             }).toList();
-        final filteredVendors =
-            data.vendors.where((vendor) {
-              if (normalizedQuery.isEmpty) {
-                return true;
-              }
-              return [
-                vendor.displayName,
-                vendor.contactPerson,
-                vendor.email,
-                vendor.phone,
-                vendor.city,
-                vendor.category,
-                vendor.vendorType,
-              ].join(' ').toLowerCase().contains(normalizedQuery);
-            }).toList();
         final filteredBanners =
             data.appBanners.where((banner) {
               if (normalizedQuery.isEmpty) {
@@ -1862,54 +5653,22 @@ class _AdminArenaPanelState extends ConsumerState<AdminArenaPanel> {
             }).toList();
 
         return _AdminSectionView(
-          tenant: ref.watch(tenantProvider).valueOrNull,
+          tenant: tenant,
           section: widget.section,
           onNavigateToAdminArena:
-              () => widget.onSectionSelected(widget.section),
+              () => widget.onSectionSelected(AdminArenaSection.appAccess),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(22),
-                        border: Border.all(color: const Color(0xFFE5E7EB)),
-                        boxShadow: const [
-                          BoxShadow(
-                            color: Color(0x0A0F172A),
-                            blurRadius: 18,
-                            offset: Offset(0, 10),
-                          ),
-                        ],
-                      ),
-                      child: TextField(
-                        controller: _searchController,
-                        onChanged: (value) => setState(() => _query = value),
-                        decoration: const InputDecoration(
-                          border: InputBorder.none,
-                          icon: Icon(Icons.search_rounded),
-                          hintText:
-                              'Search members, posts, vendors, banners, or events',
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  TextButton.icon(
-                    onPressed: _refresh,
-                    icon: const Icon(Icons.refresh_rounded),
-                    label: const Text('Refresh'),
-                  ),
-                ],
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: _refresh,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Refresh data'),
+                ),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 12),
               _AdminSummaryBanner(
                 memberCount: data.members.length,
                 postCount: data.posts.length,
@@ -1934,19 +5693,21 @@ class _AdminArenaPanelState extends ConsumerState<AdminArenaPanel> {
                     ),
                   ],
                 ),
-                AdminArenaSection.vendorAccess => _AdminVendorAccessWorkspace(
-                  vendors: filteredVendors,
-                  updatingVendorId: _updatingVendorId,
-                  onUpdateVendorAccess: _updateVendorAccess,
-                ),
                 AdminArenaSection.bannerAccess => _AdminBannerAccessWorkspace(
                   banners: filteredBanners,
+                  vendors: data.vendors,
                   updatingBannerId: _updatingBannerId,
+                  isSavingNewBanner: _isSavingNewBanner,
+                  onAddBanner: () => _openAppBannerDialog(data.vendors),
+                  onEditBanner: _openBannerModerationDialog,
                   onUpdateBannerStatus: _updateBannerStatus,
                 ),
                 AdminArenaSection.timelineAccess =>
                   _AdminTimelineAccessWorkspace(
                     posts: filteredTimelinePosts,
+                    members: data.members,
+                    vendors: data.vendors,
+                    tenant: tenant,
                     updatingTimelineId: _updatingTimelineId,
                     onUpdateTimelineStatus: _updateTimelineStatus,
                   ),
@@ -2057,17 +5818,37 @@ class AssociationArenaPanel extends ConsumerStatefulWidget {
 }
 
 class _AssociationArenaPanelState extends ConsumerState<AssociationArenaPanel> {
+  static const List<String> _committeePosts = [
+    'President',
+    'Vice President',
+    'Vice President-Large Scale',
+    'Vice President-Small Scale',
+    'Secretary',
+    'Joint Secretary',
+    'Treasurer',
+    'Application Chairman',
+    'Member',
+  ];
+
   AssociationProfileDraft? _draft;
   AssociationAboutDraft? _aboutDraft;
   AssociationCircularDraft? _circularDraft;
-  MemberMasterDraft? _memberMasterDraft;
   String? _editingMemberMasterId;
   String? _editingCircularId;
-  final Set<String> _selectedGalleryItemIds = <String>{};
+  String _activeGalleryFolderId = '';
   bool _isEditing = false;
   bool _isEditingAbout = false;
   bool _isSaving = false;
   bool _isSavingGallery = false;
+
+  int _committeePostRank(String value) {
+    final index = _committeePosts.indexWhere(
+      (post) => post.toLowerCase() == value.trim().toLowerCase(),
+    );
+    return index == -1 ? _committeePosts.length : index;
+  }
+
+  String _todayDateOnly() => DateTime.now().toIso8601String().substring(0, 10);
 
   Future<void> _refresh() async {
     ref.invalidate(tenantProvider);
@@ -2084,6 +5865,13 @@ class _AssociationArenaPanelState extends ConsumerState<AssociationArenaPanel> {
     if (_draft == null || _isSaving) {
       return;
     }
+    final validationMessage = _draft!.validationMessage;
+    if (validationMessage != null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(validationMessage)));
+      return;
+    }
     setState(() {
       _isSaving = true;
     });
@@ -2098,7 +5886,9 @@ class _AssociationArenaPanelState extends ConsumerState<AssociationArenaPanel> {
         _isEditing = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Association profile saved.')),
+        const SnackBar(
+          content: Text('Association profile updated successfully.'),
+        ),
       );
     } catch (error) {
       if (!mounted) return;
@@ -2114,8 +5904,51 @@ class _AssociationArenaPanelState extends ConsumerState<AssociationArenaPanel> {
     }
   }
 
-  Future<void> _pickGalleryImages(String associationId) async {
+  Future<String?> _promptForGalleryFolderName({
+    required String title,
+    String initialValue = '',
+  }) async {
+    final controller = TextEditingController(text: initialValue);
+    final value = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(title),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'Folder name',
+              hintText: 'Enter a folder name',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () =>
+                  Navigator.of(context).pop(controller.text.trim()),
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+    controller.dispose();
+    return value;
+  }
+
+  Future<void> _createGalleryFolder(String associationId) async {
     if (_isSavingGallery) {
+      return;
+    }
+
+    final folderName = await _promptForGalleryFolderName(
+      title: 'Create Gallery Folder',
+    );
+    if (!mounted || folderName == null || folderName.trim().isEmpty) {
       return;
     }
 
@@ -2143,19 +5976,23 @@ class _AssociationArenaPanelState extends ConsumerState<AssociationArenaPanel> {
     try {
       await ref
           .read(apiClientProvider)
-          .uploadAssociationGalleryImages(
+          .createAssociationGalleryFolder(
             associationId: associationId,
+            name: folderName,
             files: files,
           );
       if (!mounted) return;
       await _refresh();
       if (!mounted) return;
+      setState(() {
+        _activeGalleryFolderId = '';
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             files.length == 1
-                ? 'Gallery image added.'
-                : '${files.length} gallery images added.',
+                ? 'Gallery folder created with 1 photo.'
+                : 'Gallery folder created with ${files.length} photos.',
           ),
         ),
       );
@@ -2173,61 +6010,111 @@ class _AssociationArenaPanelState extends ConsumerState<AssociationArenaPanel> {
     }
   }
 
-  void _toggleGallerySelection(String galleryItemId) {
-    setState(() {
-      if (_selectedGalleryItemIds.contains(galleryItemId)) {
-        _selectedGalleryItemIds.remove(galleryItemId);
-      } else {
-        _selectedGalleryItemIds.add(galleryItemId);
-      }
-    });
-  }
-
-  void _clearGallerySelection() {
-    setState(() {
-      _selectedGalleryItemIds.clear();
-    });
-  }
-
-  Future<void> _deleteSelectedGalleryItems(String associationId) async {
-    if (_selectedGalleryItemIds.isEmpty || _isSavingGallery) {
+  Future<void> _renameGalleryFolder(
+    String associationId,
+    AssociationGalleryFolder folder,
+  ) async {
+    final nextName = await _promptForGalleryFolderName(
+      title: 'Rename Gallery Folder',
+      initialValue: folder.name,
+    );
+    if (!mounted || nextName == null || nextName.trim().isEmpty) {
       return;
     }
-
-    final idsToDelete = _selectedGalleryItemIds.toList(growable: false);
 
     setState(() {
       _isSavingGallery = true;
     });
 
     try {
-      for (final galleryItemId in idsToDelete) {
-        await ref
-            .read(apiClientProvider)
-            .deleteAssociationGalleryItem(
-              associationId: associationId,
-              galleryItemId: galleryItemId,
-            );
+      await ref.read(apiClientProvider).renameAssociationGalleryFolder(
+        associationId: associationId,
+        folderId: folder.id,
+        name: nextName,
+      );
+      if (!mounted) return;
+      await _refresh();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Gallery folder renamed.')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to rename gallery folder: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSavingGallery = false;
+        });
       }
+    }
+  }
+
+  Future<void> _deleteGalleryFolder(
+    String associationId,
+    AssociationGalleryFolder folder,
+  ) async {
+    setState(() {
+      _isSavingGallery = true;
+    });
+
+    try {
+      await ref.read(apiClientProvider).deleteAssociationGalleryFolder(
+        associationId: associationId,
+        folderId: folder.id,
+      );
       if (!mounted) return;
       await _refresh();
       if (!mounted) return;
       setState(() {
-        _selectedGalleryItemIds.clear();
+        if (_activeGalleryFolderId == folder.id) {
+          _activeGalleryFolderId = '';
+        }
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            idsToDelete.length == 1
-                ? 'Gallery image deleted.'
-                : '${idsToDelete.length} gallery images deleted.',
-          ),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Gallery folder deleted.')));
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to delete gallery images: $error')),
+        SnackBar(content: Text('Failed to delete gallery folder: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSavingGallery = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _deleteGalleryPhoto(
+    String associationId,
+    String folderId,
+    String photoId,
+  ) async {
+    setState(() {
+      _isSavingGallery = true;
+    });
+
+    try {
+      await ref.read(apiClientProvider).deleteAssociationGalleryFolderPhoto(
+        associationId: associationId,
+        folderId: folderId,
+        photoId: photoId,
+      );
+      if (!mounted) return;
+      await _refresh();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Gallery photo deleted.')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to delete gallery photo: $error')),
       );
     } finally {
       if (mounted) {
@@ -2438,25 +6325,28 @@ class _AssociationArenaPanelState extends ConsumerState<AssociationArenaPanel> {
     }
   }
 
-  void _openMemberMasterEditor([MemberDirectoryItem? member]) {
+  Future<void> _openMemberMasterEditor([MemberDirectoryItem? member]) async {
     setState(() {
       _editingMemberMasterId = member?.id ?? '';
-      _memberMasterDraft =
-          member == null
-              ? const MemberMasterDraft.empty()
-              : MemberMasterDraft.fromMember(member);
     });
-  }
 
-  void _closeMemberMasterEditor() {
+    final result = await showDialog<MemberMasterDraft>(
+      context: context,
+      builder:
+          (dialogContext) => _MemberMasterDialog(
+            initialDraft:
+                member == null
+                    ? const MemberMasterDraft.empty()
+                    : MemberMasterDraft.fromMember(member),
+          ),
+    );
+
+    if (!mounted) return;
     setState(() {
       _editingMemberMasterId = null;
-      _memberMasterDraft = null;
     });
-  }
 
-  Future<void> _saveMemberMaster() async {
-    if (_memberMasterDraft == null || _isSaving) {
+    if (result == null || _isSaving) {
       return;
     }
 
@@ -2465,19 +6355,14 @@ class _AssociationArenaPanelState extends ConsumerState<AssociationArenaPanel> {
     });
 
     try {
-      await ref
-          .read(apiClientProvider)
-          .saveMemberRecord(draft: _memberMasterDraft!);
+      await ref.read(apiClientProvider).saveMemberRecord(draft: result);
       if (!mounted) return;
       await _refresh();
       if (!mounted) return;
-      _closeMemberMasterEditor();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            _memberMasterDraft!.id.isEmpty
-                ? 'Member created.'
-                : 'Member updated.',
+            result.id.isEmpty ? 'Member created.' : 'Member updated.',
           ),
         ),
       );
@@ -2509,9 +6394,6 @@ class _AssociationArenaPanelState extends ConsumerState<AssociationArenaPanel> {
       if (!mounted) return;
       await _refresh();
       if (!mounted) return;
-      if (_editingMemberMasterId == memberId) {
-        _closeMemberMasterEditor();
-      }
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Member deleted.')));
@@ -2519,6 +6401,177 @@ class _AssociationArenaPanelState extends ConsumerState<AssociationArenaPanel> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to delete member: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _assignCommitteeMember({
+    required MemberDirectoryItem member,
+    required String committeePost,
+    required List<MemberDirectoryItem> allMembers,
+  }) async {
+    if (_isSaving) {
+      return;
+    }
+
+    final normalizedPost = committeePost.trim();
+    if (normalizedPost.isEmpty) {
+      return;
+    }
+
+    final existingOccupant = allMembers.cast<MemberDirectoryItem?>().firstWhere(
+      (candidate) =>
+          candidate != null &&
+          candidate.id != member.id &&
+          candidate.committeePost.trim().toLowerCase() ==
+              normalizedPost.toLowerCase(),
+      orElse: () => null,
+    );
+
+    if (existingOccupant != null) {
+      final shouldReplace =
+          await showDialog<bool>(
+            context: context,
+            builder:
+                (context) => AlertDialog(
+                  title: const Text('Committee post already assigned'),
+                  content: Text(
+                    '${existingOccupant.name} is already assigned as $normalizedPost. Remove the existing committee assignment and add ${member.name} instead?',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(false),
+                      child: const Text('Cancel'),
+                    ),
+                    FilledButton(
+                      onPressed: () => Navigator.of(context).pop(true),
+                      child: const Text('Replace'),
+                    ),
+                  ],
+                ),
+          ) ??
+          false;
+
+      if (!shouldReplace || !mounted) {
+        return;
+      }
+    }
+
+    setState(() {
+      _isSaving = true;
+    });
+
+    try {
+      if (existingOccupant != null) {
+        await ref
+            .read(apiClientProvider)
+            .updateMemberCommittee(
+              memberId: existingOccupant.id,
+              committeePost: '',
+              committeeTenureStart: '',
+              committeeTenureEnd: '',
+            );
+      }
+
+      await ref
+          .read(apiClientProvider)
+          .updateMemberCommittee(
+            memberId: member.id,
+            committeePost: normalizedPost,
+            committeeTenureStart:
+                member.committeeTenureStart.isNotEmpty
+                    ? member.committeeTenureStart
+                    : _todayDateOnly(),
+            committeeTenureEnd: '',
+          );
+
+      if (!mounted) return;
+      await _refresh();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${member.name} is now assigned as $normalizedPost.'),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to update committee assignment: $error'),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _removeCommitteeMember(MemberDirectoryItem member) async {
+    if (_isSaving) {
+      return;
+    }
+
+    final shouldRemove =
+        await showDialog<bool>(
+          context: context,
+          builder:
+              (context) => AlertDialog(
+                title: const Text('Remove committee member'),
+                content: Text(
+                  'Remove ${member.name} from the committee? This will only clear the committee assignment and will not remove the association member.',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.of(context).pop(true),
+                    child: const Text('Remove'),
+                  ),
+                ],
+              ),
+        ) ??
+        false;
+
+    if (!shouldRemove) {
+      return;
+    }
+
+    setState(() {
+      _isSaving = true;
+    });
+
+    try {
+      await ref
+          .read(apiClientProvider)
+          .updateMemberCommittee(
+            memberId: member.id,
+            committeePost: '',
+            committeeTenureStart: '',
+            committeeTenureEnd: '',
+          );
+      if (!mounted) return;
+      await _refresh();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${member.name} was removed from the committee.'),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to remove committee member: $error')),
       );
     } finally {
       if (mounted) {
@@ -2656,21 +6709,36 @@ class _AssociationArenaPanelState extends ConsumerState<AssociationArenaPanel> {
         data: (members) {
           final committeeMembers =
               members
-                  .where(
-                    (member) =>
-                        member.roleTitle.trim().toLowerCase() == 'committee' ||
-                        member.committeePost.trim().isNotEmpty,
-                  )
+                  .where((member) => member.committeePost.trim().isNotEmpty)
                   .toList()
-                ..sort(
-                  (a, b) =>
-                      a.name.toLowerCase().compareTo(b.name.toLowerCase()),
-                );
+                ..sort((a, b) {
+                  final rankCompare = _committeePostRank(
+                    a.committeePost,
+                  ).compareTo(_committeePostRank(b.committeePost));
+                  if (rankCompare != 0) {
+                    return rankCompare;
+                  }
+                  return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+                });
+          final sortedMembers = [...members]..sort(
+            (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+          );
 
           return _AssociationCommitteeView(
+            canManage: canManage,
+            allMembers: sortedMembers,
             members: committeeMembers,
+            isSaving: _isSaving,
+            committeePosts: _committeePosts,
             onNavigateToAssociation:
                 () => widget.onSectionSelected(AssociationArenaSection.profile),
+            onAssignCommitteeMember:
+                (member, post) => _assignCommitteeMember(
+                  member: member,
+                  committeePost: post,
+                  allMembers: sortedMembers,
+                ),
+            onRemoveCommitteeMember: _removeCommitteeMember,
           );
         },
       );
@@ -2725,16 +6793,11 @@ class _AssociationArenaPanelState extends ConsumerState<AssociationArenaPanel> {
           return _AssociationMasterSection(
             canManage: canManage,
             members: sortedMembers,
-            draft: _memberMasterDraft,
             editingMemberId: _editingMemberMasterId,
             isSaving: _isSaving,
             onNavigateToAssociation:
                 () => widget.onSectionSelected(AssociationArenaSection.profile),
             onOpenEditor: _openMemberMasterEditor,
-            onCancelEdit: _closeMemberMasterEditor,
-            onDraftChanged:
-                (draft) => setState(() => _memberMasterDraft = draft),
-            onSave: _saveMemberMaster,
             onDelete: _deleteMemberMaster,
           );
         },
@@ -2752,19 +6815,41 @@ class _AssociationArenaPanelState extends ConsumerState<AssociationArenaPanel> {
               onRetry: _refresh,
             ),
         data: (profile) {
+          final activeFolder =
+              profile.galleryFolders.firstWhere(
+                (folder) => folder.id == _activeGalleryFolderId,
+                orElse:
+                    () =>
+                        profile.galleryFolders.isNotEmpty
+                            ? profile.galleryFolders.first
+                            : const AssociationGalleryFolder(
+                              id: '',
+                              name: '',
+                              createdAt: '',
+                              updatedAt: '',
+                              photoCount: 0,
+                              previewPhotos: [],
+                              photos: [],
+                            ),
+              );
           return _AssociationGallerySection(
             canManage: canManage,
             associationId: profile.id,
-            items: profile.galleryItems,
+            folders: profile.galleryFolders,
+            activeFolderId: activeFolder.id,
             isSaving: _isSavingGallery,
-            selectedItemIds: _selectedGalleryItemIds,
-            onAddImages: () => _pickGalleryImages(profile.id),
-            onToggleSelection: _toggleGallerySelection,
-            onClearSelection: _clearGallerySelection,
-            onDeleteSelected:
-                _selectedGalleryItemIds.isEmpty
-                    ? null
-                    : () => _deleteSelectedGalleryItems(profile.id),
+            onAddFolder: () => _createGalleryFolder(profile.id),
+            onOpenFolder:
+                (folderId) => setState(() {
+                  _activeGalleryFolderId = folderId;
+                }),
+            onRenameFolder:
+                (folder) => _renameGalleryFolder(profile.id, folder),
+            onDeleteFolder:
+                (folder) => _deleteGalleryFolder(profile.id, folder),
+            onDeletePhoto:
+                (folderId, photoId) =>
+                    _deleteGalleryPhoto(profile.id, folderId, photoId),
           );
         },
       );
@@ -2858,7 +6943,7 @@ class _MemberMediaView extends StatelessWidget {
     final associationName =
         tenant?.associationName.trim().isNotEmpty == true
             ? tenant!.associationName
-            : 'Synetra Network';
+            : 'NIMA';
     final locationLabel = tenant?.locationLabel ?? '';
 
     return Column(
@@ -2897,7 +6982,7 @@ class _MemberDirectoryView extends StatelessWidget {
     final associationName =
         tenant?.associationName.trim().isNotEmpty == true
             ? tenant!.associationName
-            : 'Synetra Network';
+            : 'NIMA';
     final locationLabel = tenant?.locationLabel ?? '';
 
     return Column(
@@ -2937,7 +7022,7 @@ class _MemberFilteredDirectoryView extends StatelessWidget {
     final associationName =
         tenant?.associationName.trim().isNotEmpty == true
             ? tenant!.associationName
-            : 'Synetra Network';
+            : 'NIMA';
     final locationLabel = tenant?.locationLabel ?? '';
 
     return Column(
@@ -2976,7 +7061,7 @@ class _MemberMasterView extends StatelessWidget {
     final associationName =
         tenant?.associationName.trim().isNotEmpty == true
             ? tenant!.associationName
-            : 'Synetra Network';
+            : 'NIMA';
     final locationLabel = tenant?.locationLabel ?? '';
 
     return Column(
@@ -3012,7 +7097,7 @@ class _MemberSectionHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _AssociationSectionHero(
-      arenaLabel: 'Member Arena',
+      arenaLabel: 'Members',
       titleSpans: [
         const TextSpan(text: 'Welcome to '),
         TextSpan(
@@ -3052,7 +7137,7 @@ class _MemberDirectoryHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _AssociationSectionHero(
-      arenaLabel: 'Member Arena',
+      arenaLabel: 'Members',
       titleSpans: [
         const TextSpan(text: 'Browse '),
         TextSpan(
@@ -3087,7 +7172,7 @@ class _MemberFilteredDirectoryHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _AssociationSectionHero(
-      arenaLabel: 'Member Arena',
+      arenaLabel: 'Members',
       titleSpans: [
         const TextSpan(text: 'Browse '),
         TextSpan(
@@ -3124,7 +7209,7 @@ class _MemberMasterHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _AssociationSectionHero(
-      arenaLabel: 'Member Arena',
+      arenaLabel: 'Members',
       titleSpans: [
         const TextSpan(text: 'Manage '),
         TextSpan(
@@ -3163,7 +7248,7 @@ class _AdminSectionView extends StatelessWidget {
     final associationName =
         tenant?.associationName.trim().isNotEmpty == true
             ? tenant!.associationName
-            : 'Synetra Network';
+            : 'NIMA';
     final locationLabel = tenant?.locationLabel ?? '';
 
     return Column(
@@ -3200,7 +7285,7 @@ class _AdminSectionHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _AssociationSectionHero(
-      arenaLabel: 'Admin Arena',
+      arenaLabel: 'Admin',
       titleSpans: [
         const TextSpan(text: 'Manage '),
         TextSpan(
@@ -3234,7 +7319,7 @@ class _AdminBreadcrumb extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _ArenaBreadcrumb(
-      rootLabel: 'Admin Arena',
+      rootLabel: 'Admin',
       currentLabel: currentLabel,
       onRootTap: onRootTap,
     );
@@ -3253,7 +7338,7 @@ class _MemberBreadcrumb extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _ArenaBreadcrumb(
-      rootLabel: 'Member Arena',
+      rootLabel: 'Members',
       currentLabel: currentLabel,
       onRootTap: onRootTap,
     );
@@ -3568,7 +7653,7 @@ class _DashboardAppBannerCarousel extends StatelessWidget {
                           if (item.mediaUrl.isNotEmpty)
                             _BackendImage(
                               imageUrl: item.mediaUrl,
-                              fit: BoxFit.cover,
+                              fit: BoxFit.contain,
                               fallback: _BannerFallbackCard(item: item),
                             )
                           else
@@ -4599,26 +8684,31 @@ class _AssociationGallerySection extends StatelessWidget {
   const _AssociationGallerySection({
     required this.canManage,
     required this.associationId,
-    required this.items,
+    required this.folders,
+    required this.activeFolderId,
     required this.isSaving,
-    required this.selectedItemIds,
-    required this.onAddImages,
-    required this.onToggleSelection,
-    required this.onClearSelection,
-    required this.onDeleteSelected,
+    required this.onAddFolder,
+    required this.onOpenFolder,
+    required this.onRenameFolder,
+    required this.onDeleteFolder,
+    required this.onDeletePhoto,
   });
 
   final bool canManage;
   final String associationId;
-  final List<DashboardGalleryItem> items;
+  final List<AssociationGalleryFolder> folders;
+  final String activeFolderId;
   final bool isSaving;
-  final Set<String> selectedItemIds;
-  final VoidCallback onAddImages;
-  final ValueChanged<String> onToggleSelection;
-  final VoidCallback onClearSelection;
-  final VoidCallback? onDeleteSelected;
+  final VoidCallback onAddFolder;
+  final ValueChanged<String> onOpenFolder;
+  final ValueChanged<AssociationGalleryFolder> onRenameFolder;
+  final ValueChanged<AssociationGalleryFolder> onDeleteFolder;
+  final void Function(String folderId, String photoId) onDeletePhoto;
 
-  void _openGalleryImage(BuildContext context, DashboardGalleryItem item) {
+  void _openGalleryImage(
+    BuildContext context,
+    AssociationGalleryPhoto item,
+  ) {
     final resolvedUrl = _resolveBackendAssetUrl(item.imageUrl);
     final imageBytes = _decodeImageBytes(item.imageUrl);
     if (resolvedUrl.isEmpty && imageBytes == null) {
@@ -4684,9 +8774,22 @@ class _AssociationGallerySection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isSelectionMode = selectedItemIds.isNotEmpty;
+    final activeFolder =
+        folders.firstWhere(
+          (folder) => folder.id == activeFolderId,
+          orElse:
+              () => const AssociationGalleryFolder(
+                id: '',
+                name: '',
+                createdAt: '',
+                updatedAt: '',
+                photoCount: 0,
+                previewPhotos: [],
+                photos: [],
+              ),
+        );
 
-    if (items.isEmpty) {
+    if (folders.isEmpty) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -4695,21 +8798,21 @@ class _AssociationGallerySection extends StatelessWidget {
               children: [
                 FilledButton.icon(
                   onPressed:
-                      isSaving || associationId.isEmpty ? null : onAddImages,
+                      isSaving || associationId.isEmpty ? null : onAddFolder,
                   style: FilledButton.styleFrom(
                     backgroundColor: const Color(0xFF171717),
                   ),
                   icon: const Icon(Icons.add_photo_alternate_outlined),
-                  label: Text(isSaving ? 'Uploading...' : 'Add Photos'),
+                  label: Text(isSaving ? 'Uploading...' : 'Add Folder'),
                 ),
               ],
             ),
             const SizedBox(height: 18),
           ],
           const _EmptyStateCard(
-            title: 'No gallery images yet',
+            title: 'No gallery folders yet',
             subtitle:
-                'Gallery pictures will appear here once they are available for the association.',
+                'Create a folder and upload photos to start organizing the association gallery.',
           ),
         ],
       );
@@ -4721,52 +8824,27 @@ class _AssociationGallerySection extends StatelessWidget {
         Row(
           children: [
             Text(
-              isSelectionMode
-                  ? '${selectedItemIds.length} selected'
-                  : '${items.length} photos',
+              '${folders.length} folders',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                 color: const Color(0xFF171717),
                 fontWeight: FontWeight.w700,
               ),
             ),
             const Spacer(),
-            if (canManage && isSelectionMode) ...[
-              OutlinedButton(
-                onPressed: isSaving ? null : onClearSelection,
-                child: const Text('Cancel'),
-              ),
-              const SizedBox(width: 10),
-              FilledButton.icon(
-                onPressed: isSaving ? null : onDeleteSelected,
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFFB91C1C),
-                ),
-                icon: const Icon(Icons.delete_outline),
-                label: const Text('Delete'),
-              ),
-            ] else if (canManage) ...[
+            if (canManage) ...[
               OutlinedButton.icon(
-                onPressed: isSaving ? null : onAddImages,
+                onPressed: isSaving ? null : onAddFolder,
                 icon: const Icon(Icons.add_photo_alternate_outlined),
-                label: Text(isSaving ? 'Uploading...' : 'Add'),
+                label: Text(isSaving ? 'Uploading...' : 'Add Folder'),
               ),
             ],
           ],
         ),
-        if (canManage && !isSelectionMode) ...[
-          const SizedBox(height: 8),
-          Text(
-            'Long press any photo to select multiple items.',
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: const Color(0xFF6B7280)),
-          ),
-        ],
         const SizedBox(height: 14),
         GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: items.length,
+          itemCount: folders.length,
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 2,
             crossAxisSpacing: 12,
@@ -4774,45 +8852,59 @@ class _AssociationGallerySection extends StatelessWidget {
             childAspectRatio: 0.74,
           ),
           itemBuilder: (context, index) {
-            final item = items[index];
-            final isSelected = selectedItemIds.contains(item.id);
+            final item = folders[index];
             return ClipRRect(
               borderRadius: BorderRadius.circular(22),
               child: Material(
-                color: Colors.white,
+                color: Colors.white.withValues(alpha: 0.72),
                 child: InkWell(
-                  onTap:
-                      canManage && isSelectionMode
-                          ? () => onToggleSelection(item.id)
-                          : () => _openGalleryImage(context, item),
-                  onLongPress:
-                      canManage ? () => onToggleSelection(item.id) : null,
+                  onTap: () => onOpenFolder(item.id),
                   child: Stack(
                     children: [
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Expanded(
-                            child: Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                DecoratedBox(
-                                  decoration: const BoxDecoration(
-                                    color: Color(0xFFF3F4F6),
-                                  ),
-                                  child: _BackendImage(
-                                    imageUrl: item.imageUrl,
-                                    fit: BoxFit.cover,
-                                    fallback: _AssociationGalleryFallback(
-                                      item: item,
-                                    ),
-                                  ),
-                                ),
-                                if (isSelected)
-                                  Container(
-                                    color: Colors.black.withValues(alpha: 0.16),
-                                  ),
-                              ],
+                            child: Padding(
+                              padding: const EdgeInsets.all(10),
+                              child: GridView.count(
+                                physics: const NeverScrollableScrollPhysics(),
+                                crossAxisCount: 2,
+                                crossAxisSpacing: 6,
+                                mainAxisSpacing: 6,
+                                children:
+                                    item.previewPhotos.isEmpty
+                                        ? [
+                                          Container(
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFF3F4F6),
+                                              borderRadius:
+                                                  BorderRadius.circular(16),
+                                            ),
+                                          ),
+                                        ]
+                                        : item.previewPhotos
+                                            .take(4)
+                                            .map<Widget>(
+                                              (photo) => ClipRRect(
+                                                borderRadius:
+                                                    BorderRadius.circular(16),
+                                                child: _BackendImage(
+                                                  imageUrl: photo.thumbnailUrl,
+                                                  fit: BoxFit.cover,
+                                                  fallback: Container(
+                                                    decoration:
+                                                        const BoxDecoration(
+                                                          color: Color(
+                                                            0xFFF3F4F6,
+                                                          ),
+                                                        ),
+                                                  ),
+                                                ),
+                                              ),
+                                            )
+                                            .toList(),
+                              ),
                             ),
                           ),
                           Padding(
@@ -4821,9 +8913,7 @@ class _AssociationGallerySection extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  item.headline.isEmpty
-                                      ? 'Gallery image'
-                                      : item.headline,
+                                  item.name.isEmpty ? 'Gallery folder' : item.name,
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
@@ -4833,69 +8923,47 @@ class _AssociationGallerySection extends StatelessWidget {
                                     height: 1.2,
                                   ),
                                 ),
-                                if (item.tagline.isNotEmpty) ...[
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    item.tagline,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: Color(0xFF7C3AED),
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w700,
-                                    ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  '${item.photoCount} photo${item.photoCount == 1 ? '' : 's'}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: Color(0xFF7C3AED),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
                                   ),
-                                ],
-                                if (item.description.isNotEmpty) ...[
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    item.description,
-                                    maxLines: 3,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: Color(0xFF64748B),
-                                      fontSize: 12,
-                                      height: 1.45,
-                                    ),
-                                  ),
-                                ],
+                                ),
                               ],
                             ),
                           ),
                         ],
                       ),
-                      Positioned(
-                        top: 12,
-                        right: 12,
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 160),
-                          width: 28,
-                          height: 28,
-                          decoration: BoxDecoration(
-                            color:
-                                isSelected
-                                    ? const Color(0xFF171717)
-                                    : Colors.white.withValues(alpha: 0.9),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color:
-                                  isSelected
-                                      ? const Color(0xFF171717)
-                                      : const Color(0xFFD1D5DB),
-                            ),
-                          ),
-                          child: Icon(
-                            isSelected
-                                ? Icons.check_rounded
-                                : Icons.circle_outlined,
-                            size: 16,
-                            color:
-                                isSelected
-                                    ? Colors.white
-                                    : const Color(0xFF6B7280),
+                      if (canManage)
+                        Positioned(
+                          top: 12,
+                          right: 12,
+                          child: PopupMenuButton<String>(
+                            onSelected: (value) {
+                              if (value == 'edit') {
+                                onRenameFolder(item);
+                              } else if (value == 'delete') {
+                                onDeleteFolder(item);
+                              }
+                            },
+                            itemBuilder:
+                                (context) => const [
+                                  PopupMenuItem(
+                                    value: 'edit',
+                                    child: Text('Rename folder'),
+                                  ),
+                                  PopupMenuItem(
+                                    value: 'delete',
+                                    child: Text('Delete folder'),
+                                  ),
+                                ],
                           ),
                         ),
-                      ),
                     ],
                   ),
                 ),
@@ -4903,46 +8971,93 @@ class _AssociationGallerySection extends StatelessWidget {
             );
           },
         ),
+        if (activeFolder.id.isNotEmpty) ...[
+          const SizedBox(height: 18),
+          Text(
+            activeFolder.name,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w800,
+              color: const Color(0xFF171717),
+            ),
+          ),
+          const SizedBox(height: 12),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: activeFolder.photos.length,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: 0.74,
+            ),
+            itemBuilder: (context, index) {
+              final photo = activeFolder.photos[index];
+              return ClipRRect(
+                borderRadius: BorderRadius.circular(22),
+                child: Material(
+                  color: Colors.white,
+                  child: InkWell(
+                    onTap: () => _openGalleryImage(context, photo),
+                    child: Stack(
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: _BackendImage(
+                                imageUrl: photo.imageUrl,
+                                fit: BoxFit.cover,
+                                fallback: Container(
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFFF3F4F6),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Text(
+                                photo.createdAt,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Color(0xFF64748B),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (canManage)
+                          Positioned(
+                            top: 12,
+                            right: 12,
+                            child: IconButton(
+                              onPressed:
+                                  isSaving
+                                      ? null
+                                      : () => onDeletePhoto(activeFolder.id, photo.id),
+                              style: IconButton.styleFrom(
+                                backgroundColor: Colors.white.withValues(alpha: 0.9),
+                              ),
+                              icon: const Icon(Icons.delete_outline_rounded),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
       ],
     );
   }
 }
 
-class _AssociationGalleryFallback extends StatelessWidget {
-  const _AssociationGalleryFallback({required this.item});
-
-  final DashboardGalleryItem item;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFFF59E0B), Color(0xFFD946EF), Color(0xFF5B21B6)],
-        ),
-      ),
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Text(
-            item.headline.isEmpty ? 'Gallery' : item.headline,
-            textAlign: TextAlign.center,
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              height: 1.2,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 class _DashboardCommitteeCarousel extends StatelessWidget {
   const _DashboardCommitteeCarousel({
@@ -4967,7 +9082,25 @@ class _DashboardCommitteeCarousel extends StatelessWidget {
       );
     }
 
-    final panelHeight = MediaQuery.sizeOf(context).height * 0.56;
+    final mediaQuery = MediaQuery.of(context);
+    final availableHeight =
+        mediaQuery.size.height - mediaQuery.padding.vertical;
+    final textScaleFactor = mediaQuery.textScaler.scale(1);
+    final viewportWidth =
+        mediaQuery.size.width * pageController.viewportFraction;
+    final isCompactViewport = viewportWidth < 348 || textScaleFactor > 1.0;
+    final maxPanelHeight =
+        (availableHeight * 0.54).clamp(428.0, 470.0).toDouble();
+    final panelHeight =
+        (isCompactViewport
+                ? 446.0 + ((textScaleFactor - 1).clamp(0.0, 0.25) * 28)
+                : viewportWidth * 1.14)
+            .clamp(424.0, maxPanelHeight)
+            .toDouble();
+    final heroHeight =
+        (isCompactViewport ? 98.0 : viewportWidth * 0.34)
+            .clamp(96.0, 144.0)
+            .toDouble();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -4988,8 +9121,15 @@ class _DashboardCommitteeCarousel extends StatelessWidget {
             onPageChanged: onPageChanged,
             itemBuilder: (context, index) {
               return Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: _DashboardCommitteeCard(member: members[index]),
+                padding: EdgeInsets.only(
+                  right: index == members.length - 1 ? 0 : 12,
+                ),
+                child: _DashboardCommitteeCard(
+                  member: members[index],
+                  heroHeight: heroHeight,
+                  summaryMaxLines: isCompactViewport ? 1 : 2,
+                  compactLayout: isCompactViewport,
+                ),
               );
             },
           ),
@@ -5022,9 +9162,17 @@ class _DashboardCommitteeCarousel extends StatelessWidget {
 }
 
 class _DashboardCommitteeCard extends StatelessWidget {
-  const _DashboardCommitteeCard({required this.member});
+  const _DashboardCommitteeCard({
+    required this.member,
+    required this.heroHeight,
+    required this.summaryMaxLines,
+    required this.compactLayout,
+  });
 
   final MemberDirectoryItem member;
+  final double heroHeight;
+  final int summaryMaxLines;
+  final bool compactLayout;
 
   @override
   Widget build(BuildContext context) {
@@ -5044,6 +9192,18 @@ class _DashboardCommitteeCard extends StatelessWidget {
       primaryLabel: member.companyName,
       summary: memberNotes,
       showHeroImage: true,
+      useCircularHeroAvatar: true,
+      heroHeight: heroHeight,
+      summaryMaxLines: summaryMaxLines,
+      padding:
+          compactLayout
+              ? const EdgeInsets.fromLTRB(12, 12, 12, 10)
+              : const EdgeInsets.fromLTRB(14, 14, 14, 12),
+      heroBottomSpacing: compactLayout ? 8 : 10,
+      sectionSpacing: compactLayout ? 8 : 10,
+      detailsTopSpacing: compactLayout ? 10 : 12,
+      detailsDividerSpacing: compactLayout ? 8 : 10,
+      detailLineSpacing: compactLayout ? 6 : 8,
       factPills: [
         _DirectoryRolePill(
           label:
@@ -5051,13 +9211,19 @@ class _DashboardCommitteeCard extends StatelessWidget {
                   ? member.committeePost
                   : 'Committee Member',
         ),
-        if (tenureLabel.isNotEmpty)
+        if (tenureLabel.isNotEmpty && !compactLayout)
           _DirectoryFactPill(
             icon: Icons.calendar_today_rounded,
             label: tenureLabel,
           ),
       ],
       detailLines: [
+        if (tenureLabel.isNotEmpty && compactLayout)
+          _DirectoryDetailLine(
+            icon: Icons.calendar_today_rounded,
+            label: tenureLabel,
+            maxLines: 2,
+          ),
         if (member.email.isNotEmpty)
           _DirectoryDetailLine(
             icon: Icons.mail_outline_rounded,
@@ -5253,6 +9419,13 @@ class _AssociationProfileView extends StatelessWidget {
                   _AssociationMapTile(
                     label: 'Google Map Access Location',
                     value: profile.googleMapsLink,
+                    locationQuery: [
+                      profile.name,
+                      profile.headOfficeAddress,
+                      profile.city,
+                      profile.state,
+                      profile.pincode,
+                    ].where((part) => part.trim().isNotEmpty).join(', '),
                   ),
                 ],
               ),
@@ -5335,6 +9508,13 @@ class _AssociationProfileView extends StatelessWidget {
                         _AssociationMapTile(
                           label: 'Google Map Access Location',
                           value: address.googleMapsLink,
+                          locationQuery: [
+                            address.label,
+                            address.officeAddress,
+                            address.city,
+                            address.state,
+                            address.pincode,
+                          ].where((part) => part.trim().isNotEmpty).join(', '),
                         ),
                       ],
                     ),
@@ -5478,6 +9658,8 @@ class _BackendImage extends StatelessWidget {
       return Image.memory(
         bytes,
         fit: fit,
+        alignment: Alignment.center,
+        filterQuality: FilterQuality.medium,
         errorBuilder: (_, __, ___) => fallback,
       );
     }
@@ -5490,6 +9672,8 @@ class _BackendImage extends StatelessWidget {
     return Image.network(
       resolvedUrl,
       fit: fit,
+      alignment: Alignment.center,
+      filterQuality: FilterQuality.medium,
       errorBuilder: (_, __, ___) => fallback,
     );
   }
@@ -5525,6 +9709,13 @@ class _AssociationProfileEditor extends StatelessWidget {
               'Update the same fields used in the web profile screen, including regional offices.',
         ),
         const SizedBox(height: 14),
+        if (draft.validationMessage != null) ...[
+          _EmptyStateCard(
+            title: 'Complete the required association details',
+            subtitle: draft.validationMessage!,
+          ),
+          const SizedBox(height: 14),
+        ],
         Container(
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
@@ -5783,7 +9974,7 @@ class _AssociationProfileEditor extends StatelessWidget {
             ),
             const SizedBox(width: 10),
             FilledButton(
-              onPressed: isSaving ? null : onSave,
+              onPressed: isSaving || !draft.canSubmit ? null : onSave,
               style: FilledButton.styleFrom(
                 backgroundColor: const Color(0xFF171717),
               ),
@@ -6068,6 +10259,39 @@ class _AssociationBreadcrumb extends StatelessWidget {
   }
 }
 
+class _VendorAdminSectionView extends StatelessWidget {
+  const _VendorAdminSectionView({
+    required this.currentLabel,
+    required this.onNavigateToVendorArena,
+    required this.child,
+  });
+
+  final String currentLabel;
+  final VoidCallback onNavigateToVendorArena;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _AssociationSectionHero(
+          title: currentLabel,
+          arenaLabel: 'Vendor Arena',
+        ),
+        const SizedBox(height: 14),
+        _ArenaBreadcrumb(
+          rootLabel: 'Vendor Arena',
+          currentLabel: currentLabel,
+          onRootTap: onNavigateToVendorArena,
+        ),
+        const SizedBox(height: 18),
+        child,
+      ],
+    );
+  }
+}
+
 class _AssociationAboutEditor extends StatelessWidget {
   const _AssociationAboutEditor({
     required this.draft,
@@ -6187,24 +10411,104 @@ class _AssociationAboutEditor extends StatelessWidget {
   }
 }
 
-class _AssociationCommitteeView extends StatelessWidget {
+class _AssociationCommitteeView extends StatefulWidget {
   const _AssociationCommitteeView({
+    required this.canManage,
+    required this.allMembers,
     required this.members,
+    required this.isSaving,
+    required this.committeePosts,
     required this.onNavigateToAssociation,
+    required this.onAssignCommitteeMember,
+    required this.onRemoveCommitteeMember,
   });
 
+  final bool canManage;
+  final List<MemberDirectoryItem> allMembers;
   final List<MemberDirectoryItem> members;
+  final bool isSaving;
+  final List<String> committeePosts;
   final VoidCallback onNavigateToAssociation;
+  final Future<void> Function(MemberDirectoryItem member, String committeePost)
+  onAssignCommitteeMember;
+  final Future<void> Function(MemberDirectoryItem member)
+  onRemoveCommitteeMember;
+
+  @override
+  State<_AssociationCommitteeView> createState() =>
+      _AssociationCommitteeViewState();
+}
+
+class _AssociationCommitteeViewState extends State<_AssociationCommitteeView> {
+  final TextEditingController _searchController = TextEditingController();
+  bool _isManaging = false;
+  String _query = '';
+  String? _selectedPost;
+  MemberDirectoryItem? _selectedMember;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _toggleManageMode() {
+    setState(() {
+      _isManaging = !_isManaging;
+      if (!_isManaging) {
+        _selectedMember = null;
+        _selectedPost = null;
+        _query = '';
+        _searchController.clear();
+      }
+    });
+  }
+
+  void _selectMember(MemberDirectoryItem member) {
+    setState(() {
+      _selectedMember = member;
+      _selectedPost =
+          member.committeePost.trim().isNotEmpty ? member.committeePost : null;
+    });
+  }
+
+  Future<void> _submitAssignment() async {
+    if (_selectedMember == null || _selectedPost == null) {
+      return;
+    }
+    await widget.onAssignCommitteeMember(_selectedMember!, _selectedPost!);
+    if (!mounted) return;
+    setState(() {
+      _selectedMember = null;
+      _selectedPost = null;
+      _query = '';
+      _searchController.clear();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    if (members.isEmpty) {
+    if (widget.members.isEmpty && !widget.canManage) {
       return const _EmptyStateCard(
         title: 'No committee members found',
         subtitle:
             'Committee members will appear here once the association has published them.',
       );
     }
+
+    final filteredMembers =
+        widget.allMembers.where((member) {
+          final query = _query.trim().toLowerCase();
+          if (query.isEmpty) {
+            return member.committeePost.trim().isEmpty;
+          }
+          return [
+            member.name,
+            member.companyName,
+            member.email,
+            member.phone,
+          ].any((value) => value.trim().toLowerCase().contains(query));
+        }).toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -6213,18 +10517,200 @@ class _AssociationCommitteeView extends StatelessWidget {
         const SizedBox(height: 14),
         _AssociationBreadcrumb(
           currentLabel: 'Management Committee',
-          onRootTap: onNavigateToAssociation,
+          onRootTap: widget.onNavigateToAssociation,
         ),
         const SizedBox(height: 18),
         const _SectionHeader(
           title: 'Management Committee',
           subtitle: 'Management Committee',
         ),
+        if (widget.canManage) ...[
+          const SizedBox(height: 14),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton.icon(
+              onPressed: widget.isSaving ? null : _toggleManageMode,
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF171717),
+              ),
+              icon: Icon(
+                _isManaging ? Icons.close_rounded : Icons.edit_rounded,
+              ),
+              label: Text(
+                _isManaging
+                    ? 'Close Committee Manager'
+                    : 'Modify Committee Members',
+              ),
+            ),
+          ),
+          if (_isManaging) ...[
+            const SizedBox(height: 14),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(28),
+                border: Border.all(color: const Color(0xFFF1F5F9)),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x0D0F172A),
+                    blurRadius: 24,
+                    offset: Offset(0, 14),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Add Or Update Committee Member',
+                    style: TextStyle(
+                      color: Color(0xFF171717),
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Search an existing association member, pick one committee post, and add them to the management committee.',
+                    style: TextStyle(
+                      color: Color(0xFF6B7280),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(color: const Color(0xFFE5E7EB)),
+                    ),
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: (value) => setState(() => _query = value),
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        icon: Icon(Icons.search_rounded),
+                        hintText:
+                            'Search member by name, company, phone, or email',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  if (_selectedMember != null) ...[
+                    _AssociationCommitteeSelectionCard(
+                      member: _selectedMember!,
+                    ),
+                    const SizedBox(height: 14),
+                    DropdownButtonFormField<String>(
+                      value:
+                          _selectedPost != null &&
+                                  widget.committeePosts.contains(_selectedPost)
+                              ? _selectedPost
+                              : null,
+                      decoration: InputDecoration(
+                        labelText: 'Committee Post',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                      ),
+                      items:
+                          widget.committeePosts
+                              .map(
+                                (post) => DropdownMenuItem<String>(
+                                  value: post,
+                                  child: Text(post),
+                                ),
+                              )
+                              .toList(),
+                      onChanged:
+                          widget.isSaving
+                              ? null
+                              : (value) =>
+                                  setState(() => _selectedPost = value),
+                    ),
+                    const SizedBox(height: 14),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: FilledButton.icon(
+                        onPressed:
+                            widget.isSaving ||
+                                    _selectedMember == null ||
+                                    _selectedPost == null
+                                ? null
+                                : _submitAssignment,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFF171717),
+                        ),
+                        icon: const Icon(Icons.person_add_alt_1_rounded),
+                        label: Text(
+                          _selectedMember!.committeePost.trim().isNotEmpty
+                              ? 'Update Committee Post'
+                              : 'Add To Committee',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                  ],
+                  const Text(
+                    'Matching Members',
+                    style: TextStyle(
+                      color: Color(0xFF171717),
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  if (filteredMembers.isEmpty)
+                    const Text(
+                      'No matching association members found.',
+                      style: TextStyle(
+                        color: Color(0xFF6B7280),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    )
+                  else
+                    ...filteredMembers
+                        .take(8)
+                        .map(
+                          (member) => Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: _AssociationCommitteeSelectionCard(
+                              member: member,
+                              selected: _selectedMember?.id == member.id,
+                              onTap:
+                                  widget.isSaving
+                                      ? null
+                                      : () => _selectMember(member),
+                            ),
+                          ),
+                        ),
+                ],
+              ),
+            ),
+          ],
+        ],
         const SizedBox(height: 14),
-        ...members.map(
+        ...widget.members.map(
           (member) => Padding(
             padding: const EdgeInsets.only(bottom: 14),
-            child: _AssociationCommitteeCard(member: member),
+            child: _AssociationCommitteeCard(
+              member: member,
+              showRemoveAction: widget.canManage && _isManaging,
+              isSaving: widget.isSaving,
+              onRemove:
+                  widget.canManage
+                      ? () => widget.onRemoveCommitteeMember(member)
+                      : null,
+            ),
           ),
         ),
       ],
@@ -6233,9 +10719,17 @@ class _AssociationCommitteeView extends StatelessWidget {
 }
 
 class _AssociationCommitteeCard extends StatelessWidget {
-  const _AssociationCommitteeCard({required this.member});
+  const _AssociationCommitteeCard({
+    required this.member,
+    this.showRemoveAction = false,
+    this.isSaving = false,
+    this.onRemove,
+  });
 
   final MemberDirectoryItem member;
+  final bool showRemoveAction;
+  final bool isSaving;
+  final VoidCallback? onRemove;
 
   @override
   Widget build(BuildContext context) {
@@ -6285,6 +10779,111 @@ class _AssociationCommitteeCard extends StatelessWidget {
                 ),
           ),
       ],
+      footer:
+          showRemoveAction && onRemove != null
+              ? Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  onPressed: isSaving ? null : onRemove,
+                  icon: const Icon(Icons.remove_circle_outline_rounded),
+                  label: const Text('Remove Member'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFB91C1C),
+                  ),
+                ),
+              )
+              : null,
+    );
+  }
+}
+
+class _AssociationCommitteeSelectionCard extends StatelessWidget {
+  const _AssociationCommitteeSelectionCard({
+    required this.member,
+    this.selected = false,
+    this.onTap,
+  });
+
+  final MemberDirectoryItem member;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: selected ? const Color(0xFFF5F3FF) : const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color:
+                  selected ? const Color(0xFF8B5CF6) : const Color(0xFFE2E8F0),
+            ),
+          ),
+          child: Row(
+            children: [
+              _MemberAvatar(
+                name: member.name,
+                photoUrl: member.photoUrl,
+                size: 48,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      member.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF171717),
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      member.companyName.isEmpty
+                          ? 'No company added'
+                          : member.companyName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF6D28D9),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (member.committeePost.trim().isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Current committee post: ${member.committeePost}',
+                        style: const TextStyle(
+                          color: Color(0xFF6B7280),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (selected)
+                const Icon(
+                  Icons.check_circle_rounded,
+                  color: Color(0xFF7C3AED),
+                ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -6315,7 +10914,7 @@ class _CommitteeThumbnail extends StatelessWidget {
             photoUrl.isNotEmpty
                 ? _BackendImage(
                   imageUrl: photoUrl,
-                  fit: BoxFit.cover,
+                  fit: BoxFit.contain,
                   fallback: _CommitteeThumbnailFallback(initials: initials),
                 )
                 : _CommitteeThumbnailFallback(initials: initials),
@@ -6892,27 +11491,19 @@ class _AssociationMasterSection extends StatefulWidget {
   const _AssociationMasterSection({
     required this.canManage,
     required this.members,
-    required this.draft,
     required this.editingMemberId,
     required this.isSaving,
     this.onNavigateToAssociation,
     required this.onOpenEditor,
-    required this.onCancelEdit,
-    required this.onDraftChanged,
-    required this.onSave,
     required this.onDelete,
   });
 
   final bool canManage;
   final List<MemberDirectoryItem> members;
-  final MemberMasterDraft? draft;
   final String? editingMemberId;
   final bool isSaving;
   final VoidCallback? onNavigateToAssociation;
-  final ValueChanged<MemberDirectoryItem?> onOpenEditor;
-  final VoidCallback onCancelEdit;
-  final ValueChanged<MemberMasterDraft> onDraftChanged;
-  final Future<void> Function() onSave;
+  final Future<void> Function([MemberDirectoryItem? member]) onOpenEditor;
   final Future<void> Function(String memberId) onDelete;
 
   @override
@@ -6978,7 +11569,7 @@ class _AssociationMasterSectionState extends State<_AssociationMasterSection> {
                     borderRadius: BorderRadius.circular(18),
                   ),
                 ),
-                child: const Text('Add User'),
+                child: const Text('Add Member'),
               ),
             ],
           ],
@@ -6989,16 +11580,6 @@ class _AssociationMasterSectionState extends State<_AssociationMasterSection> {
           hintText: 'Search name, company, membership, GST, contact...',
           onChanged: (value) => setState(() => _query = value),
         ),
-        if (widget.canManage && widget.draft != null) ...[
-          const SizedBox(height: 16),
-          _MemberMasterEditor(
-            draft: widget.draft!,
-            isSaving: widget.isSaving,
-            onChanged: widget.onDraftChanged,
-            onSave: widget.onSave,
-            onCancel: widget.onCancelEdit,
-          ),
-        ],
         const SizedBox(height: 16),
         if (filteredMembers.isEmpty)
           const _EmptyStateCard(
@@ -7025,6 +11606,45 @@ class _AssociationMasterSectionState extends State<_AssociationMasterSection> {
   }
 }
 
+class _MemberMasterDialog extends StatefulWidget {
+  const _MemberMasterDialog({required this.initialDraft});
+
+  final MemberMasterDraft initialDraft;
+
+  @override
+  State<_MemberMasterDialog> createState() => _MemberMasterDialogState();
+}
+
+class _MemberMasterDialogState extends State<_MemberMasterDialog> {
+  late MemberMasterDraft _draft;
+
+  @override
+  void initState() {
+    super.initState();
+    _draft = widget.initialDraft;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 640),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: _MemberMasterEditor(
+            draft: _draft,
+            isSaving: false,
+            onChanged: (nextDraft) => setState(() => _draft = nextDraft),
+            onSave: () async => Navigator.of(context).pop(_draft),
+            onCancel: () => Navigator.of(context).pop(),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _MemberMasterEditor extends StatelessWidget {
   const _MemberMasterEditor({
     required this.draft,
@@ -7042,174 +11662,151 @@ class _MemberMasterEditor extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: const Color(0xFFF1F5F9)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0D0F172A),
-            blurRadius: 24,
-            offset: Offset(0, 14),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  draft.id.isEmpty ? 'Add Member' : 'Edit Member',
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF171717),
-                  ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                draft.id.isEmpty ? 'Add Member' : 'Edit Member',
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF171717),
                 ),
               ),
-              const _MutedChip(
-                icon: Icons.admin_panel_settings_outlined,
-                label: 'Admin CRUD',
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          _AssociationTextField(
-            label: 'Full Name',
-            value: draft.name,
-            onChanged: (value) => onChanged(draft.copyWith(name: value)),
-          ),
-          _AssociationTextField(
-            label: 'Company Name',
-            value: draft.companyName,
-            onChanged: (value) => onChanged(draft.copyWith(companyName: value)),
-          ),
-          _AssociationTextField(
-            label: 'Email',
-            value: draft.email,
-            onChanged: (value) => onChanged(draft.copyWith(email: value)),
-          ),
-          _AssociationTextField(
-            label: 'Phone',
-            value: draft.phone,
-            onChanged: (value) => onChanged(draft.copyWith(phone: value)),
-          ),
-          _AssociationTextField(
-            label: 'Company Address',
-            value: draft.address,
-            maxLines: 3,
-            onChanged: (value) => onChanged(draft.copyWith(address: value)),
-          ),
-          _AssociationTextField(
-            label: 'GST',
-            value: draft.gst,
-            onChanged: (value) => onChanged(draft.copyWith(gst: value)),
-          ),
-          _AssociationTextField(
-            label: 'Photo URL',
-            value: draft.photoUrl,
-            onChanged: (value) => onChanged(draft.copyWith(photoUrl: value)),
-          ),
-          _AssociationTextField(
-            label: 'Membership Details',
-            value: draft.membershipDetails,
-            maxLines: 3,
-            onChanged:
-                (value) => onChanged(draft.copyWith(membershipDetails: value)),
-          ),
-          _AssociationTextField(
-            label: 'Membership Start Date',
-            value: draft.membershipStartDate,
-            onChanged:
-                (value) =>
-                    onChanged(draft.copyWith(membershipStartDate: value)),
-          ),
-          _AssociationTextField(
-            label: 'Membership End Date',
-            value: draft.membershipEndDate,
-            onChanged:
-                (value) => onChanged(draft.copyWith(membershipEndDate: value)),
-          ),
-          _AssociationTextField(
-            label: 'Payment Amount',
-            value: draft.paymentAmount,
-            onChanged:
-                (value) => onChanged(draft.copyWith(paymentAmount: value)),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(bottom: 14),
-            child: DropdownButtonFormField<String>(
-              value: draft.membershipType,
-              decoration: const InputDecoration(
-                labelText: 'Membership Type',
-                border: OutlineInputBorder(),
-              ),
-              items:
-                  const ['Primary', 'Associate', 'Guest', 'Committee']
-                      .map(
-                        (item) => DropdownMenuItem<String>(
-                          value: item,
-                          child: Text(item),
-                        ),
-                      )
-                      .toList(),
-              onChanged:
-                  (value) => onChanged(
-                    draft.copyWith(membershipType: value ?? 'Primary'),
-                  ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(bottom: 14),
-            child: DropdownButtonFormField<String>(
-              value: draft.paymentStatus,
-              decoration: const InputDecoration(
-                labelText: 'Payment Status',
-                border: OutlineInputBorder(),
-              ),
-              items:
-                  const ['Pending', 'Paid', 'Overdue', 'Waived']
-                      .map(
-                        (item) => DropdownMenuItem<String>(
-                          value: item,
-                          child: Text(item),
-                        ),
-                      )
-                      .toList(),
-              onChanged:
-                  (value) => onChanged(
-                    draft.copyWith(paymentStatus: value ?? 'Pending'),
-                  ),
+            const _MutedChip(
+              icon: Icons.admin_panel_settings_outlined,
+              label: 'Admin CRUD',
             ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: isSaving ? null : onCancel,
-                  child: const Text('Cancel'),
+          ],
+        ),
+        const SizedBox(height: 16),
+        _AssociationTextField(
+          label: 'Full Name',
+          value: draft.name,
+          onChanged: (value) => onChanged(draft.copyWith(name: value)),
+        ),
+        _AssociationTextField(
+          label: 'Company Name',
+          value: draft.companyName,
+          onChanged: (value) => onChanged(draft.copyWith(companyName: value)),
+        ),
+        _AssociationTextField(
+          label: 'Email',
+          value: draft.email,
+          onChanged: (value) => onChanged(draft.copyWith(email: value)),
+        ),
+        _AssociationTextField(
+          label: 'Phone',
+          value: draft.phone,
+          onChanged: (value) => onChanged(draft.copyWith(phone: value)),
+        ),
+        _AssociationTextField(
+          label: 'Company Address',
+          value: draft.address,
+          maxLines: 3,
+          onChanged: (value) => onChanged(draft.copyWith(address: value)),
+        ),
+        _AssociationTextField(
+          label: 'GST',
+          value: draft.gst,
+          onChanged: (value) => onChanged(draft.copyWith(gst: value)),
+        ),
+        _AssociationTextField(
+          label: 'Membership Details',
+          value: draft.membershipDetails,
+          maxLines: 3,
+          onChanged:
+              (value) => onChanged(draft.copyWith(membershipDetails: value)),
+        ),
+        _AssociationTextField(
+          label: 'Membership Start Date',
+          value: draft.membershipStartDate,
+          onChanged:
+              (value) => onChanged(draft.copyWith(membershipStartDate: value)),
+        ),
+        _AssociationTextField(
+          label: 'Membership End Date',
+          value: draft.membershipEndDate,
+          onChanged:
+              (value) => onChanged(draft.copyWith(membershipEndDate: value)),
+        ),
+        _AssociationTextField(
+          label: 'Payment Amount',
+          value: draft.paymentAmount,
+          onChanged: (value) => onChanged(draft.copyWith(paymentAmount: value)),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 14),
+          child: DropdownButtonFormField<String>(
+            value: draft.membershipType,
+            decoration: const InputDecoration(
+              labelText: 'Membership Type',
+              border: OutlineInputBorder(),
+            ),
+            items:
+                const ['Primary', 'Associate', 'Guest']
+                    .map(
+                      (item) => DropdownMenuItem<String>(
+                        value: item,
+                        child: Text(item),
+                      ),
+                    )
+                    .toList(),
+            onChanged:
+                (value) => onChanged(
+                  draft.copyWith(membershipType: value ?? 'Primary'),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: FilledButton(
-                  onPressed:
-                      isSaving || !draft.canSubmit ? null : () => onSave(),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF171717),
-                  ),
-                  child: Text(isSaving ? 'Saving...' : 'Save Member'),
-                ),
-              ),
-            ],
           ),
-        ],
-      ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 14),
+          child: DropdownButtonFormField<String>(
+            value: draft.paymentStatus,
+            decoration: const InputDecoration(
+              labelText: 'Payment Status',
+              border: OutlineInputBorder(),
+            ),
+            items:
+                const ['Pending', 'Paid', 'Overdue', 'Waived']
+                    .map(
+                      (item) => DropdownMenuItem<String>(
+                        value: item,
+                        child: Text(item),
+                      ),
+                    )
+                    .toList(),
+            onChanged:
+                (value) => onChanged(
+                  draft.copyWith(paymentStatus: value ?? 'Pending'),
+                ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: isSaving ? null : onCancel,
+                child: const Text('Cancel'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: FilledButton(
+                onPressed: isSaving || !draft.canSubmit ? null : () => onSave(),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF171717),
+                ),
+                child: Text(isSaving ? 'Saving...' : 'Save Member'),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
@@ -7365,10 +11962,15 @@ class _AssociationInfoTile extends StatelessWidget {
 }
 
 class _AssociationMapTile extends StatelessWidget {
-  const _AssociationMapTile({required this.label, required this.value});
+  const _AssociationMapTile({
+    required this.label,
+    required this.value,
+    this.locationQuery = '',
+  });
 
   final String label;
   final String value;
+  final String locationQuery;
 
   static bool get _supportsEmbeddedMap {
     if (kIsWeb) {
@@ -7383,34 +11985,55 @@ class _AssociationMapTile extends StatelessWidget {
     };
   }
 
-  static Uri? _buildLaunchUri(String rawValue) {
+  static String _normalizeLocationQuery(String rawValue, String fallbackQuery) {
+    final normalizedFallback = fallbackQuery.trim();
+    if (normalizedFallback.isNotEmpty) {
+      return normalizedFallback;
+    }
+
     final trimmedValue = rawValue.trim();
     if (trimmedValue.isEmpty) {
-      return null;
+      return '';
     }
 
     try {
       final parsedUri = Uri.parse(trimmedValue);
-      if (parsedUri.hasScheme) {
-        return parsedUri;
+      final extractedQuery =
+          parsedUri.queryParameters['q'] ??
+          parsedUri.queryParameters['query'] ??
+          parsedUri.queryParameters['destination'] ??
+          parsedUri.queryParameters['daddr'] ??
+          parsedUri.queryParameters['ll'];
+      if (extractedQuery != null && extractedQuery.trim().isNotEmpty) {
+        return extractedQuery.trim();
       }
     } catch (_) {
-      // Fall through to query-based URL generation.
+      return trimmedValue;
+    }
+
+    return trimmedValue;
+  }
+
+  static Uri? _buildLaunchUri(String rawValue, String fallbackQuery) {
+    final normalizedQuery = _normalizeLocationQuery(rawValue, fallbackQuery);
+    if (normalizedQuery.isEmpty) {
+      return null;
     }
 
     return Uri.https('www.google.com', '/maps/search/', {
       'api': '1',
-      'query': trimmedValue,
+      'query': normalizedQuery,
     });
   }
 
-  static Uri? _buildEmbedUri(String rawValue) {
-    final trimmedValue = rawValue.trim();
-    if (trimmedValue.isEmpty) {
+  static Uri? _buildEmbedUri(String rawValue, String fallbackQuery) {
+    final normalizedQuery = _normalizeLocationQuery(rawValue, fallbackQuery);
+    if (normalizedQuery.isEmpty) {
       return null;
     }
 
     try {
+      final trimmedValue = rawValue.trim();
       final parsedUri = Uri.parse(trimmedValue);
 
       if (parsedUri.hasScheme &&
@@ -7433,14 +12056,11 @@ class _AssociationMapTile extends StatelessWidget {
         });
       }
     } catch (_) {
-      return Uri.https('www.google.com', '/maps', {
-        'q': trimmedValue,
-        'output': 'embed',
-      });
+      // Fall through to normalized query.
     }
 
     return Uri.https('www.google.com', '/maps', {
-      'q': trimmedValue,
+      'q': normalizedQuery,
       'output': 'embed',
     });
   }
@@ -7490,8 +12110,8 @@ class _AssociationMapTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final launchUri = _buildLaunchUri(value);
-    final embedUri = _buildEmbedUri(value);
+    final launchUri = _buildLaunchUri(value, locationQuery);
+    final embedUri = _buildEmbedUri(value, locationQuery);
 
     return SizedBox(
       width: 560,
@@ -7527,25 +12147,55 @@ class _AssociationMapTile extends StatelessWidget {
                   border: Border.all(color: const Color(0xFFE9D5FF)),
                   borderRadius: BorderRadius.circular(24),
                 ),
-                child:
-                    _supportsEmbeddedMap
-                        ? _AssociationEmbeddedMap(
-                          html: _buildEmbedHtml(embedUri),
-                        )
-                        : Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(20),
-                            child: Text(
-                              'Map preview is not available on this platform. Use the button below to open Google Maps.',
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                fontSize: 14,
-                                color: Color(0xFF4B5563),
-                                height: 1.5,
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child:
+                          _supportsEmbeddedMap
+                              ? IgnorePointer(
+                                ignoring: true,
+                                child: _AssociationEmbeddedMap(
+                                  html: _buildEmbedHtml(embedUri),
+                                ),
+                              )
+                              : const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.all(20),
+                                  child: Text(
+                                    'Map preview is not available on this platform. Use the button below to open Google Maps.',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Color(0xFF4B5563),
+                                      height: 1.5,
+                                    ),
+                                  ),
+                                ),
                               ),
-                            ),
+                    ),
+                    Positioned(
+                      top: 14,
+                      right: 14,
+                      child: FilledButton.icon(
+                        onPressed: () => _openMap(launchUri),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: const Color(0xFF171717),
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
                           ),
                         ),
+                        icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                        label: const Text('Open map'),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 10),
@@ -7554,7 +12204,7 @@ class _AssociationMapTile extends StatelessWidget {
               child: OutlinedButton.icon(
                 onPressed: () => _openMap(launchUri),
                 icon: const Icon(Icons.map_outlined),
-                label: const Text('Open in Google Maps'),
+                label: const Text('Open in Maps'),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: const Color(0xFF171717),
                   side: const BorderSide(color: Color(0xFFD8B4FE)),
@@ -7626,16 +12276,89 @@ class _AssociationTextField extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
-      child: TextFormField(
-        key: ValueKey('$label-$value'),
-        initialValue: value,
+      child: _StableTextFormField(
+        value: value,
+        label: label,
         minLines: maxLines,
         maxLines: maxLines,
-        decoration: InputDecoration(
-          labelText: label,
-          border: const OutlineInputBorder(),
-        ),
         onChanged: onChanged,
+      ),
+    );
+  }
+}
+
+class _StableTextFormField extends StatefulWidget {
+  const _StableTextFormField({
+    super.key,
+    required this.value,
+    required this.label,
+    required this.onChanged,
+    this.keyboardType,
+    this.maxLines = 1,
+    this.minLines,
+  });
+
+  final String value;
+  final String label;
+  final ValueChanged<String> onChanged;
+  final TextInputType? keyboardType;
+  final int maxLines;
+  final int? minLines;
+
+  @override
+  State<_StableTextFormField> createState() => _StableTextFormFieldState();
+}
+
+class _StableTextFormFieldState extends State<_StableTextFormField> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.value);
+  }
+
+  @override
+  void didUpdateWidget(covariant _StableTextFormField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.value != _controller.text) {
+      final selection = _controller.selection;
+      _controller.value = TextEditingValue(
+        text: widget.value,
+        selection:
+            selection.isValid
+                ? selection.copyWith(
+                  baseOffset: selection.baseOffset.clamp(
+                    0,
+                    widget.value.length,
+                  ),
+                  extentOffset: selection.extentOffset.clamp(
+                    0,
+                    widget.value.length,
+                  ),
+                )
+                : TextSelection.collapsed(offset: widget.value.length),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TextFormField(
+      controller: _controller,
+      keyboardType: widget.keyboardType,
+      minLines: widget.minLines,
+      maxLines: widget.maxLines,
+      onChanged: widget.onChanged,
+      decoration: InputDecoration(
+        labelText: widget.label,
+        border: const OutlineInputBorder(),
       ),
     );
   }
@@ -7690,8 +12413,8 @@ class _AdminAppAccessSectionState extends State<_AdminAppAccessSection> {
             _settings = _settings.copyWith(disableScreenshots: value),
       ),
       (
-        'Approve membership',
-        'Keep membership activation behind admin approval.',
+        'Require membership activation',
+        'Keep new member records in pending membership status until they are activated.',
         _settings.approveMembership,
         (bool value) =>
             _settings = _settings.copyWith(approveMembership: value),
@@ -8066,8 +12789,8 @@ enum AdminMemberAccessView { app, content }
 
 extension AdminMemberAccessViewMeta on AdminMemberAccessView {
   String get label => switch (this) {
-    AdminMemberAccessView.app => 'Member App Access',
-    AdminMemberAccessView.content => 'Member Content Access',
+    AdminMemberAccessView.app => 'App Access',
+    AdminMemberAccessView.content => 'Content Access',
   };
 }
 
@@ -8084,18 +12807,14 @@ extension AdminMemberTypeFilterMeta on AdminMemberTypeFilter {
 
   bool matches(AdminMemberAccessItem member) {
     final role = member.roleTitle.trim().toLowerCase();
+    final hasCommitteePost = member.committeePost.trim().isNotEmpty;
     return switch (this) {
-      AdminMemberTypeFilter.all => [
-        'primary',
-        'associate',
-        'temporary visit',
-        'committee',
-      ].contains(role),
-      AdminMemberTypeFilter.primary => role == 'primary',
+      AdminMemberTypeFilter.all => true,
+      AdminMemberTypeFilter.primary => role.isEmpty || role == 'primary',
       AdminMemberTypeFilter.associate => role == 'associate',
       AdminMemberTypeFilter.guest =>
         role == 'temporary visit' || role == 'guest' || role == 'visitor',
-      AdminMemberTypeFilter.committee => role == 'committee',
+      AdminMemberTypeFilter.committee => hasCommitteePost,
     };
   }
 }
@@ -8130,6 +12849,7 @@ class _AdminMemberAccessWorkspaceState
     extends State<_AdminMemberAccessWorkspace> {
   AdminMemberAccessView _activeView = AdminMemberAccessView.app;
   AdminMemberTypeFilter _activeFilter = AdminMemberTypeFilter.all;
+  MemberAccessStatus? _bulkAccessAction;
   final TextEditingController _appSearchController = TextEditingController();
   final TextEditingController _contentSearchController =
       TextEditingController();
@@ -8210,37 +12930,62 @@ class _AdminMemberAccessWorkspaceState
               'Match the same member app access and member content access workflow shown in the web admin arena.',
         ),
         const SizedBox(height: 14),
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children:
-              AdminMemberAccessView.values.map((view) {
-                final selected = _activeView == view;
-                return ChoiceChip(
-                  label: Text(view.label),
-                  selected: selected,
-                  onSelected: (_) {
-                    setState(() {
-                      _activeView = view;
-                    });
-                  },
-                  showCheckmark: false,
-                  selectedColor: const Color(0xFFE9D5FF),
-                  side: BorderSide(
-                    color:
-                        selected
-                            ? const Color(0xFF7C3AED)
-                            : const Color(0xFFE5E7EB),
-                  ),
-                  labelStyle: TextStyle(
-                    color:
-                        selected
-                            ? const Color(0xFF7C3AED)
-                            : const Color(0xFF4B5563),
-                    fontWeight: FontWeight.w700,
-                  ),
-                );
-              }).toList(),
+        Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF3F4F6),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFFE5E7EB)),
+          ),
+          child: Row(
+            children:
+                AdminMemberAccessView.values.map((view) {
+                  final selected = _activeView == view;
+                  return Expanded(
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      curve: Curves.easeOut,
+                      decoration: BoxDecoration(
+                        color: selected ? Colors.white : Colors.transparent,
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow:
+                            selected
+                                ? const [
+                                  BoxShadow(
+                                    color: Color(0x120F172A),
+                                    blurRadius: 10,
+                                    offset: Offset(0, 4),
+                                  ),
+                                ]
+                                : null,
+                      ),
+                      child: InkWell(
+                        onTap: () {
+                          setState(() {
+                            _activeView = view;
+                          });
+                        },
+                        borderRadius: BorderRadius.circular(14),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          child: Text(
+                            view.label,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color:
+                                  selected
+                                      ? const Color(0xFF7C3AED)
+                                      : const Color(0xFF4B5563),
+                              fontWeight: FontWeight.w800,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+          ),
         ),
         const SizedBox(height: 14),
         if (_activeView == AdminMemberAccessView.app) ...[
@@ -8250,94 +12995,100 @@ class _AdminMemberAccessWorkspaceState
             onChanged: (value) => setState(() => _appQuery = value),
           ),
           const SizedBox(height: 12),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              FilterChip(
-                label: const Text('Select filtered'),
-                selected: allFilteredSelected,
-                onSelected: (_) {
-                  setState(() {
-                    if (allFilteredSelected) {
-                      _selectedMemberIds.removeAll(
-                        filteredMembers.map((member) => member.id),
-                      );
-                    } else {
-                      _selectedMemberIds.addAll(
-                        filteredMembers.map((member) => member.id),
-                      );
-                    }
-                  });
-                },
-              ),
-              for (final filter in AdminMemberTypeFilter.values)
-                ChoiceChip(
-                  label: Text(filter.label),
-                  selected: _activeFilter == filter,
-                  onSelected: (_) {
-                    setState(() {
-                      _activeFilter = filter;
-                    });
-                  },
-                  showCheckmark: false,
-                ),
-            ],
+          _AdminToolbarDropdown<AdminMemberTypeFilter>(
+            value: _activeFilter,
+            icon: Icons.badge_outlined,
+            labelText: 'Member type',
+            items:
+                AdminMemberTypeFilter.values.map((filter) {
+                  return DropdownMenuItem(
+                    value: filter,
+                    child: Text(filter.label, overflow: TextOverflow.ellipsis),
+                  );
+                }).toList(),
+            onChanged: (value) {
+              if (value == null) {
+                return;
+              }
+              setState(() {
+                _activeFilter = value;
+              });
+            },
           ),
           const SizedBox(height: 12),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              OutlinedButton(
-                onPressed:
-                    _selectedMemberIds.isEmpty ||
-                            widget.updatingMemberId != null
-                        ? null
-                        : () => widget.onBulkUpdateAccess(
-                          filteredMembers
-                              .where(
-                                (member) =>
-                                    _selectedMemberIds.contains(member.id),
-                              )
-                              .toList(),
-                          MemberAccessStatus.approved,
-                        ),
-                child: const Text('Approve Membership'),
-              ),
-              OutlinedButton(
-                onPressed:
-                    _selectedMemberIds.isEmpty ||
-                            widget.updatingMemberId != null
-                        ? null
-                        : () => widget.onBulkUpdateAccess(
-                          filteredMembers
-                              .where(
-                                (member) =>
-                                    _selectedMemberIds.contains(member.id),
-                              )
-                              .toList(),
-                          MemberAccessStatus.suspended,
-                        ),
-                child: const Text('Suspend Membership'),
-              ),
-              OutlinedButton(
-                onPressed:
-                    _selectedMemberIds.isEmpty ||
-                            widget.updatingMemberId != null
-                        ? null
-                        : () => widget.onBulkUpdateAccess(
-                          filteredMembers
-                              .where(
-                                (member) =>
-                                    _selectedMemberIds.contains(member.id),
-                              )
-                              .toList(),
-                          MemberAccessStatus.cancelled,
-                        ),
-                child: const Text('Cancel Membership'),
-              ),
-            ],
+          _AdminToolbarDropdown<MemberAccessStatus>(
+            value: _bulkAccessAction,
+            icon: Icons.rule_folder_outlined,
+            labelText: 'Bulk action',
+            items:
+                const [
+                  MemberAccessStatus.approved,
+                  MemberAccessStatus.suspended,
+                  MemberAccessStatus.cancelled,
+                ].map((status) {
+                  return DropdownMenuItem(
+                    value: status,
+                    child: Text(
+                      status == MemberAccessStatus.approved
+                          ? 'Approve'
+                          : status == MemberAccessStatus.suspended
+                          ? 'Suspend'
+                          : 'Cancel',
+                    ),
+                  );
+                }).toList(),
+            onChanged: (value) {
+              setState(() {
+                _bulkAccessAction = value;
+              });
+            },
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: () {
+              setState(() {
+                if (allFilteredSelected) {
+                  _selectedMemberIds.removeAll(
+                    filteredMembers.map((member) => member.id),
+                  );
+                } else {
+                  _selectedMemberIds.addAll(
+                    filteredMembers.map((member) => member.id),
+                  );
+                }
+              });
+            },
+            icon: Icon(
+              allFilteredSelected
+                  ? Icons.check_box_rounded
+                  : Icons.check_box_outline_blank_rounded,
+            ),
+            label: Text(
+              allFilteredSelected ? 'Selected filtered' : 'Select filtered',
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: FilledButton.icon(
+              onPressed:
+                  _selectedMemberIds.isEmpty ||
+                          widget.updatingMemberId != null ||
+                          _bulkAccessAction == null
+                      ? null
+                      : () => widget.onBulkUpdateAccess(
+                        filteredMembers
+                            .where(
+                              (member) =>
+                                  _selectedMemberIds.contains(member.id),
+                            )
+                            .toList(),
+                        _bulkAccessAction!,
+                      ),
+              icon: const Icon(Icons.playlist_add_check_circle_rounded),
+              label: const Text('Apply bulk action'),
+            ),
           ),
           const SizedBox(height: 14),
         ] else ...[
@@ -8407,6 +13158,7 @@ class _AdminMemberAccessWorkspaceState
                 name: member.name,
                 photoUrl: member.photoUrl,
                 primaryLabel: member.companyName,
+                summary: '',
                 leadingControl: Checkbox(
                   value: _selectedMemberIds.contains(member.id),
                   onChanged:
@@ -8418,7 +13170,6 @@ class _AdminMemberAccessWorkspaceState
                         }
                       }),
                 ),
-                trailing: _AccessStatusBadge(status: member.accessStatus),
                 factPills: [
                   if (member.roleTitle.isNotEmpty)
                     _DirectoryRolePill(label: member.roleTitle),
@@ -8445,39 +13196,20 @@ class _AdminMemberAccessWorkspaceState
                 footer: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children:
-                          MemberAccessStatus.values.map((status) {
-                            final selected = status == member.accessStatus;
-                            return ChoiceChip(
-                              label: Text(status.label),
-                              selected: selected,
-                              onSelected:
-                                  widget.updatingMemberId != null
-                                      ? null
-                                      : (_) =>
-                                          widget.onUpdateAccess(member, status),
-                              showCheckmark: false,
-                              selectedColor: status.color.withValues(
-                                alpha: 0.16,
-                              ),
-                              side: BorderSide(
-                                color:
-                                    selected
-                                        ? status.color
-                                        : const Color(0xFFE5E7EB),
-                              ),
-                              labelStyle: TextStyle(
-                                color:
-                                    selected
-                                        ? status.color
-                                        : const Color(0xFF4B5563),
-                                fontWeight: FontWeight.w700,
-                              ),
-                            );
-                          }).toList(),
+                    _MemberAccessStatusActionRow(
+                      currentStatus: member.accessStatus,
+                      isUpdating: widget.updatingMemberId == member.id,
+                      onSelected:
+                          (status) => widget.onUpdateAccess(member, status),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'App access controls',
+                      style: TextStyle(
+                        color: const Color(0xFF6B7280),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     if (widget.updatingMemberId == member.id) ...[
                       const SizedBox(height: 12),
@@ -8535,6 +13267,166 @@ class _AdminToolbarSearch extends StatelessWidget {
   }
 }
 
+class _AdminToolbarDropdown<T> extends StatelessWidget {
+  const _AdminToolbarDropdown({
+    required this.value,
+    required this.icon,
+    required this.labelText,
+    required this.items,
+    required this.onChanged,
+  });
+
+  final T? value;
+  final IconData icon;
+  final String labelText;
+  final List<DropdownMenuItem<T>> items;
+  final ValueChanged<T?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0A0F172A),
+            blurRadius: 18,
+            offset: Offset(0, 10),
+          ),
+        ],
+      ),
+      child: DropdownButtonFormField<T>(
+        value: value,
+        items: items,
+        onChanged: onChanged,
+        decoration: InputDecoration(
+          border: InputBorder.none,
+          icon: Icon(icon),
+          labelText: labelText,
+        ),
+        isExpanded: true,
+      ),
+    );
+  }
+}
+
+class _MemberAccessStatusActionRow extends StatelessWidget {
+  const _MemberAccessStatusActionRow({
+    required this.currentStatus,
+    required this.isUpdating,
+    required this.onSelected,
+    this.primaryLabel = 'Approve / Pending',
+    this.secondaryLabel = 'Cancel / Suspend',
+  });
+
+  final MemberAccessStatus currentStatus;
+  final bool isUpdating;
+  final ValueChanged<MemberAccessStatus> onSelected;
+  final String primaryLabel;
+  final String secondaryLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: _MemberAccessToggleButton(
+            label: primaryLabel,
+            icon:
+                currentStatus == MemberAccessStatus.approved
+                    ? Icons.check_circle_rounded
+                    : Icons.hourglass_top_rounded,
+            selected:
+                currentStatus == MemberAccessStatus.approved ||
+                currentStatus == MemberAccessStatus.pending,
+            activeColor:
+                currentStatus == MemberAccessStatus.approved
+                    ? MemberAccessStatus.approved.color
+                    : MemberAccessStatus.pending.color,
+            enabled: !isUpdating,
+            onPressed:
+                () => onSelected(
+                  currentStatus == MemberAccessStatus.approved
+                      ? MemberAccessStatus.pending
+                      : MemberAccessStatus.approved,
+                ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _MemberAccessToggleButton(
+            label: secondaryLabel,
+            icon:
+                currentStatus == MemberAccessStatus.cancelled
+                    ? Icons.cancel_rounded
+                    : Icons.pause_circle_rounded,
+            selected:
+                currentStatus == MemberAccessStatus.cancelled ||
+                currentStatus == MemberAccessStatus.suspended,
+            activeColor:
+                currentStatus == MemberAccessStatus.cancelled
+                    ? MemberAccessStatus.cancelled.color
+                    : MemberAccessStatus.suspended.color,
+            enabled: !isUpdating,
+            onPressed:
+                () => onSelected(
+                  currentStatus == MemberAccessStatus.suspended
+                      ? MemberAccessStatus.cancelled
+                      : MemberAccessStatus.suspended,
+                ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MemberAccessToggleButton extends StatelessWidget {
+  const _MemberAccessToggleButton({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.activeColor,
+    required this.enabled,
+    required this.onPressed,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final Color activeColor;
+  final bool enabled;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final foregroundColor = selected ? activeColor : const Color(0xFF4B5563);
+    final backgroundColor =
+        selected
+            ? activeColor.withValues(alpha: 0.14)
+            : const Color(0xFFF8FAFC);
+    final borderColor = selected ? activeColor : const Color(0xFFE5E7EB);
+
+    return OutlinedButton.icon(
+      onPressed: enabled ? onPressed : null,
+      icon: Icon(icon, size: 15),
+      label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: foregroundColor,
+        backgroundColor: backgroundColor,
+        side: BorderSide(color: borderColor),
+        minimumSize: const Size.fromHeight(38),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+    );
+  }
+}
+
 class _AdminContentReviewSection extends StatelessWidget {
   const _AdminContentReviewSection({
     required this.posts,
@@ -8564,19 +13456,17 @@ class _AdminContentReviewSection extends StatelessWidget {
               'Moderate member posts from the same queue used by web and member arena.',
         ),
         const SizedBox(height: 14),
-        ...posts
-            .take(8)
-            .map(
-              (post) => Padding(
-                padding: const EdgeInsets.only(bottom: 14),
-                child: _MemberPostCard(
-                  post: post,
-                  viewerRole: AppViewerRole.admin,
-                  isUpdating: updatingPostId == post.id,
-                  onUpdateStatus: onUpdateStatus,
-                ),
-              ),
+        ...posts.map(
+          (post) => Padding(
+            padding: const EdgeInsets.only(bottom: 14),
+            child: _MemberPostCard(
+              post: post,
+              viewerRole: AppViewerRole.admin,
+              isUpdating: updatingPostId == post.id,
+              onUpdateStatus: onUpdateStatus,
             ),
+          ),
+        ),
       ],
     );
   }
@@ -8601,43 +13491,143 @@ class _AdminEventsSection extends StatefulWidget {
   State<_AdminEventsSection> createState() => _AdminEventsSectionState();
 }
 
-class _AdminVendorAccessWorkspace extends StatelessWidget {
+class _AdminVendorAccessWorkspace extends StatefulWidget {
   const _AdminVendorAccessWorkspace({
+    this.title = 'Vendor Requests',
+    this.subtitle =
+        'Approve vendor registrations and review paid app banner submissions from the live backend.',
+    this.emptyTitle = 'No vendor requests found',
+    this.emptySubtitle =
+        'New vendor registrations will appear here for review.',
     required this.vendors,
     required this.updatingVendorId,
+    this.reviewingVendorId,
     required this.onUpdateVendorAccess,
+    this.onEditVendor,
   });
 
+  final String title;
+  final String subtitle;
+  final String emptyTitle;
+  final String emptySubtitle;
   final List<AdminVendorAccessItem> vendors;
   final String? updatingVendorId;
+  final String? reviewingVendorId;
   final Future<void> Function(AdminVendorAccessItem, MemberAccessStatus)
   onUpdateVendorAccess;
+  final ValueChanged<AdminVendorAccessItem>? onEditVendor;
+
+  @override
+  State<_AdminVendorAccessWorkspace> createState() =>
+      _AdminVendorAccessWorkspaceState();
+}
+
+class _AdminVendorAccessWorkspaceState
+    extends State<_AdminVendorAccessWorkspace> {
+  final TextEditingController _searchController = TextEditingController();
+  String _query = '';
+  MemberAccessStatus? _selectedStatus;
+
+  String _vendorStatusLabel(MemberAccessStatus status) => switch (status) {
+    MemberAccessStatus.approved => 'Active',
+    MemberAccessStatus.pending => 'Pending',
+    MemberAccessStatus.suspended => 'Suspended',
+    MemberAccessStatus.cancelled => 'Cancelled',
+  };
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final filteredVendors =
+        widget.vendors.where((vendor) {
+          if (_selectedStatus != null &&
+              vendor.accessStatus != _selectedStatus) {
+            return false;
+          }
+          final query = _query.trim().toLowerCase();
+          if (query.isEmpty) {
+            return true;
+          }
+          return [
+            vendor.displayName,
+            vendor.contactPerson,
+            vendor.email,
+            vendor.phone,
+            vendor.primaryLoginEmail,
+            vendor.secondaryLoginEmail,
+            vendor.city,
+            vendor.category,
+            vendor.vendorType,
+          ].join(' ').toLowerCase().contains(query);
+        }).toList();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionHeader(
-          title: 'Vendor Requests',
-          subtitle:
-              'Approve vendor registrations and review paid app banner submissions from the live backend.',
+        _SectionHeader(title: widget.title, subtitle: widget.subtitle),
+        const SizedBox(height: 14),
+        _AdminToolbarSearch(
+          controller: _searchController,
+          hintText: 'Search vendor, city, category, contact...',
+          onChanged: (value) => setState(() => _query = value),
+        ),
+        const SizedBox(height: 12),
+        _AdminToolbarDropdown<MemberAccessStatus?>(
+          value: _selectedStatus,
+          icon: Icons.filter_alt_rounded,
+          labelText: 'Status',
+          items: [
+            const DropdownMenuItem<MemberAccessStatus?>(
+              value: null,
+              child: Text('All'),
+            ),
+            ...const [
+              MemberAccessStatus.pending,
+              MemberAccessStatus.suspended,
+              MemberAccessStatus.approved,
+              MemberAccessStatus.cancelled,
+            ].map(
+              (status) => DropdownMenuItem<MemberAccessStatus?>(
+                value: status,
+                child: Text(_vendorStatusLabel(status)),
+              ),
+            ),
+          ],
+          onChanged: (value) {
+            setState(() {
+              _selectedStatus = value;
+            });
+          },
         ),
         const SizedBox(height: 14),
-        if (vendors.isEmpty)
-          const _EmptyStateCard(
-            title: 'No vendor requests found',
-            subtitle: 'New vendor registrations will appear here for review.',
+        if (filteredVendors.isEmpty)
+          _EmptyStateCard(
+            title: widget.emptyTitle,
+            subtitle:
+                _query.trim().isNotEmpty || _selectedStatus != null
+                    ? 'No vendors match the current search or status filter.'
+                    : widget.emptySubtitle,
           )
         else
-          ...vendors.map(
+          ...filteredVendors.map(
             (vendor) => Padding(
               padding: const EdgeInsets.only(bottom: 14),
               child: _AdminVendorAccessCard(
                 vendor: vendor,
-                isUpdating: updatingVendorId == vendor.id,
+                isUpdating:
+                    widget.updatingVendorId == vendor.id ||
+                    widget.reviewingVendorId == vendor.id,
                 onUpdateAccess:
-                    (status) => onUpdateVendorAccess(vendor, status),
+                    (status) => widget.onUpdateVendorAccess(vendor, status),
+                onEdit:
+                    widget.onEditVendor == null
+                        ? null
+                        : () => widget.onEditVendor!(vendor),
               ),
             ),
           ),
@@ -8646,20 +13636,200 @@ class _AdminVendorAccessWorkspace extends StatelessWidget {
   }
 }
 
-class _AdminBannerAccessWorkspace extends StatelessWidget {
-  const _AdminBannerAccessWorkspace({
-    required this.banners,
-    required this.updatingBannerId,
-    required this.onUpdateBannerStatus,
+class _AdminVendorRegistrationWorkspace extends StatelessWidget {
+  const _AdminVendorRegistrationWorkspace({
+    required this.pendingCount,
+    required this.categories,
+    required this.isSaving,
+    required this.onAddNew,
   });
 
-  final List<AdminAppBannerItem> banners;
-  final String? updatingBannerId;
-  final Future<void> Function(AdminAppBannerItem, BannerReviewStatus)
-  onUpdateBannerStatus;
+  final int pendingCount;
+  final List<VendorTaxonomyCategoryItem> categories;
+  final bool isSaving;
+  final VoidCallback onAddNew;
 
   @override
   Widget build(BuildContext context) {
+    final subCategoryCount = categories.fold<int>(
+      0,
+      (sum, category) => sum + category.subCategories.length,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Expanded(
+              child: _SectionHeader(
+                title: 'Vendor Registration',
+                subtitle:
+                    'Add a new vendor from admin view using the same backend registration flow used on the web app.',
+              ),
+            ),
+            const SizedBox(width: 12),
+            FilledButton.icon(
+              onPressed: isSaving ? null : onAddNew,
+              icon:
+                  isSaving
+                      ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                      : const Icon(Icons.add_business_rounded),
+              label: const Text('Add New'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            _AdminMetricCard(
+              label: 'Categories',
+              value: '${categories.length}',
+              icon: Icons.category_rounded,
+            ),
+            _AdminMetricCard(
+              label: 'Sub-categories',
+              value: '$subCategoryCount',
+              icon: Icons.subdirectory_arrow_right_rounded,
+            ),
+            _AdminMetricCard(
+              label: 'Pending review',
+              value: '$pendingCount',
+              icon: Icons.hourglass_top_rounded,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _AdminMetricCard extends StatelessWidget {
+  const _AdminMetricCard({
+    required this.label,
+    required this.value,
+    required this.icon,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 180,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(icon, color: const Color(0xFF7C3AED), size: 18),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  value,
+                  style: const TextStyle(
+                    color: Color(0xFF171717),
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: Color(0xFF6B7280),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AdminBannerAccessWorkspace extends StatefulWidget {
+  const _AdminBannerAccessWorkspace({
+    required this.banners,
+    required this.vendors,
+    required this.updatingBannerId,
+    required this.isSavingNewBanner,
+    required this.onAddBanner,
+    required this.onUpdateBannerStatus,
+    this.onEditBanner,
+  });
+
+  final List<AdminAppBannerItem> banners;
+  final List<AdminVendorAccessItem> vendors;
+  final String? updatingBannerId;
+  final bool isSavingNewBanner;
+  final VoidCallback onAddBanner;
+  final Future<void> Function(AdminAppBannerItem, BannerReviewStatus)
+  onUpdateBannerStatus;
+  final ValueChanged<AdminAppBannerItem>? onEditBanner;
+
+  @override
+  State<_AdminBannerAccessWorkspace> createState() =>
+      _AdminBannerAccessWorkspaceState();
+}
+
+class _AdminBannerAccessWorkspaceState
+    extends State<_AdminBannerAccessWorkspace> {
+  final TextEditingController _vendorSearchController = TextEditingController();
+  String _vendorQuery = '';
+  BannerReviewStatus? _selectedStatus;
+
+  @override
+  void dispose() {
+    _vendorSearchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filteredBanners =
+        widget.banners.where((banner) {
+          if (_selectedStatus != null &&
+              banner.reviewStatus != _selectedStatus) {
+            return false;
+          }
+          final query = _vendorQuery.trim().toLowerCase();
+          if (query.isEmpty) {
+            return true;
+          }
+          return [
+            banner.vendorName,
+            banner.shortText,
+            banner.contactNumber,
+            banner.socialMediaUrl,
+          ].join(' ').toLowerCase().contains(query);
+        }).toList();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -8669,20 +13839,73 @@ class _AdminBannerAccessWorkspace extends StatelessWidget {
               'Approve, reject, or hold paid banner requests from the live backend before they go live in the carousel.',
         ),
         const SizedBox(height: 14),
-        if (banners.isEmpty)
-          const _EmptyStateCard(
+        Align(
+          alignment: Alignment.centerRight,
+          child: FilledButton.icon(
+            onPressed:
+                widget.isSavingNewBanner || widget.vendors.isEmpty
+                    ? null
+                    : widget.onAddBanner,
+            icon: const Icon(Icons.add_photo_alternate_outlined),
+            label: Text(widget.isSavingNewBanner ? 'Adding...' : 'Add New'),
+          ),
+        ),
+        const SizedBox(height: 12),
+        _AdminToolbarSearch(
+          controller: _vendorSearchController,
+          hintText: 'Search vendor name...',
+          onChanged: (value) => setState(() => _vendorQuery = value),
+        ),
+        const SizedBox(height: 12),
+        _AdminToolbarDropdown<BannerReviewStatus?>(
+          value: _selectedStatus,
+          icon: Icons.filter_alt_rounded,
+          labelText: 'Banner status',
+          items: [
+            const DropdownMenuItem<BannerReviewStatus?>(
+              value: null,
+              child: Text('All'),
+            ),
+            ...const [
+              BannerReviewStatus.approved,
+              BannerReviewStatus.pending,
+              BannerReviewStatus.rejected,
+              BannerReviewStatus.onHold,
+            ].map(
+              (status) => DropdownMenuItem<BannerReviewStatus?>(
+                value: status,
+                child: Text(status.label),
+              ),
+            ),
+          ],
+          onChanged: (value) {
+            setState(() {
+              _selectedStatus = value;
+            });
+          },
+        ),
+        const SizedBox(height: 14),
+        if (filteredBanners.isEmpty)
+          _EmptyStateCard(
             title: 'No banner requests found',
-            subtitle: 'Submitted app banners will appear here for moderation.',
+            subtitle:
+                _vendorQuery.trim().isNotEmpty || _selectedStatus != null
+                    ? 'No banners match the current vendor search or status filter.'
+                    : 'Submitted app banners will appear here for moderation.',
           )
         else
-          ...banners.map(
+          ...filteredBanners.map(
             (banner) => Padding(
               padding: const EdgeInsets.only(bottom: 14),
               child: _AdminAppBannerCard(
                 banner: banner,
-                isUpdating: updatingBannerId == banner.id,
+                isUpdating: widget.updatingBannerId == banner.id,
+                onEdit:
+                    widget.onEditBanner == null
+                        ? null
+                        : () => widget.onEditBanner!(banner),
                 onUpdateStatus:
-                    (status) => onUpdateBannerStatus(banner, status),
+                    (status) => widget.onUpdateBannerStatus(banner, status),
               ),
             ),
           ),
@@ -8691,20 +13914,66 @@ class _AdminBannerAccessWorkspace extends StatelessWidget {
   }
 }
 
-class _AdminTimelineAccessWorkspace extends StatelessWidget {
+class _AdminTimelineAccessWorkspace extends StatefulWidget {
   const _AdminTimelineAccessWorkspace({
     required this.posts,
+    required this.members,
+    required this.vendors,
+    required this.tenant,
     required this.updatingTimelineId,
     required this.onUpdateTimelineStatus,
   });
 
   final List<AdminTimelineItem> posts;
+  final List<AdminMemberAccessItem> members;
+  final List<AdminVendorAccessItem> vendors;
+  final TenantContext? tenant;
   final String? updatingTimelineId;
   final Future<void> Function(AdminTimelineItem, TimelineReviewStatus)
   onUpdateTimelineStatus;
 
   @override
+  State<_AdminTimelineAccessWorkspace> createState() =>
+      _AdminTimelineAccessWorkspaceState();
+}
+
+class _AdminTimelineAccessWorkspaceState
+    extends State<_AdminTimelineAccessWorkspace> {
+  final TextEditingController _searchController = TextEditingController();
+  String _query = '';
+  String? _selectedSourceType;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final filteredPosts =
+        widget.posts.where((post) {
+            final sourceType = post.sourceType.trim().toUpperCase();
+            if (_selectedSourceType != null &&
+                sourceType != _selectedSourceType) {
+              return false;
+            }
+            final normalizedQuery = _query.trim().toLowerCase();
+            if (normalizedQuery.isEmpty) {
+              return true;
+            }
+            return [
+              post.sourceType,
+              post.sourceName,
+              post.postedBy,
+              post.caption,
+              post.contactNumber,
+            ].any(
+              (value) => value.trim().toLowerCase().contains(normalizedQuery),
+            );
+          }).toList()
+          ..sort((left, right) => right.createdAt.compareTo(left.createdAt));
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -8714,21 +13983,49 @@ class _AdminTimelineAccessWorkspace extends StatelessWidget {
               'Approve, reject, or hold association, member, and vendor timeline posts from the live backend.',
         ),
         const SizedBox(height: 14),
-        if (posts.isEmpty)
-          const _EmptyStateCard(
+        _AdminToolbarSearch(
+          controller: _searchController,
+          hintText: 'Search source, posted by, or caption...',
+          onChanged: (value) => setState(() => _query = value),
+        ),
+        const SizedBox(height: 12),
+        _AdminToolbarDropdown<String?>(
+          value: _selectedSourceType,
+          icon: Icons.tune_rounded,
+          labelText: 'Timeline source',
+          items: const [
+            DropdownMenuItem<String?>(value: null, child: Text('All')),
+            DropdownMenuItem<String?>(
+              value: 'ASSOCIATION',
+              child: Text('Association'),
+            ),
+            DropdownMenuItem<String?>(value: 'MEMBER', child: Text('Member')),
+            DropdownMenuItem<String?>(value: 'VENDOR', child: Text('Vendor')),
+          ],
+          onChanged: (value) {
+            setState(() {
+              _selectedSourceType = value;
+            });
+          },
+        ),
+        const SizedBox(height: 14),
+        if (filteredPosts.isEmpty)
+          _EmptyStateCard(
             title: 'No timeline posts found',
             subtitle:
-                'Submitted timeline posts will appear here for moderation.',
+                _query.trim().isNotEmpty || _selectedSourceType != null
+                    ? 'No timeline posts match the current source or search filter.'
+                    : 'Submitted timeline posts will appear here for moderation.',
           )
         else
-          ...posts.map(
+          ...filteredPosts.map(
             (post) => Padding(
               padding: const EdgeInsets.only(bottom: 14),
               child: _AdminTimelineAccessCard(
                 post: post,
-                isUpdating: updatingTimelineId == post.id,
+                isUpdating: widget.updatingTimelineId == post.id,
                 onUpdateStatus:
-                    (status) => onUpdateTimelineStatus(post, status),
+                    (status) => widget.onUpdateTimelineStatus(post, status),
               ),
             ),
           ),
@@ -8742,11 +14039,13 @@ class _AdminVendorAccessCard extends StatelessWidget {
     required this.vendor,
     required this.isUpdating,
     required this.onUpdateAccess,
+    this.onEdit,
   });
 
   final AdminVendorAccessItem vendor;
   final bool isUpdating;
   final ValueChanged<MemberAccessStatus> onUpdateAccess;
+  final VoidCallback? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -8798,33 +14097,32 @@ class _AdminVendorAccessCard extends StatelessWidget {
       footer: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children:
-                [
-                  MemberAccessStatus.approved,
-                  MemberAccessStatus.pending,
-                  MemberAccessStatus.suspended,
-                  MemberAccessStatus.cancelled,
-                ].map((status) {
-                  final selected = vendor.accessStatus == status;
-                  return ChoiceChip(
-                    label: Text(status.label),
-                    selected: selected,
-                    onSelected:
-                        isUpdating ? null : (_) => onUpdateAccess(status),
-                    showCheckmark: false,
-                    selectedColor: status.color.withValues(alpha: 0.16),
-                    labelStyle: TextStyle(
-                      color: selected ? status.color : const Color(0xFF4B5563),
-                      fontWeight: FontWeight.w700,
-                    ),
-                    side: BorderSide(
-                      color: selected ? status.color : const Color(0xFFE5E7EB),
-                    ),
-                  );
-                }).toList(),
+          if (onEdit != null) ...[
+            Align(
+              alignment: Alignment.centerRight,
+              child: OutlinedButton.icon(
+                onPressed: isUpdating ? null : onEdit,
+                icon: const Icon(Icons.edit_note_rounded),
+                label: const Text('Edit'),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+          _MemberAccessStatusActionRow(
+            currentStatus: vendor.accessStatus,
+            isUpdating: isUpdating,
+            onSelected: onUpdateAccess,
+            primaryLabel: 'Active / Pending',
+            secondaryLabel: 'Cancel / Suspend',
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Vendor access controls',
+            style: TextStyle(
+              color: Color(0xFF6B7280),
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           if (isUpdating) ...[
             const SizedBox(height: 10),
@@ -8843,11 +14141,13 @@ class _AdminAppBannerCard extends StatelessWidget {
     required this.banner,
     required this.isUpdating,
     required this.onUpdateStatus,
+    this.onEdit,
   });
 
   final AdminAppBannerItem banner;
   final bool isUpdating;
   final ValueChanged<BannerReviewStatus> onUpdateStatus;
+  final VoidCallback? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -8866,7 +14166,7 @@ class _AdminAppBannerCard extends StatelessWidget {
                     height: 76,
                     child: _BackendImage(
                       imageUrl: banner.mediaUrl,
-                      fit: BoxFit.cover,
+                      fit: BoxFit.contain,
                       fallback: Container(
                         color: const Color(0xFFF3F4F6),
                         alignment: Alignment.center,
@@ -8911,10 +14211,6 @@ class _AdminAppBannerCard extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: [
-              _DirectoryFactPill(
-                icon: Icons.flag_rounded,
-                label: banner.reviewStatus.label,
-              ),
               if (banner.displayIndex > 0)
                 _DirectoryFactPill(
                   icon: Icons.view_carousel_rounded,
@@ -8947,29 +14243,49 @@ class _AdminAppBannerCard extends StatelessWidget {
                   ),
             ),
           ],
+          if (banner.socialMediaUrl.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            _DirectoryDetailLine(
+              icon: Icons.link_rounded,
+              label: banner.socialMediaUrl,
+            ),
+          ],
+          if (banner.displayStart.isNotEmpty ||
+              banner.displayEnd.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            _DirectoryDetailLine(
+              icon: Icons.date_range_rounded,
+              label:
+                  banner.displayStart.isNotEmpty && banner.displayEnd.isNotEmpty
+                      ? '${banner.displayStart} to ${banner.displayEnd}'
+                      : banner.displayStart.isNotEmpty
+                      ? 'From ${banner.displayStart}'
+                      : 'Until ${banner.displayEnd}',
+            ),
+          ],
+          if (banner.paymentRemarks.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            _DirectoryDetailLine(
+              icon: Icons.receipt_long_outlined,
+              label: banner.paymentRemarks,
+            ),
+          ],
           const SizedBox(height: 14),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children:
-                BannerReviewStatus.values.map((status) {
-                  final selected = banner.reviewStatus == status;
-                  return ChoiceChip(
-                    label: Text(status.label),
-                    selected: selected,
-                    onSelected:
-                        isUpdating ? null : (_) => onUpdateStatus(status),
-                    showCheckmark: false,
-                    selectedColor: status.color.withValues(alpha: 0.16),
-                    labelStyle: TextStyle(
-                      color: selected ? status.color : const Color(0xFF4B5563),
-                      fontWeight: FontWeight.w700,
-                    ),
-                    side: BorderSide(
-                      color: selected ? status.color : const Color(0xFFE5E7EB),
-                    ),
-                  );
-                }).toList(),
+          if (onEdit != null) ...[
+            Align(
+              alignment: Alignment.centerRight,
+              child: OutlinedButton.icon(
+                onPressed: isUpdating ? null : onEdit,
+                icon: const Icon(Icons.edit_note_rounded),
+                label: const Text('Edit'),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+          _BannerReviewStatusActionRow(
+            currentStatus: banner.reviewStatus,
+            isUpdating: isUpdating,
+            onSelected: onUpdateStatus,
           ),
           if (isUpdating) ...[
             const SizedBox(height: 10),
@@ -8978,6 +14294,178 @@ class _AdminAppBannerCard extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _AdminFileTile extends StatelessWidget {
+  const _AdminFileTile({
+    required this.label,
+    required this.fileName,
+    required this.helperText,
+    required this.buttonLabel,
+    required this.onPressed,
+  });
+
+  final String label;
+  final String fileName;
+  final String helperText;
+  final String buttonLabel;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: Color(0xFF0F172A),
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            fileName.isEmpty ? 'No file selected' : fileName,
+            style: const TextStyle(
+              color: Color(0xFF475569),
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            helperText,
+            style: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+          ),
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: onPressed,
+            icon: const Icon(Icons.upload_file_rounded),
+            label: Text(buttonLabel),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BannerReviewStatusActionRow extends StatelessWidget {
+  const _BannerReviewStatusActionRow({
+    required this.currentStatus,
+    required this.isUpdating,
+    required this.onSelected,
+  });
+
+  final BannerReviewStatus currentStatus;
+  final bool isUpdating;
+  final ValueChanged<BannerReviewStatus> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: _BannerReviewToggleButton(
+            label: 'Approve / Pending',
+            icon:
+                currentStatus == BannerReviewStatus.approved
+                    ? Icons.check_circle_rounded
+                    : Icons.hourglass_top_rounded,
+            selected:
+                currentStatus == BannerReviewStatus.approved ||
+                currentStatus == BannerReviewStatus.pending,
+            activeColor:
+                currentStatus == BannerReviewStatus.approved
+                    ? BannerReviewStatus.approved.color
+                    : BannerReviewStatus.pending.color,
+            enabled: !isUpdating,
+            onPressed:
+                () => onSelected(
+                  currentStatus == BannerReviewStatus.approved
+                      ? BannerReviewStatus.pending
+                      : BannerReviewStatus.approved,
+                ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _BannerReviewToggleButton(
+            label: 'Reject / Hold',
+            icon:
+                currentStatus == BannerReviewStatus.rejected
+                    ? Icons.cancel_rounded
+                    : Icons.pause_circle_rounded,
+            selected:
+                currentStatus == BannerReviewStatus.rejected ||
+                currentStatus == BannerReviewStatus.onHold,
+            activeColor:
+                currentStatus == BannerReviewStatus.rejected
+                    ? BannerReviewStatus.rejected.color
+                    : BannerReviewStatus.onHold.color,
+            enabled: !isUpdating,
+            onPressed:
+                () => onSelected(
+                  currentStatus == BannerReviewStatus.rejected
+                      ? BannerReviewStatus.onHold
+                      : BannerReviewStatus.rejected,
+                ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _BannerReviewToggleButton extends StatelessWidget {
+  const _BannerReviewToggleButton({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.activeColor,
+    required this.enabled,
+    required this.onPressed,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final Color activeColor;
+  final bool enabled;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final foregroundColor = selected ? activeColor : const Color(0xFF4B5563);
+    final backgroundColor =
+        selected
+            ? activeColor.withValues(alpha: 0.14)
+            : const Color(0xFFF8FAFC);
+    final borderColor = selected ? activeColor : const Color(0xFFE5E7EB);
+
+    return OutlinedButton.icon(
+      onPressed: enabled ? onPressed : null,
+      icon: Icon(icon, size: 15),
+      label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: foregroundColor,
+        backgroundColor: backgroundColor,
+        side: BorderSide(color: borderColor),
+        minimumSize: const Size.fromHeight(38),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
     );
   }
@@ -9069,10 +14557,6 @@ class _AdminTimelineAccessCard extends StatelessWidget {
             runSpacing: 8,
             children: [
               _DirectoryFactPill(
-                icon: Icons.flag_rounded,
-                label: post.reviewStatus.label,
-              ),
-              _DirectoryFactPill(
                 icon: Icons.account_tree_outlined,
                 label: post.sourceType,
               ),
@@ -9100,7 +14584,7 @@ class _AdminTimelineAccessCard extends StatelessWidget {
                 aspectRatio: 16 / 9,
                 child: _BackendImage(
                   imageUrl: post.imageUrl,
-                  fit: BoxFit.cover,
+                  fit: BoxFit.contain,
                   fallback: const ColoredBox(color: Color(0xFFE5E7EB)),
                 ),
               ),
@@ -9120,28 +14604,10 @@ class _AdminTimelineAccessCard extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 14),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children:
-                TimelineReviewStatus.values.map((status) {
-                  final selected = post.reviewStatus == status;
-                  return ChoiceChip(
-                    label: Text(status.label),
-                    selected: selected,
-                    onSelected:
-                        isUpdating ? null : (_) => onUpdateStatus(status),
-                    showCheckmark: false,
-                    selectedColor: status.color.withValues(alpha: 0.16),
-                    labelStyle: TextStyle(
-                      color: selected ? status.color : const Color(0xFF4B5563),
-                      fontWeight: FontWeight.w700,
-                    ),
-                    side: BorderSide(
-                      color: selected ? status.color : const Color(0xFFE5E7EB),
-                    ),
-                  );
-                }).toList(),
+          _TimelineReviewStatusActionRow(
+            currentStatus: post.reviewStatus,
+            isUpdating: isUpdating,
+            onSelected: onUpdateStatus,
           ),
           if (isUpdating) ...[
             const SizedBox(height: 10),
@@ -9155,13 +14621,261 @@ class _AdminTimelineAccessCard extends StatelessWidget {
   }
 }
 
-class _AdminEventsSectionState extends State<_AdminEventsSection> {
-  late AdminEventDraft _draft;
+class _TimelineBrowseCard extends StatelessWidget {
+  const _TimelineBrowseCard({required this.post});
+
+  final AdminTimelineItem post;
+
+  Color get _headerStartColor => switch (post.sourceType.toUpperCase()) {
+    'MEMBER' => const Color(0xFF15803D),
+    'VENDOR' => const Color(0xFFEA580C),
+    _ => const Color(0xFF2563EB),
+  };
+
+  Color get _headerEndColor => switch (post.sourceType.toUpperCase()) {
+    'MEMBER' => const Color(0xFF16A34A),
+    'VENDOR' => const Color(0xFFF59E0B),
+    _ => const Color(0xFF1D4ED8),
+  };
 
   @override
-  void initState() {
-    super.initState();
-    _draft = AdminEventDraft.empty();
+  Widget build(BuildContext context) {
+    return _EntityCardFrame(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [_headerStartColor, _headerEndColor],
+              ),
+            ),
+            child: Row(
+              children: [
+                _TimelinePosterAvatar(
+                  name: post.sourceName,
+                  color: _headerStartColor,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        post.displayTitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        post.postedBy.trim().isEmpty
+                            ? post.postedOn
+                            : '${post.postedBy} • ${post.postedOn}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.84),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _DirectoryFactPill(
+                icon: Icons.account_tree_outlined,
+                label: post.sourceType,
+              ),
+              _DirectoryFactPill(
+                icon: Icons.info_outline_rounded,
+                label: post.reviewStatus.label,
+              ),
+              if (post.displayEnd.isNotEmpty)
+                _DirectoryFactPill(
+                  icon: Icons.event_available_rounded,
+                  label: 'Visible till ${post.displayEnd}',
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            post.caption,
+            style: const TextStyle(
+              color: Color(0xFF374151),
+              fontSize: 15,
+              height: 1.55,
+            ),
+          ),
+          if (post.imageUrl.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: AspectRatio(
+                aspectRatio: 16 / 9,
+                child: _BackendImage(
+                  imageUrl: post.imageUrl,
+                  fit: BoxFit.contain,
+                  fallback: const ColoredBox(color: Color(0xFFE5E7EB)),
+                ),
+              ),
+            ),
+          ],
+          if (post.contactNumber.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _DirectoryDetailLine(
+              icon: Icons.call_outlined,
+              label: post.contactNumber,
+              onTap:
+                  () => _showPhoneActionsSheet(
+                    context,
+                    title: post.displayTitle,
+                    phoneNumber: post.contactNumber,
+                  ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _TimelineReviewStatusActionRow extends StatelessWidget {
+  const _TimelineReviewStatusActionRow({
+    required this.currentStatus,
+    required this.isUpdating,
+    required this.onSelected,
+  });
+
+  final TimelineReviewStatus currentStatus;
+  final bool isUpdating;
+  final ValueChanged<TimelineReviewStatus> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: _TimelineReviewToggleButton(
+            label: 'Approve / Pending',
+            icon:
+                currentStatus == TimelineReviewStatus.approved
+                    ? Icons.check_circle_rounded
+                    : Icons.hourglass_top_rounded,
+            selected:
+                currentStatus == TimelineReviewStatus.approved ||
+                currentStatus == TimelineReviewStatus.pending,
+            activeColor:
+                currentStatus == TimelineReviewStatus.approved
+                    ? TimelineReviewStatus.approved.color
+                    : TimelineReviewStatus.pending.color,
+            enabled: !isUpdating,
+            onPressed:
+                () => onSelected(
+                  currentStatus == TimelineReviewStatus.approved
+                      ? TimelineReviewStatus.pending
+                      : TimelineReviewStatus.approved,
+                ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _TimelineReviewToggleButton(
+            label: 'Reject / Hold',
+            icon:
+                currentStatus == TimelineReviewStatus.rejected
+                    ? Icons.cancel_rounded
+                    : Icons.pause_circle_rounded,
+            selected:
+                currentStatus == TimelineReviewStatus.rejected ||
+                currentStatus == TimelineReviewStatus.onHold,
+            activeColor:
+                currentStatus == TimelineReviewStatus.rejected
+                    ? TimelineReviewStatus.rejected.color
+                    : TimelineReviewStatus.onHold.color,
+            enabled: !isUpdating,
+            onPressed:
+                () => onSelected(
+                  currentStatus == TimelineReviewStatus.rejected
+                      ? TimelineReviewStatus.onHold
+                      : TimelineReviewStatus.rejected,
+                ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TimelineReviewToggleButton extends StatelessWidget {
+  const _TimelineReviewToggleButton({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.activeColor,
+    required this.enabled,
+    required this.onPressed,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final Color activeColor;
+  final bool enabled;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final foregroundColor = selected ? activeColor : const Color(0xFF4B5563);
+    final backgroundColor =
+        selected
+            ? activeColor.withValues(alpha: 0.14)
+            : const Color(0xFFF8FAFC);
+    final borderColor = selected ? activeColor : const Color(0xFFE5E7EB);
+
+    return OutlinedButton.icon(
+      onPressed: enabled ? onPressed : null,
+      icon: Icon(icon, size: 15),
+      label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: foregroundColor,
+        backgroundColor: backgroundColor,
+        side: BorderSide(color: borderColor),
+        minimumSize: const Size.fromHeight(38),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+    );
+  }
+}
+
+class _AdminEventsSectionState extends State<_AdminEventsSection> {
+  AdminEventDraft? _draft;
+  final TextEditingController _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   void _startEdit(AdminEventItem event) {
@@ -9172,29 +14886,50 @@ class _AdminEventsSectionState extends State<_AdminEventsSection> {
 
   void _resetDraft() {
     setState(() {
-      _draft = AdminEventDraft.empty();
+      _draft = null;
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    final filteredEvents =
+        widget.events.where((event) {
+          final query = _query.trim().toLowerCase();
+          if (query.isEmpty) {
+            return true;
+          }
+          return [
+            event.name,
+            event.type,
+            event.venue,
+            event.audience,
+            event.summary,
+            event.date,
+          ].join(' ').toLowerCase().contains(query);
+        }).toList();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const _SectionHeader(
           title: 'Event Access Controls',
           subtitle:
-              'Search, edit, delete, and create events using the same backend-driven flow as the web app.',
+              'Search, review, edit, and delete live events while keeping event creation in the main Events area.',
         ),
         const SizedBox(height: 14),
-        if (widget.events.isEmpty)
+        _AdminToolbarSearch(
+          controller: _searchController,
+          hintText: 'Search event name, type, venue, audience...',
+          onChanged: (value) => setState(() => _query = value),
+        ),
+        const SizedBox(height: 14),
+        if (filteredEvents.isEmpty)
           const _EmptyStateCard(
             title: 'No events found',
-            subtitle:
-                'Create an event below or in the web app to start filling this list.',
+            subtitle: 'No events match the current search.',
           )
         else
-          ...widget.events.map(
+          ...filteredEvents.map(
             (event) => Padding(
               padding: const EdgeInsets.only(bottom: 14),
               child: _EventTimelineCard(
@@ -9203,20 +14938,32 @@ class _AdminEventsSectionState extends State<_AdminEventsSection> {
                 showEntryCharges: true,
                 footer: Row(
                   children: [
-                    OutlinedButton(
-                      onPressed:
-                          widget.savingEventId != null
-                              ? null
-                              : () => _startEdit(event),
-                      child: const Text('Edit'),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed:
+                            widget.savingEventId != null
+                                ? null
+                                : () => _startEdit(event),
+                        icon: const Icon(Icons.edit_rounded, size: 16),
+                        label: const Text('Edit'),
+                      ),
                     ),
                     const SizedBox(width: 10),
-                    OutlinedButton(
-                      onPressed:
-                          widget.savingEventId != null
-                              ? null
-                              : () => widget.onDeleteEvent(event.id),
-                      child: const Text('Delete'),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed:
+                            widget.savingEventId != null
+                                ? null
+                                : () => widget.onDeleteEvent(event.id),
+                        icon: const Icon(
+                          Icons.delete_outline_rounded,
+                          size: 16,
+                        ),
+                        label: const Text('Delete'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFFB91C1C),
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -9224,21 +14971,21 @@ class _AdminEventsSectionState extends State<_AdminEventsSection> {
               ),
             ),
           ),
-        const SizedBox(height: 18),
-        _AdminEventForm(
-          draft: _draft,
-          eventTypes: widget.eventTypes,
-          isSaving:
-              widget.savingEventId == '__new__' ||
-              (_draft.id.isNotEmpty && widget.savingEventId == _draft.id),
-          onChanged: (draft) {
-            setState(() {
-              _draft = draft;
-            });
-          },
-          onSave: () => widget.onSaveEvent(_draft),
-          onCancel: _draft.id.isEmpty ? null : _resetDraft,
-        ),
+        if (_draft != null) ...[
+          const SizedBox(height: 18),
+          _AdminEventForm(
+            draft: _draft!,
+            eventTypes: widget.eventTypes,
+            isSaving: widget.savingEventId == _draft!.id,
+            onChanged: (draft) {
+              setState(() {
+                _draft = draft;
+              });
+            },
+            onSave: () => widget.onSaveEvent(_draft!),
+            onCancel: _resetDraft,
+          ),
+        ],
       ],
     );
   }
@@ -9386,6 +15133,25 @@ class _EventsArenaCreateSectionState extends State<_EventsArenaCreateSection> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.eventTypes.isEmpty) {
+      return const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionHeader(
+            title: 'Create New Event',
+            subtitle:
+                'Set up at least one event type first so new events can be categorised correctly.',
+          ),
+          SizedBox(height: 14),
+          _EmptyStateCard(
+            title: 'No event types available yet',
+            subtitle:
+                'Open Type of Event first, create an event type, and then come back here to publish the event.',
+          ),
+        ],
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -9395,6 +15161,15 @@ class _EventsArenaCreateSectionState extends State<_EventsArenaCreateSection> {
               'Use the same backend event flow as web, including banner picture and promo video uploads.',
         ),
         const SizedBox(height: 14),
+        if (!_draft.canSubmit) ...[
+          _EmptyStateCard(
+            title: 'Event details are still incomplete',
+            subtitle:
+                _draft.validationMessage ??
+                'Fill in the required event details before saving.',
+          ),
+          const SizedBox(height: 14),
+        ],
         _AdminEventForm(
           draft: _draft,
           eventTypes: widget.eventTypes,
@@ -9589,6 +15364,7 @@ class _EventsArenaTimelineSection extends StatefulWidget {
   const _EventsArenaTimelineSection({
     required this.events,
     required this.eventTypes,
+    required this.canManage,
     required this.savingEventId,
     required this.onSaveEvent,
     required this.onDeleteEvent,
@@ -9596,6 +15372,7 @@ class _EventsArenaTimelineSection extends StatefulWidget {
 
   final List<AdminEventItem> events;
   final List<AdminEventTypeItem> eventTypes;
+  final bool canManage;
   final String? savingEventId;
   final Future<void> Function(AdminEventDraft draft) onSaveEvent;
   final Future<void> Function(String eventId) onDeleteEvent;
@@ -9663,10 +15440,10 @@ class _EventsArenaTimelineSectionState
         const _SectionHeader(
           title: 'Event Timeline',
           subtitle:
-              'Browse upcoming and completed events, and edit existing records directly from the live timeline.',
+              'Browse upcoming and completed events from the live timeline.',
         ),
         const SizedBox(height: 14),
-        if (_editingDraft != null) ...[
+        if (widget.canManage && _editingDraft != null) ...[
           _AdminEventForm(
             draft: _editingDraft!,
             eventTypes: widget.eventTypes,
@@ -9695,15 +15472,24 @@ class _EventsArenaTimelineSectionState
             ...upcoming.map(
               (event) => Padding(
                 padding: const EdgeInsets.only(bottom: 14),
-                child: _EditableEventTimelineCard(
-                  event: event,
-                  isSaving: widget.savingEventId == event.id,
-                  onEdit:
-                      () => setState(() {
-                        _editingDraft = AdminEventDraft.fromEvent(event);
-                      }),
-                  onDelete: () => widget.onDeleteEvent(event.id),
-                ),
+                child:
+                    widget.canManage
+                        ? _EditableEventTimelineCard(
+                          event: event,
+                          isSaving: widget.savingEventId == event.id,
+                          onEdit:
+                              () => setState(() {
+                                _editingDraft = AdminEventDraft.fromEvent(
+                                  event,
+                                );
+                              }),
+                          onDelete: () => widget.onDeleteEvent(event.id),
+                        )
+                        : _EventTimelineCard(
+                          event: event,
+                          accentLabel: event.liveStatus,
+                          showEntryCharges: true,
+                        ),
               ),
             ),
             const SizedBox(height: 8),
@@ -9717,15 +15503,24 @@ class _EventsArenaTimelineSectionState
             ...completed.map(
               (event) => Padding(
                 padding: const EdgeInsets.only(bottom: 14),
-                child: _EditableEventTimelineCard(
-                  event: event,
-                  isSaving: widget.savingEventId == event.id,
-                  onEdit:
-                      () => setState(() {
-                        _editingDraft = AdminEventDraft.fromEvent(event);
-                      }),
-                  onDelete: () => widget.onDeleteEvent(event.id),
-                ),
+                child:
+                    widget.canManage
+                        ? _EditableEventTimelineCard(
+                          event: event,
+                          isSaving: widget.savingEventId == event.id,
+                          onEdit:
+                              () => setState(() {
+                                _editingDraft = AdminEventDraft.fromEvent(
+                                  event,
+                                );
+                              }),
+                          onDelete: () => widget.onDeleteEvent(event.id),
+                        )
+                        : _EventTimelineCard(
+                          event: event,
+                          accentLabel: event.liveStatus,
+                          showEntryCharges: true,
+                        ),
               ),
             ),
           ],
@@ -9924,20 +15719,17 @@ class _AdminEventForm extends StatelessWidget {
             children: [
               _EventField(
                 width: 280,
-                child: TextFormField(
-                  key: ValueKey('event-name-${draft.id}-${draft.name}'),
-                  initialValue: draft.name,
-                  decoration: const InputDecoration(
-                    labelText: 'Event Name',
-                    border: OutlineInputBorder(),
-                  ),
+                child: _StableTextFormField(
+                  key: ValueKey('event-name-${draft.id}'),
+                  value: draft.name,
+                  label: 'Event Name',
                   onChanged: (value) => onChanged(draft.copyWith(name: value)),
                 ),
               ),
               _EventField(
                 width: 220,
                 child: DropdownButtonFormField<String>(
-                  key: ValueKey('event-type-${draft.id}-${draft.type}'),
+                  key: ValueKey('event-type-${draft.id}'),
                   decoration: const InputDecoration(
                     labelText: 'Type',
                     border: OutlineInputBorder(),
@@ -9957,32 +15749,26 @@ class _AdminEventForm extends StatelessWidget {
               ),
               _EventField(
                 width: 180,
-                child: TextFormField(
-                  key: ValueKey('event-date-${draft.id}-${draft.date}'),
-                  initialValue: draft.date,
-                  decoration: const InputDecoration(
-                    labelText: 'Date',
-                    border: OutlineInputBorder(),
-                  ),
+                child: _StableTextFormField(
+                  key: ValueKey('event-date-${draft.id}'),
+                  value: draft.date,
+                  label: 'Date',
                   onChanged: (value) => onChanged(draft.copyWith(date: value)),
                 ),
               ),
               _EventField(
                 width: 240,
-                child: TextFormField(
-                  key: ValueKey('event-venue-${draft.id}-${draft.venue}'),
-                  initialValue: draft.venue,
-                  decoration: const InputDecoration(
-                    labelText: 'Venue',
-                    border: OutlineInputBorder(),
-                  ),
+                child: _StableTextFormField(
+                  key: ValueKey('event-venue-${draft.id}'),
+                  value: draft.venue,
+                  label: 'Venue',
                   onChanged: (value) => onChanged(draft.copyWith(venue: value)),
                 ),
               ),
               _EventField(
                 width: 220,
                 child: DropdownButtonFormField<String>(
-                  key: ValueKey('event-audience-${draft.id}-${draft.audience}'),
+                  key: ValueKey('event-audience-${draft.id}'),
                   decoration: const InputDecoration(
                     labelText: 'Audience',
                     border: OutlineInputBorder(),
@@ -10011,9 +15797,7 @@ class _AdminEventForm extends StatelessWidget {
               _EventField(
                 width: 180,
                 child: DropdownButtonFormField<String>(
-                  key: ValueKey(
-                    'event-entry-type-${draft.id}-${draft.entryType}',
-                  ),
+                  key: ValueKey('event-entry-type-${draft.id}'),
                   decoration: const InputDecoration(
                     labelText: 'Entry Type',
                     border: OutlineInputBorder(),
@@ -10030,30 +15814,20 @@ class _AdminEventForm extends StatelessWidget {
               ),
               _EventField(
                 width: 180,
-                child: TextFormField(
-                  key: ValueKey(
-                    'event-entry-charges-${draft.id}-${draft.entryCharges}',
-                  ),
-                  initialValue: draft.entryCharges,
-                  decoration: const InputDecoration(
-                    labelText: 'Entry Charges',
-                    border: OutlineInputBorder(),
-                  ),
+                child: _StableTextFormField(
+                  key: ValueKey('event-entry-charges-${draft.id}'),
+                  value: draft.entryCharges,
+                  label: 'Entry Charges',
                   onChanged:
                       (value) => onChanged(draft.copyWith(entryCharges: value)),
                 ),
               ),
               _EventField(
                 width: 200,
-                child: TextFormField(
-                  key: ValueKey(
-                    'event-participation-${draft.id}-${draft.participationCharges}',
-                  ),
-                  initialValue: draft.participationCharges,
-                  decoration: const InputDecoration(
-                    labelText: 'Participation Charges',
-                    border: OutlineInputBorder(),
-                  ),
+                child: _StableTextFormField(
+                  key: ValueKey('event-participation-${draft.id}'),
+                  value: draft.participationCharges,
+                  label: 'Participation Charges',
                   onChanged:
                       (value) => onChanged(
                         draft.copyWith(participationCharges: value),
@@ -10062,26 +15836,20 @@ class _AdminEventForm extends StatelessWidget {
               ),
               _EventField(
                 width: 150,
-                child: TextFormField(
-                  key: ValueKey('event-start-${draft.id}-${draft.startTime}'),
-                  initialValue: draft.startTime,
-                  decoration: const InputDecoration(
-                    labelText: 'Start Time',
-                    border: OutlineInputBorder(),
-                  ),
+                child: _StableTextFormField(
+                  key: ValueKey('event-start-${draft.id}'),
+                  value: draft.startTime,
+                  label: 'Start Time',
                   onChanged:
                       (value) => onChanged(draft.copyWith(startTime: value)),
                 ),
               ),
               _EventField(
                 width: 150,
-                child: TextFormField(
-                  key: ValueKey('event-end-${draft.id}-${draft.endTime}'),
-                  initialValue: draft.endTime,
-                  decoration: const InputDecoration(
-                    labelText: 'End Time',
-                    border: OutlineInputBorder(),
-                  ),
+                child: _StableTextFormField(
+                  key: ValueKey('event-end-${draft.id}'),
+                  value: draft.endTime,
+                  label: 'End Time',
                   onChanged:
                       (value) => onChanged(draft.copyWith(endTime: value)),
                 ),
@@ -10149,14 +15917,11 @@ class _AdminEventForm extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 14),
-          TextFormField(
-            initialValue: draft.summary,
+          _StableTextFormField(
+            value: draft.summary,
+            label: 'Event Summary',
             minLines: 3,
             maxLines: 5,
-            decoration: const InputDecoration(
-              labelText: 'Event Summary',
-              border: OutlineInputBorder(),
-            ),
             onChanged: (value) => onChanged(draft.copyWith(summary: value)),
           ),
           const SizedBox(height: 16),
@@ -10169,7 +15934,7 @@ class _AdminEventForm extends StatelessWidget {
                 ),
               if (onCancel != null) const SizedBox(width: 10),
               FilledButton(
-                onPressed: isSaving ? null : onSave,
+                onPressed: isSaving || !draft.canSubmit ? null : onSave,
                 child: Text(isSaving ? 'Saving...' : 'Save Event'),
               ),
             ],
@@ -10497,7 +16262,7 @@ class _PostMediaPreview extends StatelessWidget {
             children: [
               _BackendImage(
                 imageUrl: mediaUrl,
-                fit: BoxFit.cover,
+                fit: BoxFit.contain,
                 fallback: Container(
                   alignment: Alignment.center,
                   padding: const EdgeInsets.all(24),
@@ -10891,7 +16656,15 @@ class _ReusableMemberCard extends StatelessWidget {
     this.trailing,
     this.footer,
     this.showHeroImage = false,
+    this.useCircularHeroAvatar = true,
     this.heroHeight = 148,
+    this.summaryMaxLines,
+    this.padding = const EdgeInsets.all(16),
+    this.heroBottomSpacing = 12,
+    this.sectionSpacing = 12,
+    this.detailsTopSpacing = 14,
+    this.detailsDividerSpacing = 12,
+    this.detailLineSpacing = 9,
   });
 
   final String name;
@@ -10904,24 +16677,45 @@ class _ReusableMemberCard extends StatelessWidget {
   final Widget? trailing;
   final Widget? footer;
   final bool showHeroImage;
+  final bool useCircularHeroAvatar;
   final double heroHeight;
+  final int? summaryMaxLines;
+  final EdgeInsetsGeometry padding;
+  final double heroBottomSpacing;
+  final double sectionSpacing;
+  final double detailsTopSpacing;
+  final double detailsDividerSpacing;
+  final double detailLineSpacing;
 
   @override
   Widget build(BuildContext context) {
     return _EntityCardFrame(
+      padding: padding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (showHeroImage) ...[
-            ClipRRect(
-              borderRadius: BorderRadius.circular(20),
-              child: SizedBox(
-                width: double.infinity,
-                height: heroHeight,
-                child: _CommitteeThumbnail(name: name, photoUrl: photoUrl),
-              ),
+            SizedBox(
+              width: double.infinity,
+              height: heroHeight,
+              child:
+                  useCircularHeroAvatar
+                      ? Center(
+                        child: _MemberAvatar(
+                          name: name,
+                          photoUrl: photoUrl,
+                          size: heroHeight.clamp(88.0, 116.0),
+                        ),
+                      )
+                      : ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: _CommitteeThumbnail(
+                          name: name,
+                          photoUrl: photoUrl,
+                        ),
+                      ),
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: heroBottomSpacing),
           ],
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -10972,14 +16766,14 @@ class _ReusableMemberCard extends StatelessWidget {
             ],
           ),
           if (factPills.isNotEmpty) ...[
-            const SizedBox(height: 12),
+            SizedBox(height: sectionSpacing),
             Wrap(spacing: 8, runSpacing: 8, children: factPills),
           ],
           if (summary.trim().isNotEmpty) ...[
-            const SizedBox(height: 12),
+            SizedBox(height: sectionSpacing),
             Text(
               summary,
-              maxLines: showHeroImage ? 4 : 2,
+              maxLines: summaryMaxLines ?? (showHeroImage ? 4 : 2),
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 fontSize: 14,
@@ -10989,14 +16783,14 @@ class _ReusableMemberCard extends StatelessWidget {
             ),
           ],
           if (detailLines.isNotEmpty) ...[
-            const SizedBox(height: 14),
+            SizedBox(height: detailsTopSpacing),
             const Divider(height: 1, color: Color(0xFFF1F5F9)),
-            const SizedBox(height: 12),
+            SizedBox(height: detailsDividerSpacing),
             ...detailLines.indexed.expand(
               (entry) => [
                 entry.$2,
                 if (entry.$1 != detailLines.length - 1)
-                  const SizedBox(height: 9),
+                  SizedBox(height: detailLineSpacing),
               ],
             ),
           ],
@@ -11339,14 +17133,14 @@ class _MemberAvatar extends StatelessWidget {
     if (photoUrl.isNotEmpty) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(size / 2),
-        child: Image.network(
-          photoUrl,
+        child: SizedBox(
           width: size,
           height: size,
-          fit: BoxFit.cover,
-          errorBuilder:
-              (_, __, ___) =>
-                  _MemberAvatarFallback(initials: initials, size: size),
+          child: _BackendImage(
+            imageUrl: photoUrl,
+            fit: BoxFit.cover,
+            fallback: _MemberAvatarFallback(initials: initials, size: size),
+          ),
         ),
       );
     }
@@ -11396,31 +17190,6 @@ class _StatusBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color: status.color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        status.label,
-        style: TextStyle(
-          color: status.color,
-          fontSize: 12,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
-    );
-  }
-}
-
-class _AccessStatusBadge extends StatelessWidget {
-  const _AccessStatusBadge({required this.status});
-
-  final MemberAccessStatus status;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: status.color.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
@@ -11518,7 +17287,7 @@ class _PlaceholderArenaContent extends StatelessWidget {
           icon: Icons.groups_rounded,
           title: 'Arena workspace',
           subtitle:
-              'Member Arena is now implemented first. The remaining arenas can be layered into the same shell next.',
+              'Key admin tools live here already, and the remaining workflows can be polished into the same app shell.',
         ),
         SizedBox(height: 12),
         _ActionCard(
@@ -11536,9 +17305,25 @@ class _LoadingState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 40),
-      child: Center(child: CircularProgressIndicator()),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 40),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            CircularProgressIndicator(),
+            SizedBox(height: 14),
+            Text(
+              'Loading the latest NIMA data...',
+              style: TextStyle(
+                color: Color(0xFF6B7280),
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -11866,7 +17651,11 @@ class _AdminBottomBar extends StatelessWidget {
     final items = [
       (AppArena.dashboard, Icons.dashboard_rounded, 'Home'),
       (AppArena.association, Icons.apartment_rounded, 'Assoc'),
-      (AppArena.vendor, Icons.storefront_rounded, 'Vendor'),
+      (
+        viewerRole.isVendor ? AppArena.member : AppArena.vendor,
+        viewerRole.isVendor ? Icons.groups_rounded : Icons.storefront_rounded,
+        viewerRole.isVendor ? 'Members' : 'Vendor',
+      ),
       (AppArena.events, Icons.event_available_rounded, 'Events'),
     ];
     final leadingItems = items.take(2).toList();
@@ -11959,50 +17748,99 @@ class _AdminBottomBar extends StatelessWidget {
   }
 }
 
-class _TimelineDockButton extends StatelessWidget {
+class _TimelineDockButton extends StatefulWidget {
   const _TimelineDockButton({required this.active, required this.onTap});
 
   final bool active;
   final VoidCallback onTap;
 
   @override
+  State<_TimelineDockButton> createState() => _TimelineDockButtonState();
+}
+
+class _TimelineDockButtonState extends State<_TimelineDockButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _offsetAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat(reverse: true);
+    _offsetAnimation = Tween<double>(
+      begin: 0,
+      end: -4,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 74,
-        height: 74,
-        padding: const EdgeInsets.all(6),
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: active ? const Color(0xFFF97316) : Colors.white,
-          border: Border.all(
-            color: active ? const Color(0xFFF97316) : const Color(0xFFD7DCE2),
-          ),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x1F0F172A),
-              blurRadius: 14,
-              offset: Offset(0, 6),
+    return AnimatedBuilder(
+      animation: _offsetAnimation,
+      builder: (context, child) {
+        return Transform.translate(
+          offset: Offset(0, _offsetAnimation.value),
+          child: child,
+        );
+      },
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: Container(
+          width: 74,
+          height: 74,
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: widget.active ? const Color(0xFFF97316) : Colors.white,
+            border: Border.all(
+              color:
+                  widget.active
+                      ? const Color(0xFFE21E23)
+                      : const Color(0xFFE21E23),
+              width: widget.active ? 2.2 : 1.6,
             ),
-          ],
-        ),
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            if (active)
-              Container(
-                width: 62,
-                height: 62,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.65),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x1F0F172A),
+                blurRadius: 14,
+                offset: Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              if (widget.active)
+                Container(
+                  width: 62,
+                  height: 62,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.65),
+                    ),
                   ),
                 ),
+              Text(
+                'N',
+                style: TextStyle(
+                  color: widget.active ? Colors.white : const Color(0xFFE21E23),
+                  fontSize: 34,
+                  fontWeight: FontWeight.w900,
+                  height: 1,
+                ),
               ),
-            const _SynetraLogoBadge(size: 56),
-          ],
+            ],
+          ),
         ),
       ),
     );

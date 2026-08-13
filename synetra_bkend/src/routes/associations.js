@@ -603,7 +603,10 @@ router.get("/current/dashboard-summary", async (req, res) => {
     prisma.member.findMany({
       where: {
         associationId: association.id,
-        OR: [{ roleTitle: { equals: "committee", mode: "insensitive" } }, { committeePost: { not: null } }],
+        AND: [
+          { committeePost: { not: null } },
+          { committeePost: { not: "" } },
+        ],
       },
       select: {
         id: true,

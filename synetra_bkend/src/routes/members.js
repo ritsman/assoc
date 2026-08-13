@@ -56,8 +56,8 @@ const optionalStringAsNullField = z.preprocess(
 
 const memberSchema = z.object({
   associationId: z.string().min(1).optional(),
-  firstName: z.string().min(1),
-  lastName: z.string().min(1),
+  firstName: z.string().trim().min(1),
+  lastName: z.string().trim(),
   email: z.string().email(),
   phone: z.string().optional(),
   address: z.string().optional(),

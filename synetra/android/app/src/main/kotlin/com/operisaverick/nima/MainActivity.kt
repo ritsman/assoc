@@ -1,4 +1,4 @@
-package com.synetra.synetra
+package com.operisaverick.nima
 
 import io.flutter.embedding.android.FlutterFragmentActivity
 

@@ -5,6 +5,11 @@ const _nimaBrandRedDark = Color(0xFFCB1720);
 const _nimaInk = Color(0xFF1E1E1E);
 const _nimaMuted = Color(0xFF666666);
 const _nimaSoftSurface = Color(0xFFFFF7F7);
+const _nimaLogoAsset = 'assets/branding/nima_logo_official_color.png';
+const _nimaNavIconAsset = 'assets/branding/nima_app_icon_vendor.png';
+const _mahagenLogoAsset = 'assets/branding/mahagen_logo.svg';
+const _centralBankLogoAsset =
+    'assets/branding/central_bank_of_india_logo.jpeg';
 
 enum AppViewerRole { admin, member, vendor, viewOnly }
 
@@ -35,11 +40,11 @@ enum AppArena {
 extension AppArenaLabel on AppArena {
   String get label => switch (this) {
     AppArena.dashboard => 'Dashboard',
-    AppArena.admin => 'Admin Arena',
-    AppArena.association => 'Association Arena',
-    AppArena.member => 'Member Arena',
-    AppArena.vendor => 'Vendor Arena',
-    AppArena.events => 'Events Arena',
+    AppArena.admin => 'Admin',
+    AppArena.association => 'Association',
+    AppArena.member => 'Members',
+    AppArena.vendor => 'Vendors',
+    AppArena.events => 'Events',
     AppArena.profile => 'Profile',
     AppArena.timeline => 'Timeline',
   };
@@ -72,7 +77,6 @@ extension MemberArenaSectionLabel on MemberArenaSection {
 enum AdminArenaSection {
   appAccess,
   memberAccess,
-  vendorAccess,
   bannerAccess,
   timelineAccess,
   eventAccess,
@@ -82,7 +86,6 @@ extension AdminArenaSectionLabel on AdminArenaSection {
   String get label => switch (this) {
     AdminArenaSection.appAccess => 'App Access',
     AdminArenaSection.memberAccess => 'Member Access',
-    AdminArenaSection.vendorAccess => 'Vendor Access',
     AdminArenaSection.bannerAccess => 'Banner Access',
     AdminArenaSection.timelineAccess => 'Timeline Access',
     AdminArenaSection.eventAccess => 'Event Access',
@@ -111,6 +114,26 @@ extension AssociationArenaSectionLabel on AssociationArenaSection {
   };
 }
 
+enum VendorArenaSection {
+  vendor,
+  category,
+  subCategory,
+  vendorRegistration,
+  vendorStatus,
+  appBanner,
+}
+
+extension VendorArenaSectionLabel on VendorArenaSection {
+  String get label => switch (this) {
+    VendorArenaSection.vendor => 'Vendor',
+    VendorArenaSection.category => 'Category',
+    VendorArenaSection.subCategory => 'Sub-category',
+    VendorArenaSection.vendorRegistration => 'Vendor Registration',
+    VendorArenaSection.vendorStatus => 'Vendor Status',
+    VendorArenaSection.appBanner => 'App Banner',
+  };
+}
+
 enum EventsArenaSection { master, createNewEvent, typeOfEvent, event }
 
 extension EventsArenaSectionLabel on EventsArenaSection {
@@ -129,7 +152,7 @@ class SynetraApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'NIMA',
+      title: 'NIMA NASHIK',
       theme: ThemeData(
         useMaterial3: true,
         scaffoldBackgroundColor: Colors.white,
@@ -179,27 +202,57 @@ class SynetraLaunchScreen extends ConsumerStatefulWidget {
       _SynetraLaunchScreenState();
 }
 
-class _SynetraLaunchScreenState extends ConsumerState<SynetraLaunchScreen> {
+class _SynetraLaunchScreenState extends ConsumerState<SynetraLaunchScreen>
+    with WidgetsBindingObserver {
   bool _showLogin = false;
   Timer? _timer;
+  DateTime? _backgroundedAt;
 
   @override
   void initState() {
     super.initState();
-    _timer = Timer(const Duration(milliseconds: 1800), () {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _showLogin = true;
+    WidgetsBinding.instance.addObserver(this);
+    _startLaunchSequence();
+  }
+
+  void _startLaunchSequence() {
+    _timer?.cancel();
+    _showLogin = false;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _timer = Timer(const Duration(milliseconds: 2200), () {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _showLogin = true;
+        });
       });
     });
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.hidden) {
+      _backgroundedAt = DateTime.now();
+      return;
+    }
+
+    if (state == AppLifecycleState.resumed && _backgroundedAt != null) {
+      final elapsed = DateTime.now().difference(_backgroundedAt!);
+      _backgroundedAt = null;
+      if (elapsed >= const Duration(seconds: 2) && mounted) {
+        setState(_startLaunchSequence);
+      }
+    }
   }
 
   @override
@@ -207,13 +260,14 @@ class _SynetraLaunchScreenState extends ConsumerState<SynetraLaunchScreen> {
     final session = ref.watch(sessionProvider);
     final isAuthenticated = session.isAuthenticated;
     final sessionRestoreAsync = ref.watch(sessionRestoreProvider);
+    final startupWarmup = ref.watch(startupWarmupProvider);
     final appLock = ref.watch(appLockProvider);
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 420),
       switchInCurve: Curves.easeOutCubic,
       switchOutCurve: Curves.easeInCubic,
       child:
-          !_showLogin || sessionRestoreAsync.isLoading
+          !_showLogin || sessionRestoreAsync.isLoading || startupWarmup
               ? const _SynetraSplashExperience()
               : isAuthenticated && appLock.requiresUnlock && !appLock.isUnlocked
               ? const _SynetraLoginScreen(forceUnlock: true)
@@ -240,11 +294,23 @@ class _SynetraSplashExperience extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(28, 24, 28, 18),
                 child: Column(
                   children: [
-                    const Spacer(flex: 2),
-                    const _NimaBrandLockup(wordmarkWidth: 260),
-                    const SizedBox(height: 56),
+                    const Align(
+                      alignment: Alignment.topCenter,
+                      child: _NimaBrandLockup(wordmarkWidth: 240),
+                    ),
+                    const Spacer(),
                     const _NimaLoadingDots(),
-                    const Spacer(flex: 3),
+                    const SizedBox(height: 18),
+                    const Text(
+                      'Loading NIMA data...',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: _nimaMuted,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const Spacer(),
                     const _NimaPoweredByFooter(),
                   ],
                 ),
@@ -331,7 +397,7 @@ class _SynetraLoginScreenState extends ConsumerState<_SynetraLoginScreen> {
         return;
       }
 
-      ref.read(sessionProvider.notifier).signIn(authSession);
+      await ref.read(sessionProvider.notifier).signInAndWarm(authSession);
     } catch (error) {
       setState(() {
         _errorText = _friendlyAuthError(error);
@@ -568,7 +634,7 @@ class _SynetraLoginScreenState extends ConsumerState<_SynetraLoginScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Member login',
+          'Account login',
           style: TextStyle(
             fontSize: 28,
             fontWeight: FontWeight.w800,
@@ -636,6 +702,45 @@ class _SynetraLoginScreenState extends ConsumerState<_SynetraLoginScreen> {
               padding: const EdgeInsets.symmetric(vertical: 14),
               child: Text(_isSubmitting ? 'Signing in...' : 'Login'),
             ),
+          ),
+        ),
+        const SizedBox(height: 24),
+        Center(
+          child: Column(
+            children: [
+              Text(
+                'Banking Partner',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: _nimaMuted,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.4,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 14,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xFFE5E7EB)),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x12000000),
+                      blurRadius: 18,
+                      offset: Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Image.asset(
+                  _centralBankLogoAsset,
+                  height: 84,
+                  fit: BoxFit.contain,
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -720,10 +825,10 @@ class _SynetraAdminShellState extends ConsumerState<SynetraAdminShell> {
       email: username,
       aboutMe:
           viewerRole.isAdmin
-              ? 'Managing association operations, member access, and event coordination in this review build.'
+              ? 'Managing association operations, member access approvals, and event coordination for NIMA.'
               : viewerRole.isVendor
-              ? 'Vendor partner keeping profile details, catalogue information, and association updates current in this review build.'
-              : 'Association member exploring updates, directory details, and upcoming events in this review build.',
+              ? 'Vendor partner keeping organisation details, contact information, and association visibility current.'
+              : 'Association member staying connected with circulars, vendors, and upcoming events.',
     );
   }
 
@@ -738,13 +843,25 @@ class _SynetraAdminShellState extends ConsumerState<SynetraAdminShell> {
     final viewerRole = ref.watch(
       sessionProvider.select((session) => session.viewerRole),
     );
+    final disableAdminFunctionsFromApp =
+        ref
+            .watch(appAccessProvider)
+            .valueOrNull
+            ?.disableAdminFunctionsFromApp ==
+        true;
     final navigation = _navigationController.state;
-    if (_navigationController.needsNormalization(viewerRole)) {
+    if (_navigationController.needsNormalization(
+      viewerRole,
+      disableAdminFunctionsFromApp: disableAdminFunctionsFromApp,
+    )) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) {
           return;
         }
-        _navigationController.normalizeForRole(viewerRole);
+        _navigationController.normalizeForRole(
+          viewerRole,
+          disableAdminFunctionsFromApp: disableAdminFunctionsFromApp,
+        );
       });
     }
     final slideX = navigation.isDrawerOpen ? 260.0 : 0.0;
@@ -794,18 +911,29 @@ class _SynetraAdminShellState extends ConsumerState<SynetraAdminShell> {
             SafeArea(
               child: _AdminDrawer(
                 viewerRole: viewerRole,
+                disableAdminFunctionsFromApp: disableAdminFunctionsFromApp,
                 username: _profileDraft?.email ?? '',
                 profileDraft: _profileDraft ?? _buildInitialProfileDraft(),
                 selectedArena: navigation.selectedArena,
                 selectedMemberSection: navigation.memberArenaSection,
+                selectedVendorSection: navigation.vendorArenaSection,
                 selectedAdminSection: navigation.adminArenaSection,
                 selectedAssociationSection: navigation.associationArenaSection,
                 selectedEventsSection: navigation.eventsArenaSection,
                 onArenaSelected:
-                    (arena) =>
-                        _navigationController.selectArena(viewerRole, arena),
+                    (arena) => _navigationController.selectArena(
+                      viewerRole,
+                      arena,
+                      disableAdminFunctionsFromApp:
+                          disableAdminFunctionsFromApp,
+                    ),
                 onMemberSectionSelected:
                     (section) => _navigationController.selectMemberSection(
+                      viewerRole,
+                      section,
+                    ),
+                onVendorSectionSelected:
+                    (section) => _navigationController.selectVendorSection(
                       viewerRole,
                       section,
                     ),
@@ -813,6 +941,8 @@ class _SynetraAdminShellState extends ConsumerState<SynetraAdminShell> {
                     (section) => _navigationController.selectAdminSection(
                       viewerRole,
                       section,
+                      disableAdminFunctionsFromApp:
+                          disableAdminFunctionsFromApp,
                     ),
                 onAssociationSectionSelected:
                     (section) => _navigationController.selectAssociationSection(
@@ -866,6 +996,7 @@ class _SynetraAdminShellState extends ConsumerState<SynetraAdminShell> {
                         _AdminDashboardView(
                           selectedArena: navigation.selectedArena,
                           memberArenaSection: navigation.memberArenaSection,
+                          vendorArenaSection: navigation.vendorArenaSection,
                           adminArenaSection: navigation.adminArenaSection,
                           associationArenaSection:
                               navigation.associationArenaSection,
@@ -885,14 +1016,24 @@ class _SynetraAdminShellState extends ConsumerState<SynetraAdminShell> {
                               (arena) => _navigationController.selectArena(
                                 viewerRole,
                                 arena,
+                                disableAdminFunctionsFromApp:
+                                    disableAdminFunctionsFromApp,
                               ),
                           onTimelinePressed: _navigationController.openTimeline,
                           onMemberSectionSelected:
                               (section) => _navigationController
                                   .selectMemberSection(viewerRole, section),
-                          onAdminSectionSelected:
+                          onVendorSectionSelected:
                               (section) => _navigationController
-                                  .selectAdminSection(viewerRole, section),
+                                  .selectVendorSection(viewerRole, section),
+                          onAdminSectionSelected:
+                              (section) =>
+                                  _navigationController.selectAdminSection(
+                                    viewerRole,
+                                    section,
+                                    disableAdminFunctionsFromApp:
+                                        disableAdminFunctionsFromApp,
+                                  ),
                           onAssociationSectionSelected:
                               (section) => _navigationController
                                   .selectAssociationSection(
@@ -929,6 +1070,7 @@ class _AdminDashboardView extends StatefulWidget {
   const _AdminDashboardView({
     required this.selectedArena,
     required this.memberArenaSection,
+    required this.vendorArenaSection,
     required this.adminArenaSection,
     required this.associationArenaSection,
     required this.eventsArenaSection,
@@ -940,6 +1082,7 @@ class _AdminDashboardView extends StatefulWidget {
     required this.onArenaSelected,
     required this.onTimelinePressed,
     required this.onMemberSectionSelected,
+    required this.onVendorSectionSelected,
     required this.onAdminSectionSelected,
     required this.onAssociationSectionSelected,
     required this.onProfileSaved,
@@ -947,6 +1090,7 @@ class _AdminDashboardView extends StatefulWidget {
 
   final AppArena selectedArena;
   final MemberArenaSection memberArenaSection;
+  final VendorArenaSection vendorArenaSection;
   final AdminArenaSection adminArenaSection;
   final AssociationArenaSection associationArenaSection;
   final EventsArenaSection eventsArenaSection;
@@ -958,6 +1102,7 @@ class _AdminDashboardView extends StatefulWidget {
   final ValueChanged<AppArena> onArenaSelected;
   final VoidCallback onTimelinePressed;
   final ValueChanged<MemberArenaSection> onMemberSectionSelected;
+  final ValueChanged<VendorArenaSection> onVendorSectionSelected;
   final ValueChanged<AdminArenaSection> onAdminSectionSelected;
   final ValueChanged<AssociationArenaSection> onAssociationSectionSelected;
   final ValueChanged<_LocalProfileDraft> onProfileSaved;
@@ -980,6 +1125,8 @@ class _AdminDashboardViewState extends State<_AdminDashboardView> {
           MemberArenaNavigation.shouldAutoHideBottomBar(
             widget.memberArenaSection,
           )) ||
+      (widget.selectedArena == AppArena.vendor &&
+          VendorArenaNavigation.shouldAutoHideBottomBar) ||
       (widget.selectedArena == AppArena.admin &&
           _isImmersiveAdminSection(widget.adminArenaSection));
 
@@ -1058,6 +1205,8 @@ class _AdminDashboardViewState extends State<_AdminDashboardView> {
             _isImmersiveAdminSection(widget.adminArenaSection));
     final topBarOnLightSurface =
         isAssociationImmersiveSection || shouldHideArenaHeader;
+    final topContentPadding =
+        widget.selectedArena == AppArena.dashboard ? 44.0 : 78.0;
     final associationBreadcrumbLabel =
         widget.associationArenaSection == AssociationArenaSection.circulars
             ? 'Circulars'
@@ -1075,7 +1224,12 @@ class _AdminDashboardViewState extends State<_AdminDashboardView> {
                 slivers: [
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 78, 20, 16),
+                      padding: EdgeInsets.fromLTRB(
+                        20,
+                        topContentPadding,
+                        20,
+                        16,
+                      ),
                       child: Column(
                         children: [
                           if (isAssociationImmersiveSection) ...[
@@ -1114,6 +1268,8 @@ class _AdminDashboardViewState extends State<_AdminDashboardView> {
                                 selectedArena: widget.selectedArena,
                                 selectedMemberSection:
                                     widget.memberArenaSection,
+                                selectedVendorSection:
+                                    widget.vendorArenaSection,
                                 selectedAdminSection: widget.adminArenaSection,
                                 selectedAssociationSection:
                                     widget.associationArenaSection,
@@ -1134,6 +1290,9 @@ class _AdminDashboardViewState extends State<_AdminDashboardView> {
                                   Text(
                                     widget.selectedArena == AppArena.member
                                         ? widget.memberArenaSection.label
+                                        : widget.selectedArena ==
+                                            AppArena.vendor
+                                        ? widget.vendorArenaSection.label
                                         : widget.selectedArena == AppArena.admin
                                         ? widget.adminArenaSection.label
                                         : widget.selectedArena ==
@@ -1183,6 +1342,22 @@ class _AdminDashboardViewState extends State<_AdminDashboardView> {
                                           ? 'All posts'
                                           : 'Approved',
                                 )
+                              else if (widget.selectedArena == AppArena.vendor)
+                                _QuickStatsRow(
+                                  selectedArena:
+                                      widget.viewerRole.isVendor
+                                          ? 'My Vendor'
+                                          : 'Vendors',
+                                  stat1Value:
+                                      widget.viewerRole.isAdmin
+                                          ? 'Admin'
+                                          : 'Search',
+                                  stat2Value: widget.vendorArenaSection.label,
+                                  stat3Value:
+                                      widget.viewerRole.isAdmin
+                                          ? 'Manage'
+                                          : 'Live',
+                                )
                               else if (widget.selectedArena == AppArena.admin)
                                 const _QuickStatsRow(
                                   selectedArena: 'Admin',
@@ -1214,12 +1389,19 @@ class _AdminDashboardViewState extends State<_AdminDashboardView> {
                                   stat2Value: 'Approved',
                                   stat3Value: 'Feed',
                                 )
+                              else if (widget.selectedArena == AppArena.profile)
+                                const _QuickStatsRow(
+                                  selectedArena: 'Profile',
+                                  stat1Value: 'Account',
+                                  stat2Value: 'Security',
+                                  stat3Value: 'Unlock',
+                                )
                               else
                                 _QuickStatsRow(
                                   selectedArena: widget.selectedArena.label,
-                                  stat1Value: '12',
-                                  stat2Value: '₹2.4L',
-                                  stat3Value: '05',
+                                  stat1Value: 'Live',
+                                  stat2Value: 'Ready',
+                                  stat3Value: 'Access',
                                 ),
                               const SizedBox(height: 24),
                             ],
@@ -1287,10 +1469,12 @@ class _AdminDashboardViewState extends State<_AdminDashboardView> {
                             viewerRole: widget.viewerRole,
                           )
                         else if (widget.selectedArena == AppArena.timeline)
-                          const TimelinePanel()
+                          TimelinePanel(viewerRole: widget.viewerRole)
                         else if (widget.selectedArena == AppArena.vendor)
                           VendorArenaPanel(
                             viewerRole: widget.viewerRole,
+                            section: widget.vendorArenaSection,
+                            onSectionSelected: widget.onVendorSectionSelected,
                             onOpenProfile:
                                 () => widget.onArenaSelected(AppArena.profile),
                           )
@@ -1354,6 +1538,16 @@ class _DashboardTopBar extends StatelessWidget {
           onTap: onMenuPressed,
           isOnLightSurface: isOnLightSurface,
         ),
+        const SizedBox(width: 12),
+        Text(
+          'NIMA',
+          style: TextStyle(
+            color: _nimaBrandRed,
+            fontSize: 20,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.2,
+          ),
+        ),
         const Spacer(),
         _TopBarIconButton(
           icon: Icons.search_rounded,
@@ -1374,15 +1568,18 @@ class _DashboardTopBar extends StatelessWidget {
 class _AdminDrawer extends StatelessWidget {
   const _AdminDrawer({
     required this.viewerRole,
+    required this.disableAdminFunctionsFromApp,
     required this.username,
     required this.profileDraft,
     required this.selectedArena,
     required this.selectedMemberSection,
+    required this.selectedVendorSection,
     required this.selectedAdminSection,
     required this.selectedAssociationSection,
     required this.selectedEventsSection,
     required this.onArenaSelected,
     required this.onMemberSectionSelected,
+    required this.onVendorSectionSelected,
     required this.onAdminSectionSelected,
     required this.onAssociationSectionSelected,
     required this.onEventsSectionSelected,
@@ -1391,15 +1588,18 @@ class _AdminDrawer extends StatelessWidget {
   });
 
   final AppViewerRole viewerRole;
+  final bool disableAdminFunctionsFromApp;
   final String username;
   final _LocalProfileDraft profileDraft;
   final AppArena selectedArena;
   final MemberArenaSection selectedMemberSection;
+  final VendorArenaSection selectedVendorSection;
   final AdminArenaSection selectedAdminSection;
   final AssociationArenaSection selectedAssociationSection;
   final EventsArenaSection selectedEventsSection;
   final ValueChanged<AppArena> onArenaSelected;
   final ValueChanged<MemberArenaSection> onMemberSectionSelected;
+  final ValueChanged<VendorArenaSection> onVendorSectionSelected;
   final ValueChanged<AdminArenaSection> onAdminSectionSelected;
   final ValueChanged<AssociationArenaSection> onAssociationSectionSelected;
   final ValueChanged<EventsArenaSection> onEventsSectionSelected;
@@ -1414,7 +1614,10 @@ class _AdminDrawer extends StatelessWidget {
             ? _displayNameFromUsername(displayEmail, viewerRole)
             : profileDraft.displayName.trim();
     final items =
-        AppRoleVisibility.visibleArenas(viewerRole)
+        AppRoleVisibility.visibleArenas(
+              viewerRole,
+              disableAdminFunctionsFromApp: disableAdminFunctionsFromApp,
+            )
             .map(
               (arena) => (
                 arena,
@@ -1543,6 +1746,35 @@ class _AdminDrawer extends StatelessWidget {
                             onTap: () => onAdminSectionSelected(section),
                           ),
                           if (section != AdminArenaSection.values.last)
+                            const SizedBox(height: 8),
+                        ],
+                      ],
+                    ),
+                  ),
+                if (item.$1 == AppArena.vendor &&
+                    selectedArena == AppArena.vendor &&
+                    viewerRole.isAdmin)
+                  Padding(
+                    padding: const EdgeInsets.only(
+                      left: 18,
+                      top: 10,
+                      bottom: 6,
+                    ),
+                    child: Column(
+                      children: [
+                        for (final section
+                            in AppRoleVisibility.visibleVendorSections(
+                              viewerRole,
+                            )) ...[
+                          _DrawerSubItem(
+                            label: section.label,
+                            selected: selectedVendorSection == section,
+                            onTap: () => onVendorSectionSelected(section),
+                          ),
+                          if (section !=
+                              AppRoleVisibility.visibleVendorSections(
+                                viewerRole,
+                              ).last)
                             const SizedBox(height: 8),
                         ],
                       ],
@@ -1860,6 +2092,8 @@ class _ProfileArenaViewState extends ConsumerState<_ProfileArenaView> {
   }
 
   void _saveProfile() {
+    final displayName = _displayNameController.text.trim();
+    final email = _emailController.text.trim();
     if (_newPasswordController.text.isNotEmpty &&
         _newPasswordController.text != _confirmPasswordController.text) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1869,28 +2103,33 @@ class _ProfileArenaViewState extends ConsumerState<_ProfileArenaView> {
       );
       return;
     }
+    if (displayName.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Display name is required.')),
+      );
+      return;
+    }
+    if (email.isEmpty || !email.contains('@')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Enter a valid email or username before saving.'),
+        ),
+      );
+      return;
+    }
 
     final draft = widget.profileDraft.copyWith(
-      displayName:
-          _displayNameController.text.trim().isEmpty
-              ? widget.profileDraft.displayName
-              : _displayNameController.text.trim(),
-      email: _emailController.text.trim(),
+      displayName: displayName,
+      email: email,
       aboutMe: _aboutMeController.text.trim(),
       avatarBytes: _avatarBytes,
       avatarFileName: _avatarFileName,
     );
     widget.onSaved(draft);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          _newPasswordController.text.isEmpty
-              ? 'Profile updated for this review build.'
-              : 'Profile and password preview updated for this review build.',
-        ),
-      ),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(_profileSavedMessage)));
 
     _currentPasswordController.clear();
     _newPasswordController.clear();
@@ -1951,17 +2190,57 @@ class _ProfileArenaViewState extends ConsumerState<_ProfileArenaView> {
     );
   }
 
+  String get _profileTypeLabel => switch (widget.viewerRole) {
+    AppViewerRole.admin => 'Admin profile',
+    AppViewerRole.vendor => 'Vendor profile',
+    AppViewerRole.member => 'Member profile',
+    AppViewerRole.viewOnly => 'User profile',
+  };
+
+  String get _profileSectionSubtitle => switch (widget.viewerRole) {
+    AppViewerRole.admin =>
+      'Manage your admin identity, contact details, and quick unlock settings for backend access.',
+    AppViewerRole.vendor =>
+      'Keep your vendor account details current and secure so your business profile stays easy to reach.',
+    AppViewerRole.member =>
+      'Update your member identity, contact details, and quick unlock settings for easier day-to-day access.',
+    AppViewerRole.viewOnly =>
+      'Manage your account details and local quick unlock settings for this device.',
+  };
+
+  String get _aboutMeHelperText => switch (widget.viewerRole) {
+    AppViewerRole.admin =>
+      'This note stays on this mobile profile for now and helps keep your admin context handy.',
+    AppViewerRole.vendor =>
+      'This note stays on this mobile profile for now and can help you keep a short business introduction ready.',
+    AppViewerRole.member =>
+      'This note stays on this mobile profile for now and can help you keep a short member introduction ready.',
+    AppViewerRole.viewOnly => 'This note stays on this device profile for now.',
+  };
+
+  String get _aboutMeHintText => switch (widget.viewerRole) {
+    AppViewerRole.admin =>
+      'Add a short note about your admin responsibilities, team, or preferred contact details.',
+    AppViewerRole.vendor =>
+      'Add a short note about your company, services, or the best way for members to connect with you.',
+    AppViewerRole.member =>
+      'Add a short note about your role, interests, or the best way for the association to reach you.',
+    AppViewerRole.viewOnly =>
+      'Add a short introduction or contact note for this profile.',
+  };
+
+  String get _profileSavedMessage =>
+      _newPasswordController.text.isEmpty
+          ? 'Profile details saved on this device.'
+          : 'Profile details and password preview saved on this device.';
+
   @override
   Widget build(BuildContext context) {
     final appLock = ref.watch(appLockProvider);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionHeader(
-          title: 'Profile',
-          subtitle:
-              'Update your profile photo, password preview, and personal introduction for the feedback build.',
-        ),
+        _SectionHeader(title: 'Profile', subtitle: _profileSectionSubtitle),
         const SizedBox(height: 16),
         _EntityCardFrame(
           padding: const EdgeInsets.all(20),
@@ -1996,11 +2275,7 @@ class _ProfileArenaViewState extends ConsumerState<_ProfileArenaView> {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          widget.viewerRole.isAdmin
-                              ? 'Admin profile'
-                              : widget.viewerRole.isVendor
-                              ? 'Vendor profile'
-                              : 'Member profile',
+                          _profileTypeLabel,
                           style: const TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
@@ -2086,9 +2361,9 @@ class _ProfileArenaViewState extends ConsumerState<_ProfileArenaView> {
                 ),
               ),
               const SizedBox(height: 8),
-              const Text(
-                'This section is local-only for now and is meant for feedback on the profile experience.',
-                style: TextStyle(
+              Text(
+                _aboutMeHelperText,
+                style: const TextStyle(
                   fontSize: 13,
                   color: Color(0xFF6B7280),
                   height: 1.5,
@@ -2098,11 +2373,10 @@ class _ProfileArenaViewState extends ConsumerState<_ProfileArenaView> {
               TextField(
                 controller: _aboutMeController,
                 maxLines: 5,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   labelText: 'About me',
                   alignLabelWithHint: true,
-                  hintText:
-                      'Tell others a little about yourself, your role, interests, or how you contribute to the association.',
+                  hintText: _aboutMeHintText,
                 ),
               ),
             ],
@@ -2128,7 +2402,7 @@ class _ProfileArenaViewState extends ConsumerState<_ProfileArenaView> {
               ),
               const SizedBox(height: 8),
               const Text(
-                'This password form is included for experience review in this build.',
+                'Use this section to preview password updates for your account while keeping quick unlock separate on this device.',
                 style: TextStyle(
                   fontSize: 13,
                   color: Color(0xFF6B7280),
@@ -2291,6 +2565,7 @@ class _HeroSection extends ConsumerWidget {
   const _HeroSection({
     required this.selectedArena,
     required this.selectedMemberSection,
+    required this.selectedVendorSection,
     required this.selectedAdminSection,
     required this.selectedAssociationSection,
     required this.selectedEventsSection,
@@ -2300,6 +2575,7 @@ class _HeroSection extends ConsumerWidget {
 
   final AppArena selectedArena;
   final MemberArenaSection selectedMemberSection;
+  final VendorArenaSection selectedVendorSection;
   final AdminArenaSection selectedAdminSection;
   final AssociationArenaSection selectedAssociationSection;
   final EventsArenaSection selectedEventsSection;
@@ -2339,17 +2615,6 @@ class _HeroSection extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (isDashboard) ...[
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.94),
-                borderRadius: BorderRadius.circular(22),
-              ),
-              child: const _NimaBrandLockup(wordmarkWidth: 122, compact: true),
-            ),
-            const SizedBox(height: 14),
-          ],
           Text(
             isDashboard
                 ? AppArena.dashboard.label
@@ -2381,14 +2646,22 @@ class _HeroSection extends ConsumerWidget {
           else
             Text(
               isMemberArena
-                  ? 'Member ${selectedMemberSection.label} is synced with the backend.'
+                  ? viewerRole.isVendor
+                      ? 'Browse approved member records for your vendor outreach.'
+                      : 'Member updates and directory access are ready.'
                   : selectedArena == AppArena.admin
-                  ? 'Admin access is synced with live backend data.'
+                  ? 'Admin controls are ready for live member, vendor, and content operations.'
                   : selectedArena == AppArena.association
-                  ? 'Association profile is synced with live backend data.'
+                  ? 'Association information, circulars, and gallery content are ready.'
                   : selectedArena == AppArena.events
-                  ? 'Events Arena is synced with live event and event-type data.'
-                  : '${selectedArena.label} is ready for the first module build.',
+                  ? 'Event schedules and event management are ready.'
+                  : selectedArena == AppArena.vendor
+                  ? viewerRole.isVendor
+                      ? 'Manage your vendor presence from one dedicated workspace.'
+                      : 'Browse the vendor directory and discover association partners.'
+                  : selectedArena == AppArena.profile
+                  ? 'Your account details and quick unlock settings are ready.'
+                  : '${selectedArena.label} is ready.',
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 32,
@@ -2401,20 +2674,28 @@ class _HeroSection extends ConsumerWidget {
             isDashboard
                 ? _formatCurrentDateTime()
                 : isMemberArena
-                ? viewerRole.isAdmin
+                ? viewerRole.isVendor
+                    ? 'Vendor users can search members here, while other vendors remain hidden from the app.'
+                    : viewerRole.isAdmin
                     ? 'Admins can moderate member posts directly from the feed, while member and view-only modes only surface approved content.'
                     : 'Browse approved member updates and directory details curated for association members.'
                 : selectedArena == AppArena.admin
-                ? 'This arena mirrors the current web and backend workflows for member access, content review, and event oversight.'
+                ? 'Use this workspace to manage access, review content, and keep the app aligned with backend data.'
                 : selectedArena == AppArena.association
-                ? 'The same association navigation from the web app now lives in the side drawer here, starting with the backend-linked profile screen.'
+                ? 'Keep association information close at hand, from the main profile to circulars, committee details, and gallery updates.'
                 : selectedArena == AppArena.events
                 ? viewerRole.isAdmin
-                    ? 'Create events with media, manage event types, and browse the live event timeline from the same arena shell used on web.'
+                    ? 'Create events with media, manage event types, and review the live event timeline from one place.'
                     : 'See upcoming and recent association events without any editing or setup controls.'
+                : selectedArena == AppArena.vendor
+                ? viewerRole.isVendor
+                    ? 'This area is reserved for your own vendor account, profile upkeep, and vendor-specific quick actions.'
+                    : 'Search the vendor directory by name, city, category, or business type.'
+                : selectedArena == AppArena.profile
+                ? 'Keep your account, password preview, biometrics, and local PIN settings organised in one place.'
                 : viewerRole.isAdmin
-                ? 'Use the animated side drawer to move between admin, association, member, and vendor workspaces while keeping the premium hero and clean data canvas.'
-                : 'Use the animated side drawer to move between association, member, vendor, and event workspaces with a clean mobile-first layout.',
+                ? 'Move between admin, association, member, and vendor workspaces without losing context.'
+                : 'Move between your association workspaces with a cleaner, role-specific mobile flow.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: Colors.white.withValues(alpha: 0.84),
               height: 1.45,
@@ -2443,6 +2724,8 @@ class _HeroSection extends ConsumerWidget {
                             ? 'Overview'
                             : selectedArena == AppArena.admin
                             ? selectedAdminSection.label
+                            : selectedArena == AppArena.vendor
+                            ? selectedVendorSection.label
                             : selectedArena == AppArena.association
                             ? selectedAssociationSection.label
                             : selectedArena == AppArena.events
@@ -2612,7 +2895,11 @@ class _SynetraLogoBadge extends StatelessWidget {
       ),
       child: FittedBox(
         fit: BoxFit.contain,
-        child: SizedBox(width: size * 0.86, child: const _NimaWordmark()),
+        child: Image.asset(
+          _nimaNavIconAsset,
+          width: size * 0.86,
+          fit: BoxFit.contain,
+        ),
       ),
     );
   }
@@ -2646,24 +2933,23 @@ class _NimaEntryCard extends StatelessWidget {
 }
 
 class _NimaBrandLockup extends StatelessWidget {
-  const _NimaBrandLockup({this.wordmarkWidth = 240, this.compact = false});
+  const _NimaBrandLockup({this.wordmarkWidth = 240});
 
   final double wordmarkWidth;
-  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        SizedBox(width: wordmarkWidth, child: const _NimaWordmark()),
-        SizedBox(height: compact ? 10 : 14),
+        Image.asset(_nimaLogoAsset, width: wordmarkWidth, fit: BoxFit.contain),
+        const SizedBox(height: 14),
         Text(
           "Nashik Industries &\nManufacturers' Association",
           textAlign: TextAlign.center,
           style: TextStyle(
             color: _nimaBrandRed,
-            fontSize: compact ? 18 : 22,
+            fontSize: 22,
             fontWeight: FontWeight.w800,
             height: 1.18,
             letterSpacing: 0.2,
@@ -2684,41 +2970,103 @@ class _NimaPoweredByFooter extends StatelessWidget {
     return Column(
       children: [
         Text(
-          'Powered by Synetra',
+          'Powered by',
           style: TextStyle(
             color: const Color(0xFF4B5563),
-            fontSize: compact ? 14 : 16,
+            fontSize: compact ? 13 : 15,
             fontWeight: FontWeight.w700,
           ),
         ),
-        const SizedBox(height: 4),
-        Text(
-          'v1.0.0',
-          style: TextStyle(
-            color: const Color(0xFF6B7280),
-            fontSize: compact ? 12 : 14,
-            fontWeight: FontWeight.w600,
-          ),
+        SizedBox(height: compact ? 8 : 10),
+        Column(
+          children: [
+            SvgPicture.asset(
+              _mahagenLogoAsset,
+              width: compact ? 118 : 164,
+              height: compact ? 54 : 76,
+              fit: BoxFit.contain,
+            ),
+            SizedBox(height: compact ? 6 : 8),
+            Text(
+              'NextGenMahatech',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: const Color(0xFF171717),
+                fontSize: compact ? 13 : 16,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.2,
+              ),
+            ),
+            SizedBox(height: compact ? 2 : 4),
+            Text(
+              'Digital partner',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: const Color(0xFF6B7280),
+                fontSize: compact ? 10 : 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
         ),
       ],
     );
   }
 }
 
-class _NimaLoadingDots extends StatelessWidget {
+class _NimaLoadingDots extends StatefulWidget {
   const _NimaLoadingDots();
 
   @override
+  State<_NimaLoadingDots> createState() => _NimaLoadingDotsState();
+}
+
+class _NimaLoadingDotsState extends State<_NimaLoadingDots>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1100),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: const [
-        _NimaDot(),
-        SizedBox(width: 10),
-        _NimaDot(),
-        SizedBox(width: 10),
-        _NimaDot(),
-      ],
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(3, (index) {
+            final offset = (index * 0.18) % 1;
+            final progress = (_controller.value + offset) % 1.0;
+            final prominence = 0.5 - (progress - 0.5).abs();
+            final scale = (0.78 + (prominence * 0.84)).clamp(0.78, 1.2);
+            final opacity = (0.38 + (prominence * 1.24)).clamp(0.38, 1.0);
+            final rise = progress < 0.5 ? -6 * progress : -6 * (1 - progress);
+            return Padding(
+              padding: EdgeInsets.symmetric(horizontal: index == 1 ? 8 : 6),
+              child: Transform.translate(
+                offset: Offset(0, rise),
+                child: Transform.scale(
+                  scale: scale,
+                  child: Opacity(opacity: opacity, child: const _NimaDot()),
+                ),
+              ),
+            );
+          }),
+        );
+      },
     );
   }
 }
@@ -2729,92 +3077,21 @@ class _NimaDot extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 10,
-      height: 10,
+      width: 14,
+      height: 14,
       decoration: const BoxDecoration(
         color: _nimaBrandRed,
         shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: Color(0x33E21E23),
+            blurRadius: 12,
+            offset: Offset(0, 6),
+          ),
+        ],
       ),
     );
   }
-}
-
-class _NimaWordmark extends StatelessWidget {
-  const _NimaWordmark();
-
-  @override
-  Widget build(BuildContext context) {
-    return const AspectRatio(
-      aspectRatio: 4.8,
-      child: CustomPaint(painter: _NimaWordmarkPainter()),
-    );
-  }
-}
-
-class _NimaWordmarkPainter extends CustomPainter {
-  const _NimaWordmarkPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint =
-        Paint()
-          ..color = _nimaBrandRed
-          ..style = PaintingStyle.fill;
-    final h = size.height;
-    final gap = size.width * 0.035;
-    final segmentWidth = (size.width - gap * 3) / 4;
-
-    void rect(double x, double y, double width, double height) {
-      canvas.drawRect(Rect.fromLTWH(x, y, width, height), paint);
-    }
-
-    final nX = 0.0;
-    rect(nX, h * 0.22, segmentWidth * 0.24, h * 0.58);
-    rect(nX + segmentWidth * 0.78, h * 0.22, segmentWidth * 0.22, h * 0.58);
-    final nPath =
-        Path()
-          ..moveTo(nX + segmentWidth * 0.22, h * 0.8)
-          ..lineTo(nX + segmentWidth * 0.78, h * 0.8)
-          ..lineTo(nX + segmentWidth * 0.22, h * 0.22)
-          ..close();
-    canvas.drawPath(nPath, paint);
-
-    final iX = segmentWidth + gap;
-    rect(iX + segmentWidth * 0.38, 0, segmentWidth * 0.24, h * 0.18);
-    rect(iX + segmentWidth * 0.38, h * 0.22, segmentWidth * 0.24, h * 0.58);
-
-    final mX = (segmentWidth + gap) * 2;
-    rect(mX, h * 0.22, segmentWidth * 0.18, h * 0.58);
-    rect(mX + segmentWidth * 0.82, h * 0.22, segmentWidth * 0.18, h * 0.58);
-    final mLeft =
-        Path()
-          ..moveTo(mX + segmentWidth * 0.18, h * 0.8)
-          ..lineTo(mX + segmentWidth * 0.5, h * 0.22)
-          ..lineTo(mX + segmentWidth * 0.5, h * 0.8)
-          ..close();
-    final mRight =
-        Path()
-          ..moveTo(mX + segmentWidth * 0.5, h * 0.8)
-          ..lineTo(mX + segmentWidth * 0.5, h * 0.22)
-          ..lineTo(mX + segmentWidth * 0.82, h * 0.8)
-          ..close();
-    canvas.drawPath(mLeft, paint);
-    canvas.drawPath(mRight, paint);
-
-    final aX = (segmentWidth + gap) * 3;
-    rect(aX + segmentWidth * 0.1, h * 0.7, segmentWidth * 0.72, h * 0.1);
-    rect(aX + segmentWidth * 0.26, h * 0.54, segmentWidth * 0.42, h * 0.08);
-    final aTop =
-        Path()
-          ..moveTo(aX, h * 0.5)
-          ..lineTo(aX + segmentWidth * 0.46, h * 0.22)
-          ..lineTo(aX + segmentWidth * 0.92, h * 0.5)
-          ..close();
-    canvas.drawPath(aTop, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 InputDecoration _nimaInputDecoration({

@@ -40,6 +40,20 @@ const timelinePostSchema = z.object({
   displayEnd: optionalDateField,
 });
 
+const timelinePostUpdateSchema = z.object({
+  associationId: z.string().min(1).optional(),
+  sourceType: z.nativeEnum(TimelineSourceType),
+  memberId: z.string().optional(),
+  vendorId: z.string().optional(),
+  postedBy: z.string().optional(),
+  caption: z.string().min(1),
+  contactNumber: z.string().optional(),
+  landingPageUrl: z.string().optional(),
+  youtubeUrl: z.string().optional(),
+  facebookUrl: z.string().optional(),
+  brochureUrl: z.string().optional(),
+});
+
 const moderationSchema = z.object({
   reviewStatus: z.nativeEnum(PostReviewStatus),
   displayStart: optionalDateField,
@@ -148,6 +162,35 @@ function buildDefaultDisplayWindow(displayStart, displayEnd) {
     displayStart: resolvedStart,
     displayEnd: resolvedEnd,
   };
+}
+
+function removeStoredTimelineAsset(assetUrl) {
+  const rawValue = String(assetUrl || "").trim();
+  if (!rawValue) {
+    return;
+  }
+
+  let relativePath = rawValue;
+
+  if (/^https?:\/\//i.test(rawValue)) {
+    try {
+      relativePath = new URL(rawValue).pathname;
+    } catch (_error) {
+      return;
+    }
+  }
+
+  const normalizedPath = relativePath.replace(/^\/+/, "");
+
+  if (!normalizedPath.startsWith("uploads/timeline-posts/")) {
+    return;
+  }
+
+  const absolutePath = path.join(path.dirname(currentFilePath), "../../", normalizedPath);
+
+  if (fs.existsSync(absolutePath)) {
+    fs.unlinkSync(absolutePath);
+  }
 }
 
 function serializeTimelinePost(req, post) {
@@ -314,6 +357,82 @@ router.post(
   },
 );
 
+router.patch(
+  "/:id",
+  timelinePostUpload.fields([
+    { name: "imageFile", maxCount: 1 },
+    { name: "brochureFile", maxCount: 1 },
+  ]),
+  async (req, res) => {
+    const parsed = timelinePostUpdateSchema.safeParse(req.body);
+
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: "Invalid timeline post payload",
+        details: parsed.error.flatten(),
+      });
+    }
+
+    try {
+      const existingPost = await prisma.timelinePost.findUnique({
+        where: { id: req.params.id },
+      });
+
+      if (!existingPost) {
+        return res.status(404).json({ error: "Timeline post not found" });
+      }
+
+      const sourceContext = await resolveSourceContext(parsed.data);
+      const files = req.files || {};
+      const imageFile = Array.isArray(files.imageFile) ? files.imageFile[0] : null;
+      const brochureFile = Array.isArray(files.brochureFile) ? files.brochureFile[0] : null;
+
+      const post = await prisma.timelinePost.update({
+        where: { id: existingPost.id },
+        data: {
+          associationId: sourceContext.associationId,
+          sourceType: parsed.data.sourceType,
+          memberId: sourceContext.memberId,
+          vendorId: sourceContext.vendorId,
+          postedBy: parsed.data.postedBy,
+          caption: parsed.data.caption,
+          contactNumber: parsed.data.contactNumber,
+          imageUrl: imageFile
+            ? buildPublicAssetUrl(req, `uploads/timeline-posts/${imageFile.filename}`)
+            : existingPost.imageUrl,
+          imageType: imageFile?.mimetype || existingPost.imageType,
+          landingPageUrl: parsed.data.landingPageUrl,
+          youtubeUrl: parsed.data.youtubeUrl,
+          facebookUrl: parsed.data.facebookUrl,
+          brochureUrl: brochureFile
+            ? buildPublicAssetUrl(req, `uploads/timeline-posts/${brochureFile.filename}`)
+            : parsed.data.brochureUrl || existingPost.brochureUrl,
+          brochureMimeType: brochureFile?.mimetype || existingPost.brochureMimeType,
+        },
+        include: {
+          association: true,
+          member: true,
+          vendor: true,
+        },
+      });
+
+      if (imageFile && existingPost.imageUrl !== post.imageUrl) {
+        removeStoredTimelineAsset(existingPost.imageUrl);
+      }
+
+      if (brochureFile && existingPost.brochureUrl !== post.brochureUrl) {
+        removeStoredTimelineAsset(existingPost.brochureUrl);
+      }
+
+      return res.json({ post: serializeTimelinePost(req, post) });
+    } catch (error) {
+      return res.status(400).json({
+        error: error instanceof Error ? error.message : "Unable to update timeline post",
+      });
+    }
+  },
+);
+
 router.patch("/:id/moderation", async (req, res) => {
   const parsed = moderationSchema.safeParse(req.body);
 
@@ -347,6 +466,25 @@ router.patch("/:id/moderation", async (req, res) => {
   });
 
   return res.json({ post: serializeTimelinePost(req, post) });
+});
+
+router.delete("/:id", async (req, res) => {
+  const existingPost = await prisma.timelinePost.findUnique({
+    where: { id: req.params.id },
+  });
+
+  if (!existingPost) {
+    return res.status(404).json({ error: "Timeline post not found" });
+  }
+
+  await prisma.timelinePost.delete({
+    where: { id: existingPost.id },
+  });
+
+  removeStoredTimelineAsset(existingPost.imageUrl);
+  removeStoredTimelineAsset(existingPost.brochureUrl);
+
+  return res.json({ success: true });
 });
 
 export default router;

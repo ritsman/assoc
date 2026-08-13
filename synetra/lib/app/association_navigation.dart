@@ -7,17 +7,15 @@ class AssociationArenaNavigation {
       AssociationArenaSection.profile;
 
   static List<AssociationArenaSection> visibleSections(AppViewerRole role) =>
-      role.isAdmin
-          ? AssociationArenaSection.values
-          : AssociationArenaSection.values
-              .where((section) => section != AssociationArenaSection.master)
-              .toList();
+      AssociationArenaSection.values
+          .where((section) => section != AssociationArenaSection.master)
+          .toList();
 
   static AssociationArenaSection normalizeSection(
     AppViewerRole role,
     AssociationArenaSection section,
   ) {
-    if (!role.isAdmin && section == AssociationArenaSection.master) {
+    if (section == AssociationArenaSection.master) {
       return AssociationArenaSection.profile;
     }
     return section;
@@ -44,6 +42,7 @@ class AssociationArenaNavigation {
   }
 
   static bool shouldAutoHideBottomBar(AssociationArenaSection section) {
-    return shouldHideShellHeader(section) || usesBreadcrumbInsteadOfHero(section);
+    return shouldHideShellHeader(section) ||
+        usesBreadcrumbInsteadOfHero(section);
   }
 }

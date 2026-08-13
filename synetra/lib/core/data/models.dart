@@ -531,6 +531,14 @@ class AdminVendorAccessItem {
     required this.badge,
     required this.avatarUrl,
     required this.accessStatus,
+    required this.primaryLoginEmail,
+    required this.secondaryLoginEmail,
+    required this.membershipPlan,
+    required this.paymentAmount,
+    required this.onboardingStartDate,
+    required this.onboardingEndDate,
+    required this.paymentDueDate,
+    required this.notes,
   });
 
   final String id;
@@ -544,9 +552,46 @@ class AdminVendorAccessItem {
   final String badge;
   final String avatarUrl;
   final MemberAccessStatus accessStatus;
+  final String primaryLoginEmail;
+  final String secondaryLoginEmail;
+  final String membershipPlan;
+  final String paymentAmount;
+  final String onboardingStartDate;
+  final String onboardingEndDate;
+  final String paymentDueDate;
+  final String notes;
+
+  static MemberAccessStatus _accessStatusFromVendorJson(
+    Map<String, dynamic> json,
+  ) {
+    final vendorStatus = json['status']?.toString().trim().toUpperCase() ?? '';
+    switch (vendorStatus) {
+      case 'ACTIVE':
+        return MemberAccessStatus.approved;
+      case 'SUSPENDED':
+        return MemberAccessStatus.suspended;
+      case 'LAPSED':
+        return MemberAccessStatus.cancelled;
+      case 'PENDING':
+        return MemberAccessStatus.pending;
+    }
+
+    final users =
+        (json['users'] as List<dynamic>? ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .toList();
+    final primaryUser =
+        users.isNotEmpty ? users.first : json['user'] as Map<String, dynamic>?;
+    if (primaryUser != null) {
+      return MemberAccessStatusMeta.fromApi(
+        approvalStatus: primaryUser['approvalStatus']?.toString() ?? 'PENDING',
+        isActive: primaryUser['isActive'] == true,
+      );
+    }
+    return MemberAccessStatus.pending;
+  }
 
   factory AdminVendorAccessItem.fromJson(Map<String, dynamic> json) {
-    final user = json['user'] as Map<String, dynamic>?;
     final displayName =
         json['companyName']?.toString().trim().isNotEmpty == true
             ? json['companyName']!.toString()
@@ -566,11 +611,413 @@ class AdminVendorAccessItem {
           json['photoUrl']?.toString() ??
           json['imageUrl']?.toString() ??
           '',
-      accessStatus: MemberAccessStatusMeta.fromApi(
-        approvalStatus: user?['approvalStatus']?.toString() ?? 'PENDING',
-        isActive: user?['isActive'] == true,
-      ),
+      accessStatus: _accessStatusFromVendorJson(json),
+      primaryLoginEmail: json['primaryLoginEmail']?.toString() ?? '',
+      secondaryLoginEmail: json['secondaryLoginEmail']?.toString() ?? '',
+      membershipPlan: json['membershipPlan']?.toString() ?? '',
+      paymentAmount: json['paymentAmount']?.toString() ?? '',
+      onboardingStartDate: json['onboardingStartAt']?.toString() ?? '',
+      onboardingEndDate: json['onboardingEndAt']?.toString() ?? '',
+      paymentDueDate: json['paymentDueDate']?.toString() ?? '',
+      notes: json['notes']?.toString() ?? '',
     );
+  }
+}
+
+class AdminVendorApprovalDraft {
+  const AdminVendorApprovalDraft({
+    required this.planName,
+    required this.openingTime,
+    required this.closingTime,
+    required this.membershipPlan,
+    required this.paymentAmount,
+    required this.onboardingStartAt,
+    required this.onboardingEndAt,
+    required this.paymentDueDate,
+    required this.gstNumber,
+    required this.isRestaurant,
+    required this.paymentMode,
+    required this.bankName,
+    required this.transactionId,
+    required this.paymentDescription,
+    required this.googleLocation,
+    required this.idProof,
+    required this.locationProof,
+    required this.companyBrochure,
+    required this.profilePhoto,
+    required this.visitingCard,
+  });
+
+  const AdminVendorApprovalDraft.empty()
+    : planName = '',
+      openingTime = '',
+      closingTime = '',
+      membershipPlan = '',
+      paymentAmount = '',
+      onboardingStartAt = '',
+      onboardingEndAt = '',
+      paymentDueDate = '',
+      gstNumber = '',
+      isRestaurant = false,
+      paymentMode = 'Online/NEFT/IMPS',
+      bankName = '',
+      transactionId = '',
+      paymentDescription = '',
+      googleLocation = '',
+      idProof = null,
+      locationProof = null,
+      companyBrochure = null,
+      profilePhoto = null,
+      visitingCard = null;
+
+  final String planName;
+  final String openingTime;
+  final String closingTime;
+  final String membershipPlan;
+  final String paymentAmount;
+  final String onboardingStartAt;
+  final String onboardingEndAt;
+  final String paymentDueDate;
+  final String gstNumber;
+  final bool isRestaurant;
+  final String paymentMode;
+  final String bankName;
+  final String transactionId;
+  final String paymentDescription;
+  final String googleLocation;
+  final PlatformFile? idProof;
+  final PlatformFile? locationProof;
+  final PlatformFile? companyBrochure;
+  final PlatformFile? profilePhoto;
+  final PlatformFile? visitingCard;
+
+  AdminVendorApprovalDraft copyWith({
+    String? planName,
+    String? openingTime,
+    String? closingTime,
+    String? membershipPlan,
+    String? paymentAmount,
+    String? onboardingStartAt,
+    String? onboardingEndAt,
+    String? paymentDueDate,
+    String? gstNumber,
+    bool? isRestaurant,
+    String? paymentMode,
+    String? bankName,
+    String? transactionId,
+    String? paymentDescription,
+    String? googleLocation,
+    PlatformFile? idProof,
+    PlatformFile? locationProof,
+    PlatformFile? companyBrochure,
+    PlatformFile? profilePhoto,
+    PlatformFile? visitingCard,
+    bool clearIdProof = false,
+    bool clearLocationProof = false,
+    bool clearCompanyBrochure = false,
+    bool clearProfilePhoto = false,
+    bool clearVisitingCard = false,
+  }) {
+    return AdminVendorApprovalDraft(
+      planName: planName ?? this.planName,
+      openingTime: openingTime ?? this.openingTime,
+      closingTime: closingTime ?? this.closingTime,
+      membershipPlan: membershipPlan ?? this.membershipPlan,
+      paymentAmount: paymentAmount ?? this.paymentAmount,
+      onboardingStartAt: onboardingStartAt ?? this.onboardingStartAt,
+      onboardingEndAt: onboardingEndAt ?? this.onboardingEndAt,
+      paymentDueDate: paymentDueDate ?? this.paymentDueDate,
+      gstNumber: gstNumber ?? this.gstNumber,
+      isRestaurant: isRestaurant ?? this.isRestaurant,
+      paymentMode: paymentMode ?? this.paymentMode,
+      bankName: bankName ?? this.bankName,
+      transactionId: transactionId ?? this.transactionId,
+      paymentDescription: paymentDescription ?? this.paymentDescription,
+      googleLocation: googleLocation ?? this.googleLocation,
+      idProof: clearIdProof ? null : (idProof ?? this.idProof),
+      locationProof:
+          clearLocationProof ? null : (locationProof ?? this.locationProof),
+      companyBrochure:
+          clearCompanyBrochure
+              ? null
+              : (companyBrochure ?? this.companyBrochure),
+      profilePhoto:
+          clearProfilePhoto ? null : (profilePhoto ?? this.profilePhoto),
+      visitingCard:
+          clearVisitingCard ? null : (visitingCard ?? this.visitingCard),
+    );
+  }
+
+  String? get validationMessage {
+    if (planName.trim().isEmpty) {
+      return 'Plan name is required before approving a vendor registration.';
+    }
+    if (membershipPlan.trim().isEmpty) {
+      return 'Membership plan is required before approving a vendor registration.';
+    }
+    if (paymentAmount.trim().isEmpty) {
+      return 'Payment amount is required before approving a vendor registration.';
+    }
+    if (onboardingStartAt.trim().isEmpty) {
+      return 'Start date is required before approving a vendor registration.';
+    }
+    if (onboardingEndAt.trim().isEmpty) {
+      return 'End date is required before approving a vendor registration.';
+    }
+    if (paymentMode.trim().isEmpty) {
+      return 'Payment mode is required before approving a vendor registration.';
+    }
+    if (bankName.trim().isEmpty) {
+      return 'Bank name is required before approving a vendor registration.';
+    }
+    if (transactionId.trim().isEmpty) {
+      return 'Transaction ID is required before approving a vendor registration.';
+    }
+    return null;
+  }
+}
+
+class VendorTaxonomySubCategoryItem {
+  const VendorTaxonomySubCategoryItem({
+    required this.id,
+    required this.associationId,
+    required this.categoryId,
+    required this.name,
+    required this.displayOrder,
+  });
+
+  final String id;
+  final String associationId;
+  final String categoryId;
+  final String name;
+  final int displayOrder;
+
+  factory VendorTaxonomySubCategoryItem.fromJson(Map<String, dynamic> json) {
+    return VendorTaxonomySubCategoryItem(
+      id: json['id']?.toString() ?? '',
+      associationId: json['associationId']?.toString() ?? '',
+      categoryId: json['categoryId']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
+      displayOrder: (json['displayOrder'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+class VendorTaxonomyCategoryItem {
+  const VendorTaxonomyCategoryItem({
+    required this.id,
+    required this.associationId,
+    required this.name,
+    required this.displayOrder,
+    required this.subCategories,
+  });
+
+  final String id;
+  final String associationId;
+  final String name;
+  final int displayOrder;
+  final List<VendorTaxonomySubCategoryItem> subCategories;
+
+  factory VendorTaxonomyCategoryItem.fromJson(Map<String, dynamic> json) {
+    final subCategories =
+        (json['subCategories'] as List<dynamic>? ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map(VendorTaxonomySubCategoryItem.fromJson)
+            .toList()
+          ..sort((left, right) {
+            final orderCompare = left.displayOrder.compareTo(
+              right.displayOrder,
+            );
+            if (orderCompare != 0) {
+              return orderCompare;
+            }
+            return left.name.toLowerCase().compareTo(right.name.toLowerCase());
+          });
+
+    return VendorTaxonomyCategoryItem(
+      id: json['id']?.toString() ?? '',
+      associationId: json['associationId']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
+      displayOrder: (json['displayOrder'] as num?)?.toInt() ?? 0,
+      subCategories: subCategories,
+    );
+  }
+}
+
+class AdminVendorRegistrationDraft {
+  const AdminVendorRegistrationDraft({
+    required this.companyName,
+    required this.contactPerson,
+    required this.phoneCode,
+    required this.phone,
+    required this.whatsAppCode,
+    required this.whatsApp,
+    required this.email,
+    required this.primaryLoginEmail,
+    required this.secondaryLoginEmail,
+    required this.categoryId,
+    required this.categoryName,
+    required this.subCategoryId,
+    required this.subCategoryName,
+    required this.country,
+    required this.state,
+    required this.address,
+    required this.city,
+    required this.zipcode,
+    required this.website,
+    required this.facebookUrl,
+    required this.instagramUrl,
+    required this.youtubeUrl,
+    required this.linkedinUrl,
+    required this.xUrl,
+  });
+
+  const AdminVendorRegistrationDraft.empty()
+    : companyName = '',
+      contactPerson = '',
+      phoneCode = '+91',
+      phone = '',
+      whatsAppCode = '+91',
+      whatsApp = '',
+      email = '',
+      primaryLoginEmail = '',
+      secondaryLoginEmail = '',
+      categoryId = '',
+      categoryName = '',
+      subCategoryId = '',
+      subCategoryName = '',
+      country = 'India',
+      state = '',
+      address = '',
+      city = '',
+      zipcode = '',
+      website = '',
+      facebookUrl = '',
+      instagramUrl = '',
+      youtubeUrl = '',
+      linkedinUrl = '',
+      xUrl = '';
+
+  final String companyName;
+  final String contactPerson;
+  final String phoneCode;
+  final String phone;
+  final String whatsAppCode;
+  final String whatsApp;
+  final String email;
+  final String primaryLoginEmail;
+  final String secondaryLoginEmail;
+  final String categoryId;
+  final String categoryName;
+  final String subCategoryId;
+  final String subCategoryName;
+  final String country;
+  final String state;
+  final String address;
+  final String city;
+  final String zipcode;
+  final String website;
+  final String facebookUrl;
+  final String instagramUrl;
+  final String youtubeUrl;
+  final String linkedinUrl;
+  final String xUrl;
+
+  AdminVendorRegistrationDraft copyWith({
+    String? companyName,
+    String? contactPerson,
+    String? phoneCode,
+    String? phone,
+    String? whatsAppCode,
+    String? whatsApp,
+    String? email,
+    String? primaryLoginEmail,
+    String? secondaryLoginEmail,
+    String? categoryId,
+    String? categoryName,
+    String? subCategoryId,
+    String? subCategoryName,
+    String? country,
+    String? state,
+    String? address,
+    String? city,
+    String? zipcode,
+    String? website,
+    String? facebookUrl,
+    String? instagramUrl,
+    String? youtubeUrl,
+    String? linkedinUrl,
+    String? xUrl,
+  }) {
+    return AdminVendorRegistrationDraft(
+      companyName: companyName ?? this.companyName,
+      contactPerson: contactPerson ?? this.contactPerson,
+      phoneCode: phoneCode ?? this.phoneCode,
+      phone: phone ?? this.phone,
+      whatsAppCode: whatsAppCode ?? this.whatsAppCode,
+      whatsApp: whatsApp ?? this.whatsApp,
+      email: email ?? this.email,
+      primaryLoginEmail: primaryLoginEmail ?? this.primaryLoginEmail,
+      secondaryLoginEmail: secondaryLoginEmail ?? this.secondaryLoginEmail,
+      categoryId: categoryId ?? this.categoryId,
+      categoryName: categoryName ?? this.categoryName,
+      subCategoryId: subCategoryId ?? this.subCategoryId,
+      subCategoryName: subCategoryName ?? this.subCategoryName,
+      country: country ?? this.country,
+      state: state ?? this.state,
+      address: address ?? this.address,
+      city: city ?? this.city,
+      zipcode: zipcode ?? this.zipcode,
+      website: website ?? this.website,
+      facebookUrl: facebookUrl ?? this.facebookUrl,
+      instagramUrl: instagramUrl ?? this.instagramUrl,
+      youtubeUrl: youtubeUrl ?? this.youtubeUrl,
+      linkedinUrl: linkedinUrl ?? this.linkedinUrl,
+      xUrl: xUrl ?? this.xUrl,
+    );
+  }
+
+  String? get validationMessage {
+    if (companyName.trim().isEmpty) {
+      return 'Company name is required.';
+    }
+    if (contactPerson.trim().isEmpty) {
+      return 'Contact person is required.';
+    }
+    if (phone.trim().isEmpty) {
+      return 'Mobile number is required.';
+    }
+    if (email.trim().isEmpty || !email.contains('@')) {
+      return 'Enter a valid contact email.';
+    }
+    if (primaryLoginEmail.trim().isEmpty || !primaryLoginEmail.contains('@')) {
+      return 'Enter a valid primary login email.';
+    }
+    if (secondaryLoginEmail.trim().isNotEmpty &&
+        !secondaryLoginEmail.contains('@')) {
+      return 'Enter a valid secondary login email or leave it blank.';
+    }
+    if (secondaryLoginEmail.trim().isNotEmpty &&
+        secondaryLoginEmail.trim().toLowerCase() ==
+            primaryLoginEmail.trim().toLowerCase()) {
+      return 'Primary and secondary login emails must be different.';
+    }
+    if (categoryId.trim().isEmpty || categoryName.trim().isEmpty) {
+      return 'Select a vendor category.';
+    }
+    if (subCategoryId.trim().isEmpty || subCategoryName.trim().isEmpty) {
+      return 'Select a vendor sub-category.';
+    }
+    if (country.trim() == 'India' && state.trim().isEmpty) {
+      return 'Select a state.';
+    }
+    if (country.trim() == 'India' && city.trim().isEmpty) {
+      return 'Select a city.';
+    }
+    if (address.trim().isEmpty) {
+      return 'Address is required.';
+    }
+    return null;
   }
 }
 
@@ -657,12 +1104,15 @@ class AdminAppBannerItem {
     required this.shortText,
     required this.contactNumber,
     required this.mediaUrl,
+    required this.brochureUrl,
     required this.socialMediaUrl,
     required this.reviewStatus,
     required this.paymentReceived,
     required this.paymentMode,
     required this.paymentRemarks,
     required this.displayIndex,
+    required this.displayStart,
+    required this.displayEnd,
   });
 
   final String id;
@@ -670,12 +1120,15 @@ class AdminAppBannerItem {
   final String shortText;
   final String contactNumber;
   final String mediaUrl;
+  final String brochureUrl;
   final String socialMediaUrl;
   final BannerReviewStatus reviewStatus;
   final bool paymentReceived;
   final String paymentMode;
   final String paymentRemarks;
   final int displayIndex;
+  final String displayStart;
+  final String displayEnd;
 
   factory AdminAppBannerItem.fromJson(Map<String, dynamic> json) {
     return AdminAppBannerItem(
@@ -684,6 +1137,7 @@ class AdminAppBannerItem {
       shortText: json['shortText']?.toString() ?? '',
       contactNumber: json['contactNumber']?.toString() ?? '',
       mediaUrl: json['mediaUrl']?.toString() ?? '',
+      brochureUrl: json['brochureUrl']?.toString() ?? '',
       socialMediaUrl: json['socialMediaUrl']?.toString() ?? '',
       reviewStatus: BannerReviewStatusMeta.fromApi(
         json['reviewStatus']?.toString() ?? 'PENDING',
@@ -692,6 +1146,133 @@ class AdminAppBannerItem {
       paymentMode: json['paymentMode']?.toString() ?? '',
       paymentRemarks: json['paymentRemarks']?.toString() ?? '',
       displayIndex: (json['displayIndex'] as num?)?.toInt() ?? 0,
+      displayStart: json['displayStart']?.toString() ?? '',
+      displayEnd: json['displayEnd']?.toString() ?? '',
+    );
+  }
+}
+
+class AdminBannerModerationDraft {
+  const AdminBannerModerationDraft({
+    required this.status,
+    required this.paymentReceived,
+    required this.paymentMode,
+    required this.paymentRemarks,
+    required this.displayIndex,
+    required this.displayStart,
+    required this.displayEnd,
+  });
+
+  final BannerReviewStatus status;
+  final bool paymentReceived;
+  final String paymentMode;
+  final String paymentRemarks;
+  final String displayIndex;
+  final String displayStart;
+  final String displayEnd;
+
+  AdminBannerModerationDraft copyWith({
+    BannerReviewStatus? status,
+    bool? paymentReceived,
+    String? paymentMode,
+    String? paymentRemarks,
+    String? displayIndex,
+    String? displayStart,
+    String? displayEnd,
+  }) {
+    return AdminBannerModerationDraft(
+      status: status ?? this.status,
+      paymentReceived: paymentReceived ?? this.paymentReceived,
+      paymentMode: paymentMode ?? this.paymentMode,
+      paymentRemarks: paymentRemarks ?? this.paymentRemarks,
+      displayIndex: displayIndex ?? this.displayIndex,
+      displayStart: displayStart ?? this.displayStart,
+      displayEnd: displayEnd ?? this.displayEnd,
+    );
+  }
+
+  String? get validationMessage {
+    if (status == BannerReviewStatus.approved) {
+      if (displayIndex.trim().isEmpty) {
+        return 'Banner slot is required before approving.';
+      }
+      if (int.tryParse(displayIndex.trim()) == null) {
+        return 'Banner slot must be a valid number.';
+      }
+      if (!paymentReceived) {
+        return 'Mark payment as received before approving a banner.';
+      }
+      if (paymentMode.trim().isEmpty) {
+        return 'Payment mode is required before approving a banner.';
+      }
+    }
+    return null;
+  }
+}
+
+class AdminAppBannerDraft {
+  const AdminAppBannerDraft({
+    required this.vendorId,
+    required this.vendorName,
+    required this.contactNumber,
+    required this.shortText,
+    required this.socialMediaUrl,
+    required this.mediaFile,
+    required this.brochureFile,
+  });
+
+  const AdminAppBannerDraft.empty()
+    : vendorId = '',
+      vendorName = '',
+      contactNumber = '',
+      shortText = '',
+      socialMediaUrl = '',
+      mediaFile = null,
+      brochureFile = null;
+
+  final String vendorId;
+  final String vendorName;
+  final String contactNumber;
+  final String shortText;
+  final String socialMediaUrl;
+  final AssociationUploadFile? mediaFile;
+  final AssociationUploadFile? brochureFile;
+
+  bool get canSubmit =>
+      vendorId.trim().isNotEmpty &&
+      shortText.trim().isNotEmpty &&
+      mediaFile != null;
+
+  String? get validationMessage {
+    if (vendorId.trim().isEmpty) {
+      return 'Select a vendor first.';
+    }
+    if (shortText.trim().isEmpty) {
+      return 'Add the banner message before submitting.';
+    }
+    if (mediaFile == null) {
+      return 'Attach a lightweight banner image for the Flutter app.';
+    }
+    return null;
+  }
+
+  AdminAppBannerDraft copyWith({
+    String? vendorId,
+    String? vendorName,
+    String? contactNumber,
+    String? shortText,
+    String? socialMediaUrl,
+    AssociationUploadFile? mediaFile,
+    AssociationUploadFile? brochureFile,
+  }) {
+    return AdminAppBannerDraft(
+      vendorId: vendorId ?? this.vendorId,
+      vendorName: vendorName ?? this.vendorName,
+      contactNumber: contactNumber ?? this.contactNumber,
+      shortText: shortText ?? this.shortText,
+      socialMediaUrl: socialMediaUrl ?? this.socialMediaUrl,
+      mediaFile: mediaFile ?? this.mediaFile,
+      brochureFile: brochureFile ?? this.brochureFile,
     );
   }
 }
@@ -792,6 +1373,103 @@ class AdminTimelineItem {
   }
 }
 
+class AdminTimelineDraft {
+  const AdminTimelineDraft({
+    required this.sourceType,
+    required this.memberId,
+    required this.vendorId,
+    required this.postedBy,
+    required this.caption,
+    required this.contactNumber,
+    required this.landingPageUrl,
+    required this.youtubeUrl,
+    required this.facebookUrl,
+    required this.imageFile,
+    required this.brochureFile,
+  });
+
+  const AdminTimelineDraft.empty()
+    : sourceType = 'ASSOCIATION',
+      memberId = '',
+      vendorId = '',
+      postedBy = '',
+      caption = '',
+      contactNumber = '',
+      landingPageUrl = '',
+      youtubeUrl = '',
+      facebookUrl = '',
+      imageFile = null,
+      brochureFile = null;
+
+  final String sourceType;
+  final String memberId;
+  final String vendorId;
+  final String postedBy;
+  final String caption;
+  final String contactNumber;
+  final String landingPageUrl;
+  final String youtubeUrl;
+  final String facebookUrl;
+  final AssociationUploadFile? imageFile;
+  final AssociationUploadFile? brochureFile;
+
+  bool get canSubmit {
+    final type = sourceType.trim().toUpperCase();
+    if (caption.trim().isEmpty) {
+      return false;
+    }
+    if (type == 'VENDOR') {
+      return vendorId.trim().isNotEmpty;
+    }
+    if (type == 'MEMBER') {
+      return memberId.trim().isNotEmpty;
+    }
+    return true;
+  }
+
+  String? get validationMessage {
+    final type = sourceType.trim().toUpperCase();
+    if (caption.trim().isEmpty) {
+      return 'Add the timeline post copy before saving.';
+    }
+    if (type == 'VENDOR' && vendorId.trim().isEmpty) {
+      return 'Select a vendor for this timeline post.';
+    }
+    if (type == 'MEMBER' && memberId.trim().isEmpty) {
+      return 'Select a member for this timeline post.';
+    }
+    return null;
+  }
+
+  AdminTimelineDraft copyWith({
+    String? sourceType,
+    String? memberId,
+    String? vendorId,
+    String? postedBy,
+    String? caption,
+    String? contactNumber,
+    String? landingPageUrl,
+    String? youtubeUrl,
+    String? facebookUrl,
+    AssociationUploadFile? imageFile,
+    AssociationUploadFile? brochureFile,
+  }) {
+    return AdminTimelineDraft(
+      sourceType: sourceType ?? this.sourceType,
+      memberId: memberId ?? this.memberId,
+      vendorId: vendorId ?? this.vendorId,
+      postedBy: postedBy ?? this.postedBy,
+      caption: caption ?? this.caption,
+      contactNumber: contactNumber ?? this.contactNumber,
+      landingPageUrl: landingPageUrl ?? this.landingPageUrl,
+      youtubeUrl: youtubeUrl ?? this.youtubeUrl,
+      facebookUrl: facebookUrl ?? this.facebookUrl,
+      imageFile: imageFile ?? this.imageFile,
+      brochureFile: brochureFile ?? this.brochureFile,
+    );
+  }
+}
+
 class DashboardTimelineItem {
   const DashboardTimelineItem({
     required this.id,
@@ -867,6 +1545,78 @@ class DashboardGalleryItem {
       headline: json['headline']?.toString() ?? '',
       tagline: json['tagline']?.toString() ?? '',
       description: json['description']?.toString() ?? '',
+    );
+  }
+}
+
+class AssociationGalleryPhoto {
+  const AssociationGalleryPhoto({
+    required this.id,
+    required this.imageUrl,
+    required this.thumbnailUrl,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String imageUrl;
+  final String thumbnailUrl;
+  final String createdAt;
+
+  factory AssociationGalleryPhoto.fromJson(Map<String, dynamic> json) {
+    return AssociationGalleryPhoto(
+      id: json['id']?.toString() ?? '',
+      imageUrl: json['imageUrl']?.toString() ?? '',
+      thumbnailUrl:
+          json['thumbnailUrl']?.toString() ??
+          json['imageUrl']?.toString() ??
+          '',
+      createdAt: json['createdAt']?.toString() ?? '',
+    );
+  }
+}
+
+class AssociationGalleryFolder {
+  const AssociationGalleryFolder({
+    required this.id,
+    required this.name,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.photoCount,
+    required this.previewPhotos,
+    required this.photos,
+  });
+
+  final String id;
+  final String name;
+  final String createdAt;
+  final String updatedAt;
+  final int photoCount;
+  final List<AssociationGalleryPhoto> previewPhotos;
+  final List<AssociationGalleryPhoto> photos;
+
+  factory AssociationGalleryFolder.fromJson(Map<String, dynamic> json) {
+    return AssociationGalleryFolder(
+      id: json['id']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
+      createdAt: json['createdAt']?.toString() ?? '',
+      updatedAt: json['updatedAt']?.toString() ?? '',
+      photoCount: (json['photoCount'] as num?)?.toInt() ?? 0,
+      previewPhotos:
+          (json['previewPhotos'] as List<dynamic>? ?? const [])
+              .map(
+                (item) => AssociationGalleryPhoto.fromJson(
+                  item as Map<String, dynamic>,
+                ),
+              )
+              .toList(),
+      photos:
+          (json['photos'] as List<dynamic>? ?? const [])
+              .map(
+                (item) => AssociationGalleryPhoto.fromJson(
+                  item as Map<String, dynamic>,
+                ),
+              )
+              .toList(),
     );
   }
 }
@@ -1113,7 +1863,7 @@ extension MemberAccessStatusMeta on MemberAccessStatus {
     required String approvalStatus,
     required bool isActive,
   }) {
-    if (approvalStatus == 'CANCELLED') {
+    if (approvalStatus == 'CANCELLED' || approvalStatus == 'REJECTED') {
       return MemberAccessStatus.cancelled;
     }
     if (approvalStatus == 'PENDING') {
@@ -1226,7 +1976,11 @@ class PostAuthor {
       id: json['id']?.toString() ?? '',
       name: json['name']?.toString() ?? 'Member',
       company: json['company']?.toString() ?? '',
-      photoUrl: json['photoUrl']?.toString() ?? '',
+      photoUrl:
+          json['photoUrl']?.toString() ??
+          json['thumbnailUrl']?.toString() ??
+          json['imageUrl']?.toString() ??
+          '',
     );
   }
 }
@@ -1237,6 +1991,7 @@ class AdminMemberAccessItem {
     required this.name,
     required this.companyName,
     required this.roleTitle,
+    required this.committeePost,
     required this.email,
     required this.phone,
     required this.photoUrl,
@@ -1247,6 +2002,7 @@ class AdminMemberAccessItem {
   final String name;
   final String companyName;
   final String roleTitle;
+  final String committeePost;
   final String email;
   final String phone;
   final String photoUrl;
@@ -1261,9 +2017,14 @@ class AdminMemberAccessItem {
       name: '$firstName $lastName'.trim(),
       companyName: json['companyName']?.toString() ?? '',
       roleTitle: json['roleTitle']?.toString() ?? '',
+      committeePost: json['committeePost']?.toString() ?? '',
       email: json['email']?.toString() ?? '',
       phone: json['phone']?.toString() ?? '',
-      photoUrl: json['photoUrl']?.toString() ?? '',
+      photoUrl:
+          json['photoUrl']?.toString() ??
+          json['thumbnailUrl']?.toString() ??
+          json['imageUrl']?.toString() ??
+          '',
       accessStatus: MemberAccessStatusMeta.fromApi(
         approvalStatus: user?['approvalStatus']?.toString() ?? 'PENDING',
         isActive: user?['isActive'] == true,
@@ -1336,7 +2097,11 @@ class MemberDirectoryItem {
       address: json['address']?.toString() ?? '',
       email: json['email']?.toString() ?? '',
       phone: json['phone']?.toString() ?? '',
-      photoUrl: json['photoUrl']?.toString() ?? '',
+      photoUrl:
+          json['photoUrl']?.toString() ??
+          json['thumbnailUrl']?.toString() ??
+          json['imageUrl']?.toString() ??
+          '',
     );
   }
 
@@ -1571,6 +2336,37 @@ class AdminEventDraft {
       videoFile: null,
     );
   }
+
+  String? get validationMessage {
+    if (name.trim().isEmpty) {
+      return 'Event name is required.';
+    }
+    if (type.trim().isEmpty) {
+      return 'Event type is required.';
+    }
+    if (date.trim().isEmpty) {
+      return 'Event date is required.';
+    }
+    if (venue.trim().isEmpty) {
+      return 'Event venue is required.';
+    }
+    if (audience.trim().isEmpty) {
+      return 'Select the audience for this event.';
+    }
+    if (entryType.trim().isEmpty) {
+      return 'Choose whether the event is free or paid.';
+    }
+    if (entryType.trim().toLowerCase() == 'paid' &&
+        entryCharges.trim().isEmpty) {
+      return 'Entry charges are required for paid events.';
+    }
+    if (summary.trim().isEmpty) {
+      return 'Add a short event summary before saving.';
+    }
+    return null;
+  }
+
+  bool get canSubmit => validationMessage == null;
 }
 
 class EventTypeDraft {
@@ -1618,6 +2414,7 @@ class AssociationProfileData {
     required this.googleMapsLink,
     required this.regionalAddresses,
     required this.galleryItems,
+    required this.galleryFolders,
   });
 
   const AssociationProfileData.empty()
@@ -1635,7 +2432,8 @@ class AssociationProfileData {
       contactNumbers = const [],
       googleMapsLink = '',
       regionalAddresses = const [],
-      galleryItems = const [];
+      galleryItems = const [],
+      galleryFolders = const [];
 
   final String id;
   final String name;
@@ -1652,6 +2450,7 @@ class AssociationProfileData {
   final String googleMapsLink;
   final List<AssociationRegionalAddressData> regionalAddresses;
   final List<DashboardGalleryItem> galleryItems;
+  final List<AssociationGalleryFolder> galleryFolders;
 
   String get contactNumbersLabel => contactNumbers.join(', ');
 
@@ -1686,6 +2485,14 @@ class AssociationProfileData {
               .map(
                 (item) =>
                     DashboardGalleryItem.fromJson(item as Map<String, dynamic>),
+              )
+              .toList(),
+      galleryFolders:
+          (json['galleryFolders'] as List<dynamic>? ?? const [])
+              .map(
+                (item) => AssociationGalleryFolder.fromJson(
+                  item as Map<String, dynamic>,
+                ),
               )
               .toList(),
     );
@@ -1862,6 +2669,61 @@ class AssociationProfileDraft {
           regionalAddresses.map((item) => item.toJson()).toList(),
     };
   }
+
+  String? get validationMessage {
+    if (name.trim().isEmpty) {
+      return 'Association name is required.';
+    }
+    if (headOfficeAddress.trim().isEmpty) {
+      return 'Head office address is required.';
+    }
+    if (city.trim().isEmpty) {
+      return 'Head office city is required.';
+    }
+    if (state.trim().isEmpty) {
+      return 'Head office state is required.';
+    }
+    if (pincode.trim().isEmpty) {
+      return 'Head office pincode is required.';
+    }
+    if (contactNumbers
+        .split(',')
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .isEmpty) {
+      return 'At least one association contact number is required.';
+    }
+    for (var index = 0; index < regionalAddresses.length; index++) {
+      final address = regionalAddresses[index];
+      final hasAnyField =
+          address.label.trim().isNotEmpty ||
+          address.officeAddress.trim().isNotEmpty ||
+          address.city.trim().isNotEmpty ||
+          address.state.trim().isNotEmpty ||
+          address.pincode.trim().isNotEmpty ||
+          address.registrationNumber.trim().isNotEmpty ||
+          address.gstNumber.trim().isNotEmpty ||
+          address.website.trim().isNotEmpty ||
+          address.helpdeskNumber.trim().isNotEmpty ||
+          address.contactNumbers.trim().isNotEmpty ||
+          address.googleMapsLink.trim().isNotEmpty;
+      if (!hasAnyField) {
+        continue;
+      }
+      if (address.label.trim().isEmpty) {
+        return 'Regional office ${index + 1} needs a label.';
+      }
+      if (address.officeAddress.trim().isEmpty) {
+        return 'Regional office ${index + 1} needs an office address.';
+      }
+      if (address.city.trim().isEmpty || address.state.trim().isEmpty) {
+        return 'Regional office ${index + 1} needs both city and state.';
+      }
+    }
+    return null;
+  }
+
+  bool get canSubmit => validationMessage == null;
 }
 
 class AssociationRegionalAddressDraft {
@@ -2118,10 +2980,11 @@ extension MemberDirectoryFilterMeta on MemberDirectoryFilter {
 
   bool matches(MemberDirectoryItem member) {
     final role = member.roleTitle.trim().toLowerCase();
+    final hasCommitteePost = member.committeePost.trim().isNotEmpty;
     return switch (this) {
       MemberDirectoryFilter.all => true,
       MemberDirectoryFilter.primary => role == 'primary',
-      MemberDirectoryFilter.committee => role == 'committee',
+      MemberDirectoryFilter.committee => hasCommitteePost,
       MemberDirectoryFilter.associate => role == 'associate',
       MemberDirectoryFilter.guest =>
         role == 'temporary visit' || role == 'guest' || role == 'visitor',

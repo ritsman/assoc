@@ -30,6 +30,12 @@ const createSuperAdminSchema = z.object({
   lastName: z.string().trim().optional(),
 });
 
+const createBackendAdminSchema = z.object({
+  email: z.string().email(),
+  firstName: z.string().trim().optional(),
+  lastName: z.string().trim().optional(),
+});
+
 function buildNamesFromEmail(email) {
   const localPart = String(email || "")
     .split("@")[0]
@@ -490,6 +496,136 @@ router.post(
       user: serializeUser(user),
       defaultPassword: DEFAULT_SUPER_ADMIN_PASSWORD,
     });
+  },
+);
+
+router.post(
+  "/backend-admins",
+  requireAuthenticatedSession,
+  requireAdminUser,
+  async (req, res) => {
+    if (!req.auth.user.isSuperAdmin) {
+      return res.status(403).json({
+        error: "Only a super admin can create a backend admin.",
+      });
+    }
+
+    const parsed = createBackendAdminSchema.safeParse(req.body);
+
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: "Invalid backend admin payload",
+        details: parsed.error.flatten(),
+      });
+    }
+
+    const email = parsed.data.email.trim().toLowerCase();
+    const derivedNames = buildNamesFromEmail(email);
+    const firstName =
+      parsed.data.firstName?.trim() || derivedNames.firstName;
+    const lastName = parsed.data.lastName?.trim() || derivedNames.lastName;
+    const passwordHash = await hashPassword(DEFAULT_SUPER_ADMIN_PASSWORD);
+
+    const existingUser = await prisma.user.findUnique({
+      where: { email },
+      include: {
+        member: true,
+        vendor: true,
+      },
+    });
+
+    const user = existingUser
+      ? await prisma.user.update({
+          where: { id: existingUser.id },
+          data: {
+            associationId:
+              req.auth.user.associationId || existingUser.associationId,
+            firstName: existingUser.firstName || firstName,
+            lastName: existingUser.lastName || lastName,
+            passwordHash,
+            isAdmin: true,
+            isSuperAdmin: false,
+            isActive: true,
+            approvalStatus: ApprovalStatus.APPROVED,
+            approvedAt: existingUser.approvedAt ?? new Date(),
+            rejectedAt: null,
+          },
+          include: {
+            member: true,
+            vendor: true,
+          },
+        })
+      : await prisma.user.create({
+          data: {
+            associationId: req.auth.user.associationId || null,
+            firstName,
+            lastName,
+            email,
+            passwordHash,
+            isAdmin: true,
+            isSuperAdmin: false,
+            isActive: true,
+            approvalStatus: ApprovalStatus.APPROVED,
+            approvedAt: new Date(),
+          },
+          include: {
+            member: true,
+            vendor: true,
+          },
+        });
+
+    return res.status(existingUser ? 200 : 201).json({
+      user: serializeUser(user),
+      defaultPassword: DEFAULT_SUPER_ADMIN_PASSWORD,
+    });
+  },
+);
+
+router.delete(
+  "/:id",
+  requireAuthenticatedSession,
+  requireAdminUser,
+  async (req, res) => {
+    const targetUser = await prisma.user.findUnique({
+      where: { id: req.params.id },
+    });
+
+    if (!targetUser) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    if (targetUser.id === req.auth.user.id) {
+      return res.status(400).json({
+        error: "You cannot delete the currently signed in account.",
+      });
+    }
+
+    if (targetUser.isSuperAdmin && !req.auth.user.isSuperAdmin) {
+      return res.status(403).json({
+        error: "Only a super admin can delete another super admin.",
+      });
+    }
+
+    if (targetUser.isSuperAdmin) {
+      const superAdminCount = await prisma.user.count({
+        where: {
+          isSuperAdmin: true,
+          isActive: true,
+        },
+      });
+
+      if (superAdminCount <= 1) {
+        return res.status(400).json({
+          error: "At least one active super admin must remain.",
+        });
+      }
+    }
+
+    await prisma.user.delete({
+      where: { id: targetUser.id },
+    });
+
+    return res.json({ success: true });
   },
 );
 

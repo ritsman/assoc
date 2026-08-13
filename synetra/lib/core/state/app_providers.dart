@@ -169,6 +169,16 @@ class SessionController extends Notifier<AppSessionState> {
     _applySession(authSession, unlockSession: true);
   }
 
+  Future<void> signInAndWarm(AuthSession authSession) async {
+    ref.read(startupWarmupProvider.notifier).state = true;
+    try {
+      _applySession(authSession, unlockSession: true);
+      await _warmAuthenticatedStartup(ref, authSession.viewerRole);
+    } finally {
+      ref.read(startupWarmupProvider.notifier).state = false;
+    }
+  }
+
   void syncSession(AuthSession authSession) {
     _applySession(authSession, unlockSession: false);
   }
@@ -418,8 +428,21 @@ final appLockProvider = NotifierProvider<AppLockController, AppLockState>(
   AppLockController.new,
 );
 
+final startupWarmupProvider = StateProvider<bool>((ref) => false);
+
 final sessionRestoreProvider = FutureProvider<bool>((ref) async {
-  return ref.read(sessionProvider.notifier).restoreSession();
+  final restored = await ref.read(sessionProvider.notifier).restoreSession();
+  if (!restored) {
+    return false;
+  }
+
+  final session = ref.read(sessionProvider);
+  if (!session.isAuthenticated) {
+    return false;
+  }
+
+  await _warmAuthenticatedStartup(ref, session.viewerRole);
+  return true;
 });
 
 final associationProfileProvider = FutureProvider<AssociationProfileData>(
@@ -450,6 +473,10 @@ final adminArenaDataProvider = FutureProvider<AdminArenaData>(
   (ref) => ref.watch(apiClientProvider).loadAdminArenaData(),
 );
 
+final appAccessProvider = FutureProvider<AdminAppAccessSettings>(
+  (ref) => ref.watch(apiClientProvider).fetchAppAccess(),
+);
+
 final eventsArenaDataProvider = FutureProvider<EventsArenaData>(
   (ref) => ref.watch(apiClientProvider).loadEventsArenaData(),
 );
@@ -466,7 +493,30 @@ final vendorDirectoryProvider = FutureProvider<List<DashboardVendorItem>>(
   (ref) => ref.watch(apiClientProvider).fetchVendors(),
 );
 
+final vendorTaxonomyProvider = FutureProvider<List<VendorTaxonomyCategoryItem>>(
+  (ref) => ref.watch(apiClientProvider).fetchVendorTaxonomy(),
+);
+
 final tenantProvider = FutureProvider<TenantContext>((ref) async {
   final profile = await ref.watch(associationProfileProvider.future);
   return TenantContext.fromProfile(profile);
 });
+
+Future<void> _warmAuthenticatedStartup(
+  Ref ref,
+  AppViewerRole viewerRole,
+) async {
+  final warmupTasks = <Future<void>>[
+    ref.read(associationProfileProvider.future).then((_) {}),
+    ref.read(tenantProvider.future).then((_) {}),
+  ];
+
+  if (AppRoleVisibility.preferredHomeArena(viewerRole) == AppArena.dashboard) {
+    warmupTasks.add(ref.read(dashboardDataProvider.future).then((_) {}));
+  }
+
+  await Future.wait(
+    warmupTasks.map((task) => task.catchError((_) {})),
+    eagerError: false,
+  );
+}

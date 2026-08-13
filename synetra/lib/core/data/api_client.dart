@@ -20,6 +20,35 @@ class SynetraApiClient {
   static const _mediumCacheTtl = Duration(minutes: 2);
   static const _dashboardCacheTtl = Duration(seconds: 45);
   static const _requestTimeout = Duration(seconds: 15);
+  static const Set<String> _memberCacheKeys = {
+    'members',
+    'members-directory',
+    'members-admin',
+  };
+
+  bool _isVendorVisibleToApp(Map<String, dynamic> item) {
+    final vendorStatus = item['status']?.toString().trim().toUpperCase() ?? '';
+    if (vendorStatus != 'ACTIVE') {
+      return false;
+    }
+
+    final users =
+        (item['users'] as List<dynamic>? ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .toList();
+    final primaryUser =
+        users.isNotEmpty ? users.first : item['user'] as Map<String, dynamic>?;
+
+    if (primaryUser == null) {
+      return false;
+    }
+
+    final approvalStatus =
+        primaryUser['approvalStatus']?.toString().trim().toUpperCase() ?? '';
+    final isActive = primaryUser['isActive'] == true;
+
+    return approvalStatus == 'APPROVED' && isActive;
+  }
 
   Future<AuthSession> authenticate({
     required String username,
@@ -166,8 +195,8 @@ class SynetraApiClient {
 
   Future<List<MemberDirectoryItem>> fetchMembers() async {
     final json = await _getCachedJson(
-      Uri.parse('$_baseUrl/members'),
-      cacheKey: 'members',
+      Uri.parse('$_baseUrl/members?view=directory'),
+      cacheKey: 'members-directory',
       ttl: _mediumCacheTtl,
     );
     final items = (json['members'] as List<dynamic>? ?? const []);
@@ -180,8 +209,8 @@ class SynetraApiClient {
 
   Future<List<AdminMemberAccessItem>> fetchAdminMembers() async {
     final json = await _getCachedJson(
-      Uri.parse('$_baseUrl/members'),
-      cacheKey: 'members',
+      Uri.parse('$_baseUrl/members?view=admin'),
+      cacheKey: 'members-admin',
       ttl: _mediumCacheTtl,
     );
     final items = (json['members'] as List<dynamic>? ?? const []);
@@ -289,32 +318,31 @@ class SynetraApiClient {
   }
 
   Future<DashboardData> loadDashboardData() async {
-    final results = await Future.wait<dynamic>([
-      _getCachedJson(
-        Uri.parse('$_baseUrl/associations/current/dashboard-summary'),
-        cacheKey: 'dashboard-summary',
-        ttl: _dashboardCacheTtl,
-      ),
-      _getCachedJson(
+    final json = await _getCachedJson(
+      Uri.parse('$_baseUrl/associations/current/dashboard-summary'),
+      cacheKey: 'dashboard-summary',
+      ttl: _dashboardCacheTtl,
+    );
+    final optionalResults = await Future.wait<Map<String, dynamic>>([
+      _getCachedJsonOrEmpty(
         Uri.parse('$_baseUrl/app-banners'),
         cacheKey: 'dashboard-banners',
         ttl: _dashboardCacheTtl,
       ),
-      _getCachedJson(
+      _getCachedJsonOrEmpty(
         Uri.parse('$_baseUrl/timeline-posts'),
         cacheKey: 'dashboard-timeline',
         ttl: _dashboardCacheTtl,
       ),
-      _getCachedJson(
+      _getCachedJsonOrEmpty(
         Uri.parse('$_baseUrl/vendors'),
         cacheKey: 'dashboard-vendors',
         ttl: _dashboardCacheTtl,
       ),
     ]);
-    final json = results[0] as Map<String, dynamic>;
-    final bannersJson = results[1] as Map<String, dynamic>;
-    final timelineJson = results[2] as Map<String, dynamic>;
-    final vendorsJson = results[3] as Map<String, dynamic>;
+    final bannersJson = optionalResults[0];
+    final timelineJson = optionalResults[1];
+    final vendorsJson = optionalResults[2];
     final summary = json['summary'] as Map<String, dynamic>? ?? const {};
     final galleryItems =
         (summary['galleryItems'] as List<dynamic>? ?? const [])
@@ -356,14 +384,14 @@ class SynetraApiClient {
             .whereType<Map<String, dynamic>>()
             .where(
               (item) =>
-                  item['reviewStatus']?.toString().toUpperCase() ==
-                  'APPROVED',
+                  item['reviewStatus']?.toString().toUpperCase() == 'APPROVED',
             )
             .map(DashboardTimelineItem.fromJson)
             .toList();
     final featuredVendors =
         (vendorsJson['vendors'] as List<dynamic>? ?? const [])
             .whereType<Map<String, dynamic>>()
+            .where(_isVendorVisibleToApp)
             .map(DashboardVendorItem.fromJson)
             .toList()
           ..shuffle();
@@ -392,8 +420,29 @@ class SynetraApiClient {
     final items = (json['vendors'] as List<dynamic>? ?? const []);
     return items
         .whereType<Map<String, dynamic>>()
+        .where(_isVendorVisibleToApp)
         .map(DashboardVendorItem.fromJson)
         .toList();
+  }
+
+  Future<List<VendorTaxonomyCategoryItem>> fetchVendorTaxonomy() async {
+    final json = await _getCachedJson(
+      Uri.parse('$_baseUrl/vendor-taxonomy/categories'),
+      cacheKey: 'vendor-taxonomy',
+      ttl: _shortCacheTtl,
+    );
+    final items = (json['categories'] as List<dynamic>? ?? const []);
+    return items
+        .whereType<Map<String, dynamic>>()
+        .map(VendorTaxonomyCategoryItem.fromJson)
+        .toList()
+      ..sort((left, right) {
+        final orderCompare = left.displayOrder.compareTo(right.displayOrder);
+        if (orderCompare != 0) {
+          return orderCompare;
+        }
+        return left.name.toLowerCase().compareTo(right.name.toLowerCase());
+      });
   }
 
   Future<void> uploadAssociationGalleryImages({
@@ -415,12 +464,100 @@ class SynetraApiClient {
 
       for (final file in files) {
         request.files.add(
-          http.MultipartFile.fromBytes('files', file.bytes, filename: file.name),
+          http.MultipartFile.fromBytes(
+            'files',
+            file.bytes,
+            filename: file.name,
+          ),
         );
       }
 
       return request;
     });
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Status ${response.statusCode}: ${response.body}');
+    }
+    _invalidateCacheKeys({'association-current', 'dashboard-summary'});
+  }
+
+  Future<void> createAssociationGalleryFolder({
+    required String associationId,
+    required String name,
+    required List<AssociationUploadFile> files,
+  }) async {
+    if (name.trim().isEmpty || files.isEmpty) {
+      return;
+    }
+
+    final uri = Uri.parse('$_baseUrl/associations/$associationId/gallery/folders');
+    final response = await _authorizedMultipartRequest((overrideAuthToken) {
+      final request = http.MultipartRequest('POST', uri);
+      request.headers.addAll(
+        _buildHeaders(overrideAuthToken: overrideAuthToken),
+      );
+      request.fields['name'] = name.trim();
+
+      for (final file in files) {
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'files',
+            file.bytes,
+            filename: file.name,
+          ),
+        );
+      }
+
+      return request;
+    });
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Status ${response.statusCode}: ${response.body}');
+    }
+    _invalidateCacheKeys({'association-current', 'dashboard-summary'});
+  }
+
+  Future<void> renameAssociationGalleryFolder({
+    required String associationId,
+    required String folderId,
+    required String name,
+  }) async {
+    final response = await _authorizedPatch(
+      Uri.parse('$_baseUrl/associations/$associationId/gallery/folders/$folderId'),
+      includeJsonContentType: true,
+      body: jsonEncode({'name': name.trim()}),
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Status ${response.statusCode}: ${response.body}');
+    }
+    _invalidateCacheKeys({'association-current', 'dashboard-summary'});
+  }
+
+  Future<void> deleteAssociationGalleryFolder({
+    required String associationId,
+    required String folderId,
+  }) async {
+    final response = await _authorizedDelete(
+      Uri.parse('$_baseUrl/associations/$associationId/gallery/folders/$folderId'),
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Status ${response.statusCode}: ${response.body}');
+    }
+    _invalidateCacheKeys({'association-current', 'dashboard-summary'});
+  }
+
+  Future<void> deleteAssociationGalleryFolderPhoto({
+    required String associationId,
+    required String folderId,
+    required String photoId,
+  }) async {
+    final response = await _authorizedDelete(
+      Uri.parse(
+        '$_baseUrl/associations/$associationId/gallery/folders/$folderId/photos/$photoId',
+      ),
+    );
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('Status ${response.statusCode}: ${response.body}');
@@ -455,7 +592,7 @@ class SynetraApiClient {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('Status ${response.statusCode}: ${response.body}');
     }
-    _invalidateCacheKeys({'members', 'dashboard-summary'});
+    _invalidateCacheKeys({..._memberCacheKeys, 'dashboard-summary'});
   }
 
   Future<void> updateAppAccess({
@@ -490,6 +627,236 @@ class SynetraApiClient {
     _invalidateCacheKeys({'admin-vendors', 'dashboard-vendors'});
   }
 
+  Future<void> saveVendorApproval({
+    required String vendorId,
+    required AdminVendorApprovalDraft draft,
+    required MemberAccessStatus status,
+  }) async {
+    final notes = [
+      if (draft.planName.trim().isNotEmpty)
+        'Plan Name: ${draft.planName.trim()}',
+      if (draft.openingTime.trim().isNotEmpty)
+        'Opening Time: ${draft.openingTime.trim()}',
+      if (draft.closingTime.trim().isNotEmpty)
+        'Closing Time: ${draft.closingTime.trim()}',
+      if (draft.gstNumber.trim().isNotEmpty)
+        'GST Number: ${draft.gstNumber.trim()}',
+      'Is Restaurant: ${draft.isRestaurant ? 'Yes' : 'No'}',
+      if (draft.paymentMode.trim().isNotEmpty)
+        'Payment Mode: ${draft.paymentMode.trim()}',
+      if (draft.bankName.trim().isNotEmpty)
+        'Bank Name: ${draft.bankName.trim()}',
+      if (draft.transactionId.trim().isNotEmpty)
+        'Transaction ID: ${draft.transactionId.trim()}',
+      if (draft.paymentDescription.trim().isNotEmpty)
+        'Payment Description: ${draft.paymentDescription.trim()}',
+      if (draft.googleLocation.trim().isNotEmpty)
+        'Google Location: ${draft.googleLocation.trim()}',
+      if (draft.idProof?.name.trim().isNotEmpty == true)
+        'ID Proof: ${draft.idProof!.name.trim()}',
+      if (draft.locationProof?.name.trim().isNotEmpty == true)
+        'Location Proof: ${draft.locationProof!.name.trim()}',
+      if (draft.companyBrochure?.name.trim().isNotEmpty == true)
+        'Company Profile/Brochure: ${draft.companyBrochure!.name.trim()}',
+      if (draft.profilePhoto?.name.trim().isNotEmpty == true)
+        'Profile Photo: ${draft.profilePhoto!.name.trim()}',
+      if (draft.visitingCard?.name.trim().isNotEmpty == true)
+        'Visiting Card: ${draft.visitingCard!.name.trim()}',
+    ].join('\n');
+
+    final patchResponse = await _authorizedPatch(
+      Uri.parse('$_baseUrl/vendors/$vendorId'),
+      includeJsonContentType: true,
+      body: jsonEncode({
+        'membershipPlan': draft.membershipPlan.trim(),
+        'paymentAmount': draft.paymentAmount.trim(),
+        'onboardingStartAt':
+            draft.onboardingStartAt.trim().isEmpty
+                ? null
+                : draft.onboardingStartAt.trim(),
+        'onboardingEndAt':
+            draft.onboardingEndAt.trim().isEmpty
+                ? null
+                : draft.onboardingEndAt.trim(),
+        'paymentDueDate':
+            draft.paymentDueDate.trim().isEmpty
+                ? null
+                : draft.paymentDueDate.trim(),
+        'notes': notes,
+      }),
+    );
+    if (patchResponse.statusCode < 200 || patchResponse.statusCode >= 300) {
+      throw Exception(
+        'Status ${patchResponse.statusCode}: ${patchResponse.body}',
+      );
+    }
+
+    await updateVendorAccess(vendorId: vendorId, status: status);
+    _invalidateCacheKeys({'admin-vendors', 'dashboard-vendors'});
+  }
+
+  Future<void> createVendorCategory({required String name}) async {
+    final response = await _authorizedPost(
+      Uri.parse('$_baseUrl/vendor-taxonomy/categories'),
+      includeJsonContentType: true,
+      body: jsonEncode({'name': name.trim()}),
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Status ${response.statusCode}: ${response.body}');
+    }
+    _invalidateCacheKeys({
+      'vendor-taxonomy',
+      'admin-vendors',
+      'dashboard-vendors',
+    });
+  }
+
+  Future<void> updateVendorCategory({
+    required String categoryId,
+    required String name,
+  }) async {
+    final response = await _authorizedPatch(
+      Uri.parse('$_baseUrl/vendor-taxonomy/categories/$categoryId'),
+      includeJsonContentType: true,
+      body: jsonEncode({'name': name.trim()}),
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Status ${response.statusCode}: ${response.body}');
+    }
+    _invalidateCacheKeys({
+      'vendor-taxonomy',
+      'admin-vendors',
+      'dashboard-vendors',
+    });
+  }
+
+  Future<void> deleteVendorCategory({required String categoryId}) async {
+    final response = await _authorizedDelete(
+      Uri.parse('$_baseUrl/vendor-taxonomy/categories/$categoryId'),
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Status ${response.statusCode}: ${response.body}');
+    }
+    _invalidateCacheKeys({
+      'vendor-taxonomy',
+      'admin-vendors',
+      'dashboard-vendors',
+    });
+  }
+
+  Future<void> createVendorSubCategory({
+    required String categoryId,
+    required String name,
+  }) async {
+    final response = await _authorizedPost(
+      Uri.parse('$_baseUrl/vendor-taxonomy/sub-categories'),
+      includeJsonContentType: true,
+      body: jsonEncode({'categoryId': categoryId, 'name': name.trim()}),
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Status ${response.statusCode}: ${response.body}');
+    }
+    _invalidateCacheKeys({
+      'vendor-taxonomy',
+      'admin-vendors',
+      'dashboard-vendors',
+    });
+  }
+
+  Future<void> createVendorRecord({
+    required AdminVendorRegistrationDraft draft,
+  }) async {
+    final response = await _authorizedPost(
+      Uri.parse('$_baseUrl/vendors'),
+      includeJsonContentType: true,
+      body: jsonEncode({
+        'name': draft.companyName.trim(),
+        'companyName': draft.companyName.trim(),
+        'contactPerson': draft.contactPerson.trim(),
+        'phone': '${draft.phoneCode.trim()} ${draft.phone.trim()}'.trim(),
+        'whatsapp':
+            draft.whatsApp.trim().isEmpty
+                ? ''
+                : '${draft.whatsAppCode.trim()} ${draft.whatsApp.trim()}'
+                    .trim(),
+        'email': draft.email.trim(),
+        'primaryLoginEmail': draft.primaryLoginEmail.trim().toLowerCase(),
+        'secondaryLoginEmail':
+            draft.secondaryLoginEmail.trim().isEmpty
+                ? null
+                : draft.secondaryLoginEmail.trim().toLowerCase(),
+        'category': draft.categoryName.trim(),
+        'vendorType': draft.subCategoryName.trim(),
+        'address': draft.address.trim(),
+        'city': draft.city.trim(),
+        'facebookUrl': draft.facebookUrl.trim(),
+        'instagramUrl': draft.instagramUrl.trim(),
+        'youtubeUrl': draft.youtubeUrl.trim(),
+        'linkedinUrl': draft.linkedinUrl.trim(),
+        'xUrl': draft.xUrl.trim(),
+        'paymentStatus': 'PENDING',
+        'badge':
+            draft.subCategoryName.trim().isNotEmpty
+                ? draft.subCategoryName.trim()
+                : draft.categoryName.trim(),
+        'notes': [
+          draft.country.trim().isNotEmpty
+              ? 'Country: ${draft.country.trim()}'
+              : '',
+          draft.state.trim().isNotEmpty ? 'State: ${draft.state.trim()}' : '',
+          draft.zipcode.trim().isNotEmpty
+              ? 'Zipcode: ${draft.zipcode.trim()}'
+              : '',
+          draft.website.trim().isNotEmpty
+              ? 'Website: ${draft.website.trim()}'
+              : '',
+        ].where((item) => item.isNotEmpty).join('\n'),
+      }),
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Status ${response.statusCode}: ${response.body}');
+    }
+    _invalidateCacheKeys({
+      'admin-vendors',
+      'dashboard-vendors',
+      'vendor-taxonomy',
+    });
+  }
+
+  Future<void> updateVendorSubCategory({
+    required String subCategoryId,
+    required String categoryId,
+    required String name,
+  }) async {
+    final response = await _authorizedPatch(
+      Uri.parse('$_baseUrl/vendor-taxonomy/sub-categories/$subCategoryId'),
+      includeJsonContentType: true,
+      body: jsonEncode({'categoryId': categoryId, 'name': name.trim()}),
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Status ${response.statusCode}: ${response.body}');
+    }
+    _invalidateCacheKeys({
+      'vendor-taxonomy',
+      'admin-vendors',
+      'dashboard-vendors',
+    });
+  }
+
+  Future<void> deleteVendorSubCategory({required String subCategoryId}) async {
+    final response = await _authorizedDelete(
+      Uri.parse('$_baseUrl/vendor-taxonomy/sub-categories/$subCategoryId'),
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Status ${response.statusCode}: ${response.body}');
+    }
+    _invalidateCacheKeys({
+      'vendor-taxonomy',
+      'admin-vendors',
+      'dashboard-vendors',
+    });
+  }
+
   Future<void> updateAppBannerModeration({
     required String bannerId,
     required BannerReviewStatus status,
@@ -497,6 +864,8 @@ class SynetraApiClient {
     required String paymentMode,
     required String paymentRemarks,
     required int displayIndex,
+    String? displayStart,
+    String? displayEnd,
   }) async {
     final response = await _authorizedPatch(
       Uri.parse('$_baseUrl/app-banners/$bannerId/moderation'),
@@ -506,11 +875,63 @@ class SynetraApiClient {
         'paymentReceived': paymentReceived,
         'paymentMode': paymentMode,
         'paymentRemarks': paymentRemarks,
-        'displayIndex': status == BannerReviewStatus.approved
-            ? displayIndex
-            : null,
+        'displayIndex':
+            status == BannerReviewStatus.approved ? displayIndex : null,
+        'displayStart':
+            status == BannerReviewStatus.approved &&
+                    (displayStart ?? '').trim().isNotEmpty
+                ? displayStart!.trim()
+                : null,
+        'displayEnd':
+            status == BannerReviewStatus.approved &&
+                    (displayEnd ?? '').trim().isNotEmpty
+                ? displayEnd!.trim()
+                : null,
       }),
     );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Status ${response.statusCode}: ${response.body}');
+    }
+
+    _invalidateCacheKeys({'admin-app-banners', 'dashboard-banners'});
+  }
+
+  Future<void> createAppBanner({required AdminAppBannerDraft draft}) async {
+    final uri = Uri.parse('$_baseUrl/app-banners');
+    final response = await _authorizedMultipartRequest((overrideAuthToken) {
+      final request =
+          http.MultipartRequest('POST', uri)
+            ..headers.addAll(
+              _buildHeaders(overrideAuthToken: overrideAuthToken),
+            )
+            ..fields['vendorId'] = draft.vendorId.trim()
+            ..fields['shortText'] = draft.shortText.trim()
+            ..fields['contactNumber'] = draft.contactNumber.trim()
+            ..fields['socialMediaUrl'] = draft.socialMediaUrl.trim();
+
+      if (draft.mediaFile != null) {
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'mediaFile',
+            draft.mediaFile!.bytes,
+            filename: draft.mediaFile!.name,
+          ),
+        );
+      }
+
+      if (draft.brochureFile != null) {
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'brochureFile',
+            draft.brochureFile!.bytes,
+            filename: draft.brochureFile!.name,
+          ),
+        );
+      }
+
+      return request;
+    });
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('Status ${response.statusCode}: ${response.body}');
@@ -528,6 +949,59 @@ class SynetraApiClient {
       includeJsonContentType: true,
       body: jsonEncode({'reviewStatus': status.apiValue}),
     );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Status ${response.statusCode}: ${response.body}');
+    }
+
+    _invalidateCacheKeys({'admin-timeline-posts', 'dashboard-timeline'});
+  }
+
+  Future<void> createTimelinePost({required AdminTimelineDraft draft}) async {
+    final uri = Uri.parse('$_baseUrl/timeline-posts');
+    final response = await _authorizedMultipartRequest((overrideAuthToken) {
+      final request =
+          http.MultipartRequest('POST', uri)
+            ..headers.addAll(
+              _buildHeaders(overrideAuthToken: overrideAuthToken),
+            )
+            ..fields['sourceType'] = draft.sourceType.trim().toUpperCase()
+            ..fields['postedBy'] = draft.postedBy.trim()
+            ..fields['caption'] = draft.caption.trim()
+            ..fields['contactNumber'] = draft.contactNumber.trim()
+            ..fields['landingPageUrl'] = draft.landingPageUrl.trim()
+            ..fields['youtubeUrl'] = draft.youtubeUrl.trim()
+            ..fields['facebookUrl'] = draft.facebookUrl.trim();
+
+      if (draft.memberId.trim().isNotEmpty) {
+        request.fields['memberId'] = draft.memberId.trim();
+      }
+      if (draft.vendorId.trim().isNotEmpty) {
+        request.fields['vendorId'] = draft.vendorId.trim();
+      }
+
+      if (draft.imageFile != null) {
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'imageFile',
+            draft.imageFile!.bytes,
+            filename: draft.imageFile!.name,
+          ),
+        );
+      }
+
+      if (draft.brochureFile != null) {
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'brochureFile',
+            draft.brochureFile!.bytes,
+            filename: draft.brochureFile!.name,
+          ),
+        );
+      }
+
+      return request;
+    });
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('Status ${response.statusCode}: ${response.body}');
@@ -584,6 +1058,7 @@ class SynetraApiClient {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('Status ${response.statusCode}: ${response.body}');
     }
+    _invalidateCacheKeys({'events'});
   }
 
   Future<void> deleteEvent({required String eventId}) async {
@@ -592,6 +1067,7 @@ class SynetraApiClient {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('Status ${response.statusCode}: ${response.body}');
     }
+    _invalidateCacheKeys({'events'});
   }
 
   Future<void> createEventType({required EventTypeDraft draft}) async {
@@ -606,6 +1082,7 @@ class SynetraApiClient {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('Status ${response.statusCode}: ${response.body}');
     }
+    _invalidateCacheKeys({'event-types'});
   }
 
   Future<void> updateEventType({required EventTypeDraft draft}) async {
@@ -620,6 +1097,7 @@ class SynetraApiClient {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('Status ${response.statusCode}: ${response.body}');
     }
+    _invalidateCacheKeys({'event-types'});
   }
 
   Future<AssociationProfileData> fetchAssociationProfile() async {
@@ -776,7 +1254,7 @@ class SynetraApiClient {
           'Status ${createResponse.statusCode}: ${createResponse.body}',
         );
       }
-      _invalidateCacheKeys({'members', 'dashboard-summary'});
+      _invalidateCacheKeys({..._memberCacheKeys, 'dashboard-summary'});
       return;
     }
 
@@ -788,7 +1266,28 @@ class SynetraApiClient {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('Status ${response.statusCode}: ${response.body}');
     }
-    _invalidateCacheKeys({'members', 'dashboard-summary'});
+    _invalidateCacheKeys({..._memberCacheKeys, 'dashboard-summary'});
+  }
+
+  Future<void> updateMemberCommittee({
+    required String memberId,
+    required String committeePost,
+    String committeeTenureStart = '',
+    String committeeTenureEnd = '',
+  }) async {
+    final response = await _authorizedPatch(
+      Uri.parse('$_baseUrl/members/$memberId'),
+      includeJsonContentType: true,
+      body: jsonEncode({
+        'committeePost': committeePost,
+        'committeeTenureStart': committeeTenureStart,
+        'committeeTenureEnd': committeeTenureEnd,
+      }),
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Status ${response.statusCode}: ${response.body}');
+    }
+    _invalidateCacheKeys({..._memberCacheKeys, 'dashboard-summary'});
   }
 
   Future<void> deleteMemberRecord({required String memberId}) async {
@@ -797,7 +1296,7 @@ class SynetraApiClient {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('Status ${response.statusCode}: ${response.body}');
     }
-    _invalidateCacheKeys({'members', 'dashboard-summary'});
+    _invalidateCacheKeys({..._memberCacheKeys, 'dashboard-summary'});
   }
 
   Future<void> updatePostStatus({
@@ -973,6 +1472,18 @@ class SynetraApiClient {
     );
   }
 
+  Future<Map<String, dynamic>> _getCachedJsonOrEmpty(
+    Uri uri, {
+    required String cacheKey,
+    required Duration ttl,
+  }) async {
+    try {
+      return await _getCachedJson(uri, cacheKey: cacheKey, ttl: ttl);
+    } catch (_) {
+      return const {};
+    }
+  }
+
   Future<T> _withCache<T>(
     String key, {
     required Duration ttl,
@@ -1008,34 +1519,22 @@ class SynetraApiClient {
       if (cached != null) {
         return cached.value as T;
       }
-      throw SynetraApiException.network(
-        uri: Uri.parse(_baseUrl),
-        cause: error,
-      );
+      throw SynetraApiException.network(uri: Uri.parse(_baseUrl), cause: error);
     } on http.ClientException catch (error) {
       if (cached != null) {
         return cached.value as T;
       }
-      throw SynetraApiException.network(
-        uri: Uri.parse(_baseUrl),
-        cause: error,
-      );
+      throw SynetraApiException.network(uri: Uri.parse(_baseUrl), cause: error);
     } on HandshakeException catch (error) {
       if (cached != null) {
         return cached.value as T;
       }
-      throw SynetraApiException.network(
-        uri: Uri.parse(_baseUrl),
-        cause: error,
-      );
+      throw SynetraApiException.network(uri: Uri.parse(_baseUrl), cause: error);
     } on TimeoutException catch (error) {
       if (cached != null) {
         return cached.value as T;
       }
-      throw SynetraApiException.network(
-        uri: Uri.parse(_baseUrl),
-        cause: error,
-      );
+      throw SynetraApiException.network(uri: Uri.parse(_baseUrl), cause: error);
     } finally {
       _inFlight.remove(key);
     }
@@ -1057,7 +1556,7 @@ class SynetraApiException implements Exception {
     required Object cause,
   }) {
     return SynetraApiException(
-      'We could not connect to the Synetra server. Please check your internet connection and try again.',
+      'We could not connect to the NIMA server. Please check your internet connection and try again.',
       details: 'Request failed for $uri: $cause',
     );
   }

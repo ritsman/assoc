@@ -24,6 +24,7 @@ const defaultMembershipTypeOptions = [
 const topLevelSections = {
   dashboard: "Dashboard",
   admin: "Admin",
+  users: "Users",
   association: "Association",
   members: "Members",
   vendors: "Vendors",
@@ -31,6 +32,27 @@ const topLevelSections = {
   timeline: "Timeline",
   profile: "Profile",
 };
+
+function getAccountInitials(displayName, email) {
+  const namePart = (displayName || "").trim();
+
+  if (namePart && namePart !== email) {
+    const words = namePart.split(/\s+/).filter(Boolean);
+    if (words.length >= 2) {
+      return (words[0][0] + words[words.length - 1][0]).toUpperCase();
+    }
+    if (words.length === 1) {
+      return words[0].slice(0, 2).toUpperCase();
+    }
+  }
+
+  const emailPart = (email || "").trim();
+  if (emailPart) {
+    return emailPart.slice(0, 2).toUpperCase();
+  }
+
+  return "NA";
+}
 
 function normalizeAuthSession(payload, fallbackSession = null) {
   if (!payload?.auth?.token || !payload?.user) {
@@ -49,6 +71,10 @@ function normalizeAuthSession(payload, fallbackSession = null) {
     isSuperAdmin:
       payload.user.isSuperAdmin === true ||
       payload.user.viewerRole === "superAdmin",
+    rememberMe:
+      payload.auth.rememberMe ??
+      fallbackSession?.rememberMe ??
+      true,
     displayName:
       payload.user.displayName ||
       [payload.user.firstName, payload.user.lastName]
@@ -77,7 +103,9 @@ function readStoredAdminSession() {
   }
 
   try {
-    const rawValue = window.localStorage.getItem(webAdminSessionStorageKey);
+    const rawValue =
+      window.sessionStorage.getItem(webAdminSessionStorageKey) ||
+      window.localStorage.getItem(webAdminSessionStorageKey);
     if (!rawValue) {
       return null;
     }
@@ -88,6 +116,7 @@ function readStoredAdminSession() {
         token: parsed.authToken,
         refreshToken: parsed.refreshToken,
         sessionId: parsed.sessionId,
+        rememberMe: parsed.rememberMe,
       },
       user: {
         id: parsed.userId,
@@ -102,19 +131,25 @@ function readStoredAdminSession() {
   }
 }
 
-function persistAdminSession(session) {
+function persistAdminSession(session, rememberMe = session?.rememberMe ?? true) {
   if (typeof window === "undefined") {
     return;
   }
 
+  window.localStorage.removeItem(webAdminSessionStorageKey);
+  window.sessionStorage.removeItem(webAdminSessionStorageKey);
+
   if (!session) {
-    window.localStorage.removeItem(webAdminSessionStorageKey);
     return;
   }
 
-  window.localStorage.setItem(
+  const storage = rememberMe ? window.localStorage : window.sessionStorage;
+  storage.setItem(
     webAdminSessionStorageKey,
-    JSON.stringify(session),
+    JSON.stringify({
+      ...session,
+      rememberMe,
+    }),
   );
 }
 
@@ -132,6 +167,62 @@ function getMemberAdminLabel(member) {
   }
 
   return "Member";
+}
+
+function getManagedUserDisplayName(user) {
+  return [user?.firstName, user?.lastName].filter(Boolean).join(" ").trim() || user?.email || "User";
+}
+
+function getManagedUserBucket(user) {
+  if (user?.isSuperAdmin) {
+    return "superAdmin";
+  }
+
+  if (user?.isAdmin) {
+    return "backendAdmin";
+  }
+
+  if (user?.isMember || user?.isVendor) {
+    return "appAdmin";
+  }
+
+  return "appAdmin";
+}
+
+function getManagedUserSourceLabel(user) {
+  if (user?.isSuperAdmin) {
+    return "Super Admin";
+  }
+
+  if (user?.isAdmin) {
+    return user?.isMember ? "Web Admin" : "Backend Admin";
+  }
+
+  if (user?.isVendor) {
+    return "Flutter Vendor";
+  }
+
+  if (user?.isMember) {
+    return "Flutter Member";
+  }
+
+  return "App User";
+}
+
+function getManagedUserStatusLabel(user) {
+  if (user?.approvalStatus === "REJECTED") {
+    return "Rejected";
+  }
+
+  if (user?.approvalStatus === "APPROVED" && user?.isActive === false) {
+    return "Suspended";
+  }
+
+  if (user?.approvalStatus === "APPROVED") {
+    return "Approved";
+  }
+
+  return "Pending";
 }
 
 function normalizeCommitteePostLabel(value) {
@@ -222,6 +313,22 @@ const navSections = [
     ),
   },
   {
+    label: topLevelSections.users,
+    icon: (
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      >
+        <circle cx="8" cy="8" r="2.8" />
+        <circle cx="16.5" cy="7.5" r="2.3" />
+        <path d="M3.8 18c.9-2.6 2.9-4 5.9-4s5 1.4 5.9 4" />
+        <path d="M14.5 17.3c.5-1.9 1.9-3 4-3 1 0 1.9.2 2.7.8" />
+      </svg>
+    ),
+  },
+  {
     label: topLevelSections.association,
     icon: (
       <svg
@@ -302,21 +409,6 @@ const navSections = [
         <circle cx="4.5" cy="18.5" r="1.2" />
       </svg>
     ),
-  },
-  {
-    label: topLevelSections.profile,
-    icon: (
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-      >
-        <circle cx="12" cy="8" r="3.2" />
-        <path d="M5 19c1.1-3 3.5-4.5 7-4.5s5.9 1.5 7 4.5" />
-      </svg>
-    ),
-    href: "/profile",
   },
 ];
 
@@ -1742,6 +1834,11 @@ function DashboardHeroStats({
   activeUsersThisMonthCount,
   activeUsersLastSixMonthsCount,
   totalMembersCount,
+  onOpenPrimaryMembers,
+  onOpenAssociateMembers,
+  onOpenGuestMembers,
+  onOpenVendorStatus,
+  onOpenUsers,
 }) {
   return (
     <section className="dashboard-hero-stats">
@@ -1751,18 +1848,30 @@ function DashboardHeroStats({
           <h2>Membership Snapshot</h2>
         </div>
         <div className="dashboard-hero-metrics">
-          <div className="dashboard-hero-metric">
+          <button
+            type="button"
+            className="dashboard-hero-metric"
+            onClick={onOpenPrimaryMembers}
+          >
             <strong>{primaryMembersCount}</strong>
             <span>Primary Members</span>
-          </div>
-          <div className="dashboard-hero-metric">
+          </button>
+          <button
+            type="button"
+            className="dashboard-hero-metric"
+            onClick={onOpenAssociateMembers}
+          >
             <strong>{associateMembersCount}</strong>
             <span>Associate Members</span>
-          </div>
-          <div className="dashboard-hero-metric">
+          </button>
+          <button
+            type="button"
+            className="dashboard-hero-metric"
+            onClick={onOpenGuestMembers}
+          >
             <strong>{guestMembersCount}</strong>
             <span>Guest Members</span>
-          </div>
+          </button>
         </div>
       </article>
 
@@ -1772,22 +1881,38 @@ function DashboardHeroStats({
           <h2>Vendor Access Status</h2>
         </div>
         <div className="dashboard-hero-metrics">
-          <div className="dashboard-hero-metric">
+          <button
+            type="button"
+            className="dashboard-hero-metric"
+            onClick={onOpenVendorStatus}
+          >
             <strong>{totalVendorsCount}</strong>
             <span>Total Vendors</span>
-          </div>
-          <div className="dashboard-hero-metric">
+          </button>
+          <button
+            type="button"
+            className="dashboard-hero-metric"
+            onClick={onOpenVendorStatus}
+          >
             <strong>{approvedVendorsCount}</strong>
             <span>Approved</span>
-          </div>
-          <div className="dashboard-hero-metric">
+          </button>
+          <button
+            type="button"
+            className="dashboard-hero-metric"
+            onClick={onOpenVendorStatus}
+          >
             <strong>{pendingVendorsCount}</strong>
             <span>Pending</span>
-          </div>
-          <div className="dashboard-hero-metric">
+          </button>
+          <button
+            type="button"
+            className="dashboard-hero-metric"
+            onClick={onOpenVendorStatus}
+          >
             <strong>{suspendedVendorsCount}</strong>
             <span>Suspended</span>
-          </div>
+          </button>
         </div>
       </article>
 
@@ -1797,18 +1922,30 @@ function DashboardHeroStats({
           <h2>Login Activity</h2>
         </div>
         <div className="dashboard-hero-metrics">
-          <div className="dashboard-hero-metric">
+          <button
+            type="button"
+            className="dashboard-hero-metric"
+            onClick={onOpenUsers}
+          >
             <strong>{activeUsersThisMonthCount}</strong>
             <span>This Month</span>
-          </div>
-          <div className="dashboard-hero-metric">
+          </button>
+          <button
+            type="button"
+            className="dashboard-hero-metric"
+            onClick={onOpenUsers}
+          >
             <strong>{activeUsersCount}</strong>
             <span>Active Now</span>
-          </div>
-          <div className="dashboard-hero-metric">
+          </button>
+          <button
+            type="button"
+            className="dashboard-hero-metric"
+            onClick={onOpenUsers}
+          >
             <strong>{activeUsersLastSixMonthsCount}</strong>
             <span>Last 6 Months</span>
-          </div>
+          </button>
         </div>
         <p className="dashboard-hero-note">
           Counts are based on authenticated session activity in this association.
@@ -1821,10 +1958,14 @@ function DashboardHeroStats({
           <h2>Overall Totals</h2>
         </div>
         <div className="dashboard-hero-metrics">
-          <div className="dashboard-hero-metric">
+          <button
+            type="button"
+            className="dashboard-hero-metric"
+            onClick={onOpenPrimaryMembers}
+          >
             <strong>{totalMembersCount}</strong>
             <span>Total Members</span>
-          </div>
+          </button>
         </div>
       </article>
     </section>
@@ -2139,6 +2280,7 @@ function mapApiVendorToUi(vendor) {
 
   return {
     id: vendor.id,
+    vendorStatus,
     name,
     company: vendor.companyName || name,
     address: vendor.address || "",
@@ -2201,6 +2343,13 @@ function mapApiVendorToUi(vendor) {
       vendor.secondaryLoginEmail || linkedUsers[1]?.email || "",
   };
 }
+
+const vendorStatusOptions = [
+  { value: "PENDING", label: "Pending" },
+  { value: "ACTIVE", label: "Active" },
+  { value: "SUSPENDED", label: "Suspended" },
+  { value: "LAPSED", label: "Lapsed" },
+];
 
 function readVendorNoteValue(notes, label) {
   if (!notes) {
@@ -3035,6 +3184,7 @@ const defaultCircularDocumentForm = {
 };
 
 const defaultTimelinePostForm = {
+  id: "",
   sourceType: "ASSOCIATION",
   memberId: "",
   vendorId: "",
@@ -3046,15 +3196,20 @@ const defaultTimelinePostForm = {
   facebookUrl: "",
   imageFile: null,
   brochureFile: null,
+  imageUrl: "",
+  brochureUrl: "",
 };
 
 const defaultAppBannerForm = {
+  id: "",
   vendorId: "",
   shortText: "",
   contactNumber: "",
   socialMediaUrl: "",
   mediaFile: null,
   brochureFile: null,
+  mediaUrl: "",
+  brochureUrl: "",
 };
 
 const appBannerMediaRecommendation =
@@ -6321,12 +6476,36 @@ function MemberTable({
   onToggleSelect,
   onEditOne,
   onDeleteOne,
+  title = "Members",
 }) {
+  const [tableSearchQuery, setTableSearchQuery] = useState("");
+
+  const normalizedQuery = tableSearchQuery.trim().toLowerCase();
+  const visibleItems = normalizedQuery
+    ? items.filter((member) => {
+        return [member.name, member.company, member.email, member.phone]
+          .filter(Boolean)
+          .some((field) => field.toLowerCase().includes(normalizedQuery));
+      })
+    : items;
+
   return (
     <section className="member-table-panel">
       <div className="panel-topline">
-        <h2>Member Table</h2>
-        <span className="mini-label">Bulk Actions Ready</span>
+        <h2>{title}</h2>
+      </div>
+
+      <div className="member-table-search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+          <circle cx="10.5" cy="10.5" r="6.5" />
+          <path d="M20 20l-4.3-4.3" />
+        </svg>
+        <input
+          type="search"
+          value={tableSearchQuery}
+          onChange={(event) => setTableSearchQuery(event.target.value)}
+          placeholder={`Search ${title.toLowerCase()}...`}
+        />
       </div>
 
       <div className="member-table-wrap">
@@ -6345,7 +6524,17 @@ function MemberTable({
             </tr>
           </thead>
           <tbody>
-            {items.map((member) => (
+            {visibleItems.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={isAdmin ? 8 : 6}
+                  className="member-table-empty-cell"
+                >
+                  No members match &quot;{tableSearchQuery}&quot;.
+                </td>
+              </tr>
+            ) : null}
+            {visibleItems.map((member) => (
               <tr
                 key={member.id}
                 className={
@@ -6387,30 +6576,44 @@ function MemberTable({
                 </td>
                 <td>
                   <a
-                    className="table-action-link"
+                    className="table-action-link table-icon-only"
                     href={`https://wa.me/${member.whatsapp}`}
                     target="_blank"
                     rel="noreferrer"
+                    aria-label="Open WhatsApp chat"
+                    title="Open WhatsApp chat"
                   >
-                    Open Chat
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="M12 2.5a9.5 9.5 0 0 0-8.2 14.4L2.5 21.5l4.7-1.3A9.5 9.5 0 1 0 12 2.5Zm0 1.8a7.7 7.7 0 0 1 6.5 11.8l-.2.4.7 2.5-2.6-.7-.4.2A7.7 7.7 0 1 1 12 4.3Zm-3.2 3.6c-.2 0-.5.1-.7.4-.2.3-.9 1-.9 2.2 0 1.3.9 2.6 1 2.7.1.2 1.8 2.9 4.4 4 .6.3 1.1.4 1.5.5.6.2 1.2.1 1.6.1.5-.1 1.4-.6 1.6-1.1.2-.5.2-1 .1-1.1-.1-.1-.3-.2-.6-.3l-1.6-.8c-.2-.1-.4-.1-.6.1l-.6.8c-.1.2-.3.2-.5.1-.4-.2-1.3-.6-2-1.4-.6-.7-1-1.5-1.1-1.7-.1-.2 0-.4.1-.5l.5-.6c.1-.2.1-.4 0-.6l-.7-1.7c-.1-.2-.3-.4-.6-.4Z" />
+                    </svg>
                   </a>
                 </td>
                 <td>
                   {member.expiryStatus === "expiring-soon" ? (
                     <button
-                      className="secondary-link secondary-button table-button reminder-button"
+                      className="secondary-link secondary-button table-button table-icon-only reminder-button"
                       type="button"
                       disabled={isSaving}
+                      aria-label="Send reminder"
+                      title="Send reminder"
                     >
-                      Send Reminder
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                        <path d="M7 10a5 5 0 1 1 10 0v4.2l1.4 2.3H5.6L7 14.2V10Z" />
+                        <path d="M10 18.5a2.2 2.2 0 0 0 4 0" />
+                      </svg>
                     </button>
                   ) : (
                     <button
-                      className="secondary-link secondary-button table-button"
+                      className="secondary-link secondary-button table-button table-icon-only"
                       type="button"
                       disabled={isSaving}
+                      aria-label="Send notice"
+                      title="Send notice"
                     >
-                      Send Notice
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                        <path d="M7 10a5 5 0 1 1 10 0v4.2l1.4 2.3H5.6L7 14.2V10Z" />
+                        <path d="M10 18.5a2.2 2.2 0 0 0 4 0" />
+                      </svg>
                     </button>
                   )}
                 </td>
@@ -6418,20 +6621,33 @@ function MemberTable({
                   <td>
                     <div className="member-master-actions">
                       <button
-                        className="secondary-link secondary-button table-button"
+                        className="secondary-link secondary-button table-button table-icon-only"
                         type="button"
                         onClick={() => onEditOne(member.id)}
                         disabled={isSaving}
+                        aria-label="Edit member"
+                        title="Edit member"
                       >
-                        Edit
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                          <path d="M4 20l.9-3.6L15.4 6 18 8.6 7.6 19.1 4 20Z" />
+                          <path d="M13.2 7.8l2.6 2.6" />
+                        </svg>
                       </button>
                       <button
-                        className="secondary-link secondary-button danger-button table-button"
+                        className="secondary-link secondary-button danger-button table-button table-icon-only"
                         type="button"
                         onClick={() => onDeleteOne(member.id)}
                         disabled={isSaving}
+                        aria-label="Delete member"
+                        title="Delete member"
                       >
-                        Delete
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                          <path d="M5 7h14" />
+                          <path d="M9 7V5.5c0-.6.4-1 1-1h4c.6 0 1 .4 1 1V7" />
+                          <path d="M7 7l1 12.5c0 .6.5 1 1 1h6c.5 0 1-.4 1-1L17 7" />
+                          <path d="M10 11v5" />
+                          <path d="M14 11v5" />
+                        </svg>
                       </button>
                     </div>
                   </td>
@@ -6538,6 +6754,7 @@ function MemberArenaContent({
           onToggleSelect={onToggleSelect}
           onEditOne={onEditMember}
           onDeleteOne={onDeleteOne}
+          title="Primary Members"
         />
       </section>
     );
@@ -6554,6 +6771,7 @@ function MemberArenaContent({
           onToggleSelect={onToggleSelect}
           onEditOne={onEditMember}
           onDeleteOne={onDeleteOne}
+          title={activeTab}
         />
       </section>
     );
@@ -6596,6 +6814,7 @@ function MemberArenaContent({
         onToggleSelect={onToggleSelect}
         onEditOne={onEditMember}
         onDeleteOne={onDeleteOne}
+        title={activeTab}
       />
     </section>
   );
@@ -6989,40 +7208,118 @@ function VendorStatusGrid({ items, isSaving, onEdit }) {
   );
 }
 
-function VendorRegistrationTable({ items, onEdit }) {
+function VendorRegistrationTable({ items, onEdit, onDelete, onStatusChange }) {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedVendorIds, setSelectedVendorIds] = useState([]);
+
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+  const filteredItems = normalizedQuery
+    ? items.filter((vendor) =>
+        [
+          vendor.name,
+          vendor.company,
+          vendor.category,
+          vendor.city,
+          vendor.vendorType,
+          vendor.email,
+          vendor.primaryLoginEmail,
+          vendor.secondaryLoginEmail,
+        ]
+          .filter(Boolean)
+          .some((value) => value.toLowerCase().includes(normalizedQuery)),
+      )
+    : items;
+
+  const allFilteredSelected =
+    filteredItems.length > 0 &&
+    filteredItems.every((vendor) => selectedVendorIds.includes(vendor.id));
+
+  const toggleVendorSelect = (vendorId) => {
+    setSelectedVendorIds((current) =>
+      current.includes(vendorId)
+        ? current.filter((id) => id !== vendorId)
+        : [...current, vendorId],
+    );
+  };
+
+  const toggleSelectAllFiltered = () => {
+    const filteredIds = filteredItems.map((vendor) => vendor.id);
+    setSelectedVendorIds((current) =>
+      allFilteredSelected
+        ? current.filter((id) => !filteredIds.includes(id))
+        : [...new Set([...current, ...filteredIds])],
+    );
+  };
+
   return (
     <section className="member-table-panel">
       <div className="panel-topline">
-        <h2>Vendor Registration Status</h2>
+        <h2>Vendor Status</h2>
         <span className="mini-label">
           Active, Suspended, Lapsed, and login IDs
         </span>
       </div>
 
+      <div className="admin-member-toolbar">
+        <div className="search-wrap admin-member-search">
+          <input
+            className="search-input"
+            type="search"
+            placeholder="Search vendor, company, category, city..."
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+          />
+        </div>
+        <label className="selection-chip">
+          <input
+            type="checkbox"
+            checked={allFilteredSelected}
+            onChange={toggleSelectAllFiltered}
+          />
+          <span>Select filtered</span>
+        </label>
+      </div>
+
       <div className="member-table-wrap">
-        <table className="member-table">
+        <table className="member-table vendor-status-table">
           <thead>
             <tr>
+              <th>Select</th>
               <th>Vendor</th>
-              <th>Company</th>
-              <th>Category</th>
+              <th>Category / Type</th>
               <th>City</th>
-              <th>Type</th>
               <th>Vendor Logins</th>
-              <th>Registration Period</th>
+              <th>Registration</th>
               <th>Status</th>
               <th>Contact</th>
               <th>Action</th>
             </tr>
           </thead>
           <tbody>
-            {items.map((vendor) => (
+            {filteredItems.map((vendor) => (
               <tr key={vendor.id}>
-                <td>{vendor.name}</td>
-                <td>{vendor.company}</td>
-                <td>{vendor.category}</td>
+                <td>
+                  <input
+                    type="checkbox"
+                    checked={selectedVendorIds.includes(vendor.id)}
+                    onChange={() => toggleVendorSelect(vendor.id)}
+                  />
+                </td>
+                <td>
+                  <div className="member-table-contact">
+                    <span className="table-primary-text">{vendor.name}</span>
+                    <span>{vendor.company}</span>
+                  </div>
+                </td>
+                <td>
+                  <div className="member-table-contact">
+                    <span className="table-primary-text">
+                      {vendor.category}
+                    </span>
+                    <span>{vendor.vendorType}</span>
+                  </div>
+                </td>
                 <td>{vendor.city}</td>
-                <td>{vendor.vendorType}</td>
                 <td>
                   <div className="member-table-contact">
                     <span>{vendor.primaryLoginEmail || "--"}</span>
@@ -7033,9 +7330,20 @@ function VendorRegistrationTable({ items, onEdit }) {
                 </td>
                 <td>{vendor.onboardingPeriod}</td>
                 <td>
-                  <span className="access-status-chip">
-                    {vendor.registrationStatus}
-                  </span>
+                  <select
+                    className="member-access-select"
+                    value={vendor.vendorStatus || "PENDING"}
+                    onChange={(event) =>
+                      onStatusChange?.(vendor.id, event.target.value)
+                    }
+                    disabled={!onStatusChange}
+                  >
+                    {vendorStatusOptions.map((status) => (
+                      <option key={status.value} value={status.value}>
+                        {status.label}
+                      </option>
+                    ))}
+                  </select>
                 </td>
                 <td>
                   <div className="member-table-contact">
@@ -7044,16 +7352,45 @@ function VendorRegistrationTable({ items, onEdit }) {
                   </div>
                 </td>
                 <td>
-                  <button
-                    className="secondary-link secondary-button"
-                    type="button"
-                    onClick={() => onEdit(vendor)}
-                  >
-                    Edit
-                  </button>
+                  <div className="record-actions">
+                    <button
+                      className="secondary-link secondary-button table-button table-icon-only"
+                      type="button"
+                      onClick={() => onEdit(vendor)}
+                      aria-label="Edit vendor"
+                      title="Edit vendor"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                        <path d="M4 20l.9-3.6L15.4 6 18 8.6 7.6 19.1 4 20Z" />
+                        <path d="M13.2 7.8l2.6 2.6" />
+                      </svg>
+                    </button>
+                    <button
+                      className="secondary-link secondary-button danger-button table-button table-icon-only"
+                      type="button"
+                      onClick={() => onDelete?.(vendor)}
+                      aria-label="Delete vendor"
+                      title="Delete vendor"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                        <path d="M5 7h14" />
+                        <path d="M9 7V5.5c0-.6.4-1 1-1h4c.6 0 1 .4 1 1V7" />
+                        <path d="M7 7l1 12.5c0 .6.5 1 1 1h6c.5 0 1-.4 1-1L17 7" />
+                        <path d="M10 11v5" />
+                        <path d="M14 11v5" />
+                      </svg>
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
+            {filteredItems.length === 0 ? (
+              <tr>
+                <td colSpan={9} className="member-table-empty-cell">
+                  No vendors match &quot;{searchQuery}&quot;.
+                </td>
+              </tr>
+            ) : null}
           </tbody>
         </table>
       </div>
@@ -7147,9 +7484,6 @@ function VendorRegistrationForm({
   stateOptions,
   cityOptions,
   phoneCodeOptions,
-  newCategory,
-  onNewCategoryChange,
-  onAddCategory,
   onReset,
   onSubmit,
   errorMessage,
@@ -7157,40 +7491,12 @@ function VendorRegistrationForm({
   isSaving,
 }) {
   return (
-    <section className="member-table-panel">
+    <section className="member-table-panel vendor-registration-panel">
       <div className="panel-topline">
-        <h2>{formData.id ? "Update Vendor" : "Add / Update Vendor"}</h2>
-        <span className="mini-label">Admin Vendor Desk</span>
+        <h2>Register New Vendor</h2>
       </div>
 
-      <div className="admin-member-toolbar">
-        <div className="search-wrap admin-member-search">
-          <input
-            className="search-input"
-            type="text"
-            placeholder="Create a category like Logistics, Packaging, Automation..."
-            value={newCategory}
-            onChange={(event) => onNewCategoryChange(event.target.value)}
-          />
-        </div>
-        <button
-          className="secondary-link secondary-button"
-          type="button"
-          onClick={onAddCategory}
-        >
-          Add Category
-        </button>
-      </div>
-
-      <div className="content-member-selector">
-        {categories.map((category) => (
-          <span key={category} className="content-member-chip active">
-            {category}
-          </span>
-        ))}
-      </div>
-
-      <div className="profile-form-grid">
+      <div className="profile-form-grid vendor-registration-grid">
         <label className="profile-field">
           <span>Company Name *</span>
           <input
@@ -7783,6 +8089,7 @@ function VendorStatusPanel({
   onToggleSelect,
   onToggleSelectAll,
   onSelectVendor,
+  onCancelReview,
   onReviewFieldChange,
   onReviewFileChange,
   onApplyBulkDecision,
@@ -7797,7 +8104,6 @@ function VendorStatusPanel({
     <article className="admin-access-panel">
       <div className="panel-topline">
         <h2>Vendor Registration Requests</h2>
-        <span className="mini-label">Approve Or Reject</span>
       </div>
 
       <div className="admin-member-toolbar">
@@ -7819,22 +8125,6 @@ function VendorStatusPanel({
           />
           <span>Select filtered</span>
         </label>
-        <button
-          className="secondary-link secondary-button"
-          type="button"
-          onClick={() => onApplyBulkDecision("APPROVED")}
-          disabled={isSaving}
-        >
-          Approve Selected Individually
-        </button>
-        <button
-          className="secondary-link secondary-button danger-button"
-          type="button"
-          onClick={() => onApplyBulkDecision("CANCELLED")}
-          disabled={isSaving}
-        >
-          Reject Selected
-        </button>
       </div>
 
       {approvalError ? (
@@ -7885,32 +8175,26 @@ function VendorStatusPanel({
                   </span>
                 </td>
                 <td>
-                  <div className="record-actions">
-                    <button
-                      className="secondary-link secondary-button"
-                      type="button"
-                      onClick={() => onSelectVendor(vendor.id)}
-                      disabled={isSaving}
-                    >
-                      Review
-                    </button>
-                    <button
-                      className="secondary-link secondary-button"
-                      type="button"
-                      onClick={() => onApproveOne(vendor.id)}
-                      disabled={isSaving}
-                    >
-                      Approve With Details
-                    </button>
-                    <button
-                      className="secondary-link secondary-button danger-button"
-                      type="button"
-                      onClick={() => onRejectOne(vendor.id)}
-                      disabled={isSaving}
-                    >
-                      Quick Reject
-                    </button>
-                  </div>
+                  <select
+                    className="member-access-select"
+                    defaultValue=""
+                    onChange={(event) => {
+                      const nextAction = event.target.value;
+                      if (nextAction === "approve") {
+                        onSelectVendor(vendor.id);
+                      } else if (nextAction === "reject") {
+                        onRejectOne(vendor.id);
+                      }
+                      event.target.value = "";
+                    }}
+                    disabled={isSaving}
+                  >
+                    <option value="" disabled>
+                      Select Action
+                    </option>
+                    <option value="approve">Approve With Details</option>
+                    <option value="reject">Reject</option>
+                  </select>
                 </td>
               </tr>
             ))}
@@ -8197,22 +8481,26 @@ function VendorStatusPanel({
             </label>
           </div>
 
+          {approvalError ? (
+            <p className="vendor-admin-note">{approvalError}</p>
+          ) : null}
+
           <div className="profile-action-row">
             <button
               className="secondary-link secondary-button"
+              type="button"
+              onClick={onCancelReview}
+              disabled={isSaving}
+            >
+              Cancel
+            </button>
+            <button
+              className="primary-link admin-action-button"
               type="button"
               onClick={() => onApproveOne(selectedVendor.id)}
               disabled={isSaving}
             >
               {isSaving ? "Saving..." : "Save And Approve"}
-            </button>
-            <button
-              className="secondary-link secondary-button danger-button"
-              type="button"
-              onClick={() => onRejectOne(selectedVendor.id)}
-              disabled={isSaving}
-            >
-              {isSaving ? "Saving..." : "Save And Reject"}
             </button>
           </div>
         </article>
@@ -8233,13 +8521,10 @@ function VendorArenaContent({
   phoneCodeOptions,
   planOptions,
   paymentModeOptions,
-  newCategory,
   filterState,
   onFormChange,
   onFileChange,
   onFilterChange,
-  onNewCategoryChange,
-  onAddCategory,
   onReset,
   onEditVendor,
   onSubmit,
@@ -8345,10 +8630,7 @@ function VendorArenaContent({
         phoneCodeOptions={phoneCodeOptions}
         planOptions={planOptions}
         paymentModeOptions={paymentModeOptions}
-        newCategory={newCategory}
         onFileChange={onFileChange}
-        onNewCategoryChange={onNewCategoryChange}
-        onAddCategory={onAddCategory}
         onReset={onReset}
         onSubmit={onSubmit}
         errorMessage={errorMessage}
@@ -8362,20 +8644,29 @@ function VendorArenaContent({
 function TimelinePanel({
   formData,
   posts,
+  selectedIds,
   memberOptions,
   vendorOptions,
   associationLabel,
   isSaving,
+  isDeleting,
   feedback,
   onChange,
   onFileChange,
+  onReset,
+  onToggleSelectAll,
+  onToggleSelect,
+  onDeleteSelected,
   onSubmit,
 }) {
+  const isEditing = Boolean(formData.id);
+  const allSelected = posts.length > 0 && selectedIds.length === posts.length;
+
   return (
     <section className="association-tab-section member-media-layout">
       <article className="member-media-composer">
         <div className="panel-topline">
-          <h2>Create Timeline Post</h2>
+          <h2>{isEditing ? "Modify Timeline Post" : "Create Timeline Post"}</h2>
           <span className="mini-label">Independent Ad Timeline</span>
         </div>
 
@@ -8490,6 +8781,9 @@ function TimelinePanel({
                 onFileChange("imageFile", event.target.files?.[0] ?? null)
               }
             />
+            {formData.imageUrl ? (
+              <small>Current image attached. Upload a new file only to replace it.</small>
+            ) : null}
           </label>
           <label className="profile-field">
             <span>PDF Brochure</span>
@@ -8500,17 +8794,73 @@ function TimelinePanel({
                 onFileChange("brochureFile", event.target.files?.[0] ?? null)
               }
             />
+            {formData.brochureUrl ? (
+              <small>Current PDF attached. Upload a new file only to replace it.</small>
+            ) : null}
           </label>
         </div>
 
+        {formData.imageUrl || formData.brochureUrl ? (
+          <div className="member-record-details">
+            {formData.imageUrl ? (
+              <p>
+                Current Image:{" "}
+                <a href={formData.imageUrl} target="_blank" rel="noreferrer">
+                  Open current post image
+                </a>
+              </p>
+            ) : null}
+            {formData.brochureUrl ? (
+              <p>
+                Current PDF:{" "}
+                <a href={formData.brochureUrl} target="_blank" rel="noreferrer">
+                  Open current brochure
+                </a>
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
+        <div className="admin-member-toolbar">
+          <label className="selection-chip">
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={onToggleSelectAll}
+              disabled={isSaving || isDeleting}
+            />
+            <span>Select multiple</span>
+          </label>
+          <button
+            className="secondary-link secondary-button danger-button"
+            type="button"
+            onClick={onDeleteSelected}
+            disabled={isSaving || isDeleting || selectedIds.length === 0}
+          >
+            {isDeleting ? "Deleting..." : "Delete Selected"}
+          </button>
+        </div>
+
         <div className="profile-action-row">
+          <button
+            className="secondary-link secondary-button"
+            type="button"
+            onClick={onReset}
+            disabled={isSaving}
+          >
+            Cancel
+          </button>
           <button
             className="primary-link admin-action-button"
             type="button"
             onClick={onSubmit}
             disabled={isSaving}
           >
-            {isSaving ? "Saving Timeline..." : "Save Timeline Post"}
+            {isSaving
+              ? "Saving Timeline..."
+              : isEditing
+                ? "Save Timeline Changes"
+                : "Save Timeline Post"}
           </button>
         </div>
         {feedback ? <p className="member-access-feedback">{feedback}</p> : null}
@@ -8536,6 +8886,15 @@ function TimelinePanel({
                     : post.postedOn}
                 </p>
               </div>
+              <label className="record-select-chip">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.includes(post.id)}
+                  onChange={() => onToggleSelect(post.id)}
+                  disabled={isSaving || isDeleting}
+                />
+                <span>Select</span>
+              </label>
             </div>
 
             <div className="timeline-feed-body">
@@ -8634,13 +8993,16 @@ function AppBannerPanel({
   errorMessage,
   onChange,
   onFileChange,
+  onReset,
   onSubmit,
 }) {
+  const isEditing = Boolean(formData.id);
+
   return (
     <section className="association-tab-section member-media-layout">
       <article className="member-media-composer">
         <div className="panel-topline">
-          <h2>Create App Banner</h2>
+          <h2>{isEditing ? "Modify App Banner" : "Create App Banner"}</h2>
           <span className="mini-label">Paid Advertisement</span>
         </div>
 
@@ -8698,6 +9060,9 @@ function AppBannerPanel({
               }
             />
             <small>{appBannerMediaRecommendation}</small>
+            {formData.mediaUrl ? (
+              <small>Current media attached. Upload a new file only to replace it.</small>
+            ) : null}
           </label>
           <label className="profile-field">
             <span>PDF Attachment</span>
@@ -8709,8 +9074,32 @@ function AppBannerPanel({
               }
             />
             <small>{appBannerPdfRecommendation}</small>
+            {formData.brochureUrl ? (
+              <small>Current PDF attached. Upload a new file only to replace it.</small>
+            ) : null}
           </label>
         </div>
+
+        {formData.mediaUrl || formData.brochureUrl ? (
+          <div className="member-record-details">
+            {formData.mediaUrl ? (
+              <p>
+                Current Media:{" "}
+                <a href={formData.mediaUrl} target="_blank" rel="noreferrer">
+                  Open current banner
+                </a>
+              </p>
+            ) : null}
+            {formData.brochureUrl ? (
+              <p>
+                Current PDF:{" "}
+                <a href={formData.brochureUrl} target="_blank" rel="noreferrer">
+                  Open current attachment
+                </a>
+              </p>
+            ) : null}
+          </div>
+        ) : null}
 
         {errorMessage ? (
           <p className="form-helper-error">{errorMessage}</p>
@@ -8718,12 +9107,24 @@ function AppBannerPanel({
 
         <div className="profile-action-row">
           <button
+            className="secondary-link secondary-button"
+            type="button"
+            onClick={onReset}
+            disabled={isSaving}
+          >
+            Cancel
+          </button>
+          <button
             className="primary-link admin-action-button"
             type="button"
             onClick={onSubmit}
             disabled={isSaving}
           >
-            {isSaving ? "Saving Banner..." : "Submit Paid Advertisement"}
+            {isSaving
+              ? "Saving Banner..."
+              : isEditing
+                ? "Save Banner Changes"
+                : "Submit Paid Advertisement"}
           </button>
         </div>
       </article>
@@ -9369,13 +9770,21 @@ function AdminEventAccessPanel({
 function AdminTimelineAccessPanel({
   items,
   searchQuery,
+  selectedIds,
   edits,
   isSaving,
+  isDeleting,
   feedbackMessage,
   onSearchChange,
+  onToggleSelectAll,
+  onToggleSelect,
+  onDeleteSelected,
+  onModifyPost,
   onUpdatePost,
   onSaveTimelineAccessChanges,
 }) {
+  const allSelected = items.length > 0 && selectedIds.length === items.length;
+
   return (
     <article className="admin-access-panel">
       <div className="panel-topline">
@@ -9393,6 +9802,23 @@ function AdminTimelineAccessPanel({
             onChange={(event) => onSearchChange(event.target.value)}
           />
         </div>
+        <label className="selection-chip">
+          <input
+            type="checkbox"
+            checked={allSelected}
+            onChange={onToggleSelectAll}
+            disabled={isSaving || isDeleting}
+          />
+          <span>Select multiple</span>
+        </label>
+        <button
+          className="secondary-link secondary-button danger-button"
+          type="button"
+          onClick={onDeleteSelected}
+          disabled={isSaving || isDeleting || selectedIds.length === 0}
+        >
+          {isDeleting ? "Deleting..." : "Delete Selected"}
+        </button>
       </div>
 
       <div className="member-content-grid">
@@ -9402,7 +9828,18 @@ function AdminTimelineAccessPanel({
               <span>{post.sourceType}</span>
             </div>
             <div className="member-content-copy">
-              <strong>{post.sourceName}</strong>
+              <div className="member-record-head">
+                <strong>{post.sourceName}</strong>
+                <label className="record-select-chip">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.includes(post.id)}
+                    onChange={() => onToggleSelect(post.id)}
+                    disabled={isSaving || isDeleting}
+                  />
+                  <span>Select</span>
+                </label>
+              </div>
               <p>{post.caption}</p>
               <div className="member-content-meta">
                 <span>Posted By: {post.postedBy || post.sourceName}</span>
@@ -9419,6 +9856,16 @@ function AdminTimelineAccessPanel({
                 </div>
               ) : null}
               <div className="member-content-controls">
+                <div className="member-master-actions">
+                  <button
+                    className="secondary-link secondary-button table-button"
+                    type="button"
+                    onClick={() => onModifyPost(post)}
+                    disabled={isSaving}
+                  >
+                    Modify Post
+                  </button>
+                </div>
                 <label className="content-control-field">
                   <span>Status</span>
                   <select
@@ -9474,7 +9921,7 @@ function AdminTimelineAccessPanel({
           className="primary-link admin-action-button"
           type="button"
           onClick={onSaveTimelineAccessChanges}
-          disabled={isSaving}
+          disabled={isSaving || isDeleting}
         >
           {isSaving ? "Saving..." : "Save Timeline Access Changes"}
         </button>
@@ -9486,13 +9933,21 @@ function AdminTimelineAccessPanel({
 function AdminAppBannerAccessPanel({
   items,
   searchQuery,
+  selectedIds,
   edits,
   isSaving,
+  isDeleting,
   feedbackMessage,
   onSearchChange,
+  onToggleSelectAll,
+  onToggleSelect,
+  onDeleteSelected,
+  onModifyBanner,
   onUpdateBanner,
   onSaveAppBannerAccessChanges,
 }) {
+  const allSelected = items.length > 0 && selectedIds.length === items.length;
+
   return (
     <article className="admin-access-panel">
       <div className="panel-topline">
@@ -9510,6 +9965,23 @@ function AdminAppBannerAccessPanel({
             onChange={(event) => onSearchChange(event.target.value)}
           />
         </div>
+        <label className="selection-chip">
+          <input
+            type="checkbox"
+            checked={allSelected}
+            onChange={onToggleSelectAll}
+            disabled={isSaving || isDeleting}
+          />
+          <span>Select multiple</span>
+        </label>
+        <button
+          className="secondary-link secondary-button danger-button"
+          type="button"
+          onClick={onDeleteSelected}
+          disabled={isSaving || isDeleting || selectedIds.length === 0}
+        >
+          {isDeleting ? "Deleting..." : "Delete Selected"}
+        </button>
       </div>
 
       <div className="member-content-grid">
@@ -9519,7 +9991,18 @@ function AdminAppBannerAccessPanel({
               <span>Banner</span>
             </div>
             <div className="member-content-copy">
-              <strong>{item.vendorName}</strong>
+              <div className="member-record-head">
+                <strong>{item.vendorName}</strong>
+                <label className="record-select-chip">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.includes(item.id)}
+                    onChange={() => onToggleSelect(item.id)}
+                    disabled={isSaving || isDeleting}
+                  />
+                  <span>Select</span>
+                </label>
+              </div>
               <p>{item.shortText}</p>
               <div className="member-content-meta">
                 <span>Date: {item.postedOn}</span>
@@ -9561,6 +10044,16 @@ function AdminAppBannerAccessPanel({
                 ) : null}
               </div>
               <div className="member-content-controls">
+                <div className="member-master-actions">
+                  <button
+                    className="secondary-link secondary-button table-button"
+                    type="button"
+                    onClick={() => onModifyBanner(item)}
+                    disabled={isSaving || isDeleting}
+                  >
+                    Modify Banner
+                  </button>
+                </div>
                 <label className="content-control-field">
                   <span>Status</span>
                   <select
@@ -9694,11 +10187,250 @@ function AdminAppBannerAccessPanel({
           className="primary-link admin-action-button"
           type="button"
           onClick={onSaveAppBannerAccessChanges}
-          disabled={isSaving}
+          disabled={isSaving || isDeleting}
         >
           {isSaving ? "Saving..." : "Save App Banner Access Changes"}
         </button>
       </div>
+    </article>
+  );
+}
+
+const usersManagementTabs = [
+  { key: "superAdmin", label: "Super Admin" },
+  { key: "backendAdmin", label: "Backend Admin" },
+  { key: "appAdmin", label: "App Admin" },
+];
+
+function UsersManagementPanel({
+  activeTab,
+  items,
+  selectedIds,
+  searchQuery,
+  isDeleting,
+  feedbackMessage,
+  currentUserId,
+  canManageSuperAdmins,
+  isCreateFormOpen,
+  superAdminInviteForm,
+  isCreatingSuperAdmin,
+  superAdminInviteFeedback,
+  backendAdminInviteFeedback,
+  onTabChange,
+  onSearchChange,
+  onToggleSelectAll,
+  onToggleSelect,
+  onDeleteSelected,
+  onDeleteOne,
+  onToggleCreateForm,
+  onSuperAdminInviteFieldChange,
+  onSubmitSuperAdminInvite,
+  onSubmitBackendAdminInvite,
+}) {
+  const allSelected = items.length > 0 && selectedIds.length === items.length;
+  const showPrivilegedCreate =
+    (activeTab === "superAdmin" || activeTab === "backendAdmin") &&
+    canManageSuperAdmins === true;
+  const isSuperAdminTab = activeTab === "superAdmin";
+
+  return (
+    <article className="admin-access-panel">
+      <div className="panel-topline">
+        <h2>Users Access</h2>
+        <span className="mini-label">Super, Backend, Flutter</span>
+      </div>
+
+      <div className="admin-member-filterbar">
+        {usersManagementTabs.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            className={`admin-member-filter-button ${activeTab === tab.key ? "active" : ""}`}
+            onClick={() => onTabChange(tab.key)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="admin-member-toolbar">
+        <div className="search-wrap admin-member-search">
+          <input
+            className="search-input"
+            type="search"
+            placeholder="Search name, email, source..."
+            value={searchQuery}
+            onChange={(event) => onSearchChange(event.target.value)}
+          />
+        </div>
+        <label className="selection-chip">
+          <input
+            type="checkbox"
+            checked={allSelected}
+            onChange={onToggleSelectAll}
+            disabled={isDeleting}
+          />
+          <span>Select multiple</span>
+        </label>
+        <button
+          className="secondary-link secondary-button danger-button"
+          type="button"
+          onClick={onDeleteSelected}
+          disabled={isDeleting || selectedIds.length === 0}
+        >
+          {isDeleting ? "Deleting..." : "Delete Selected"}
+        </button>
+        {showPrivilegedCreate ? (
+          <button
+            className="primary-link admin-action-button"
+            type="button"
+            onClick={onToggleCreateForm}
+            disabled={isCreatingSuperAdmin}
+          >
+            {isCreateFormOpen ? "Close Form" : "Create New"}
+          </button>
+        ) : null}
+      </div>
+
+      {showPrivilegedCreate && isCreateFormOpen ? (
+        <div className="admin-super-admin-card">
+          <div className="panel-topline">
+            <h3>{isSuperAdminTab ? "Create Super Admin" : "Create Backend Admin"}</h3>
+            <span className="mini-label">Email Access</span>
+          </div>
+          <p className="admin-access-helper-copy">
+            Create or upgrade any email as a{" "}
+            {isSuperAdminTab ? "super admin" : "backend admin"}. Default login
+            password: `Admin@123`.
+          </p>
+          <div className="profile-form-grid admin-super-admin-grid">
+            <label className="profile-field">
+              <span>Email</span>
+              <input
+                type="email"
+                value={superAdminInviteForm.email}
+                onChange={(event) =>
+                  onSuperAdminInviteFieldChange("email", event.target.value)
+                }
+                placeholder="client@example.com"
+              />
+            </label>
+            <label className="profile-field">
+              <span>First Name</span>
+              <input
+                type="text"
+                value={superAdminInviteForm.firstName}
+                onChange={(event) =>
+                  onSuperAdminInviteFieldChange("firstName", event.target.value)
+                }
+                placeholder="Optional"
+              />
+            </label>
+            <label className="profile-field">
+              <span>Last Name</span>
+              <input
+                type="text"
+                value={superAdminInviteForm.lastName}
+                onChange={(event) =>
+                  onSuperAdminInviteFieldChange("lastName", event.target.value)
+                }
+                placeholder="Optional"
+              />
+            </label>
+          </div>
+
+          <div className="profile-action-row">
+            {(isSuperAdminTab
+              ? superAdminInviteFeedback
+              : backendAdminInviteFeedback) ? (
+              <p className="admin-access-feedback">
+                {isSuperAdminTab
+                  ? superAdminInviteFeedback
+                  : backendAdminInviteFeedback}
+              </p>
+            ) : null}
+            <button
+              className="primary-link admin-action-button"
+              type="button"
+              disabled={isCreatingSuperAdmin}
+              onClick={
+                isSuperAdminTab
+                  ? onSubmitSuperAdminInvite
+                  : onSubmitBackendAdminInvite
+              }
+            >
+              {isCreatingSuperAdmin
+                ? "Creating..."
+                : isSuperAdminTab
+                  ? "Create Super Admin"
+                  : "Create Backend Admin"}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="member-table-wrap">
+        <table className="member-table">
+          <thead>
+            <tr>
+              <th>Select</th>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Source</th>
+              <th>Status</th>
+              <th>Created</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((user) => (
+              <tr key={user.id}>
+                <td>
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.includes(user.id)}
+                    onChange={() => onToggleSelect(user.id)}
+                    disabled={isDeleting}
+                  />
+                </td>
+                <td>
+                  <div className="member-table-contact">
+                    <span className="table-primary-text">
+                      {getManagedUserDisplayName(user)}
+                    </span>
+                    <span>
+                      {user.id === currentUserId ? "Current session" : "--"}
+                    </span>
+                  </div>
+                </td>
+                <td>{user.email}</td>
+                <td>{getManagedUserSourceLabel(user)}</td>
+                <td>{getManagedUserStatusLabel(user)}</td>
+                <td>{String(user.createdAt || "").slice(0, 10) || "--"}</td>
+                <td>
+                  <button
+                    className="secondary-link secondary-button danger-button table-button"
+                    type="button"
+                    onClick={() => onDeleteOne(user.id)}
+                    disabled={isDeleting || user.id === currentUserId}
+                  >
+                    Delete
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {items.length === 0 ? (
+              <tr>
+                <td colSpan="7">No users match the current selection.</td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+
+      {feedbackMessage ? (
+        <p className="admin-access-feedback">{feedbackMessage}</p>
+      ) : null}
     </article>
   );
 }
@@ -10007,18 +10739,29 @@ function AdminMemberAccessPanel({
           </div>
 
           <div className="admin-member-filterbar">
-            {adminMemberAccessFilters.map((filter) => (
-              <button
-                key={filter.key}
-                type="button"
-                className={`admin-member-filter-button ${
-                  activeFilter === filter.key ? "active" : ""
-                }`}
-                onClick={() => onFilterChange(filter.key)}
-              >
-                {filter.label}
-              </button>
-            ))}
+            <div className="admin-member-filter-tabs">
+              {adminMemberAccessFilters.map((filter) => (
+                <button
+                  key={filter.key}
+                  type="button"
+                  className={`admin-member-filter-button ${
+                    activeFilter === filter.key ? "active" : ""
+                  }`}
+                  onClick={() => onFilterChange(filter.key)}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+
+            <button
+              className="primary-link admin-action-button admin-member-filterbar-save"
+              type="button"
+              disabled={isSaving}
+              onClick={onSaveMemberAccessChanges}
+            >
+              {isSaving ? "Saving..." : "Save Member Access Changes"}
+            </button>
           </div>
 
           <div className="member-table-wrap">
@@ -10069,73 +10812,42 @@ function AdminMemberAccessPanel({
                       </select>
                     </td>
                     <td>
-                      <div className="member-table-contact">
-                        <span>{getMemberAdminLabel(member)}</span>
-                        <div className="member-admin-actions">
-                          <button
-                            className={`secondary-link secondary-button ${
-                              !member.isAdmin ? "danger-button" : ""
-                            }`}
-                            type="button"
-                            disabled={
-                              !member.accessUserId ||
-                              updatingAdminUserIds.includes(
-                                member.accessUserId,
-                              )
-                            }
-                            onClick={() => onUpdateAdminRole(member, "admin")}
-                          >
-                            {updatingAdminUserIds.includes(member.accessUserId)
-                              ? "Saving..."
-                              : member.isAdmin && !member.isSuperAdmin
-                                ? "Keep Admin"
-                                : "Make Admin"}
-                          </button>
-                          {canManageSuperAdmins ? (
-                            <button
-                              className="secondary-link secondary-button"
-                              type="button"
-                              disabled={
-                                !member.accessUserId ||
-                                updatingAdminUserIds.includes(
-                                  member.accessUserId,
-                                )
-                              }
-                              onClick={() =>
-                                onUpdateAdminRole(member, "superAdmin")
-                              }
-                            >
-                              {updatingAdminUserIds.includes(
-                                member.accessUserId,
-                              )
-                                ? "Saving..."
-                                : member.isSuperAdmin
-                                  ? "Keep Super Admin"
-                                  : "Make Super Admin"}
-                            </button>
-                          ) : null}
-                          <button
-                            className="secondary-link secondary-button danger-button"
-                            type="button"
-                            disabled={
-                              !member.accessUserId ||
-                              updatingAdminUserIds.includes(
-                                member.accessUserId,
-                              ) ||
-                              (member.isSuperAdmin &&
-                                member.accessUserId === currentUserId)
-                            }
-                            onClick={() => onUpdateAdminRole(member, "member")}
-                          >
-                            {updatingAdminUserIds.includes(member.accessUserId)
-                              ? "Saving..."
-                              : member.isSuperAdmin &&
-                                  member.accessUserId === currentUserId
-                                ? "Current Super Admin"
-                                : "Make Member"}
-                          </button>
-                        </div>
-                      </div>
+                      <select
+                        className="member-access-select"
+                        value={
+                          member.isSuperAdmin
+                            ? "superAdmin"
+                            : member.isAdmin
+                              ? "admin"
+                              : "member"
+                        }
+                        onChange={(event) =>
+                          onUpdateAdminRole(member, event.target.value)
+                        }
+                        disabled={
+                          !member.accessUserId ||
+                          updatingAdminUserIds.includes(member.accessUserId)
+                        }
+                      >
+                        <option
+                          value="member"
+                          disabled={
+                            member.isSuperAdmin &&
+                            member.accessUserId === currentUserId
+                          }
+                        >
+                          Member
+                        </option>
+                        <option value="admin">Admin</option>
+                        {canManageSuperAdmins || member.isSuperAdmin ? (
+                          <option value="superAdmin">Super Admin</option>
+                        ) : null}
+                      </select>
+                      {updatingAdminUserIds.includes(member.accessUserId) ? (
+                        <span className="member-admin-role-status">
+                          Saving...
+                        </span>
+                      ) : null}
                     </td>
                     <td>
                       <div className="member-table-contact">
@@ -10289,27 +11001,27 @@ function AdminMemberAccessPanel({
         </>
       )}
 
-      <div className="profile-action-row">
-        {feedbackMessage ? (
-          <p className="admin-access-feedback">{feedbackMessage}</p>
-        ) : null}
-        <button
-          className="primary-link admin-action-button"
-          type="button"
-          disabled={isSaving}
-          onClick={
-            activeView === "app"
-              ? onSaveMemberAccessChanges
-              : onSaveContentAccessChanges
-          }
-        >
-          {isSaving
-            ? "Saving..."
-            : activeView === "app"
-              ? "Save Member Access Changes"
-              : "Save Content Access Changes"}
-        </button>
-      </div>
+      {activeView === "app" ? (
+        feedbackMessage ? (
+          <div className="profile-action-row profile-action-row-feedback">
+            <p className="admin-access-feedback">{feedbackMessage}</p>
+          </div>
+        ) : null
+      ) : (
+        <div className="profile-action-row">
+          {feedbackMessage ? (
+            <p className="admin-access-feedback">{feedbackMessage}</p>
+          ) : null}
+          <button
+            className="primary-link admin-action-button"
+            type="button"
+            disabled={isSaving}
+            onClick={onSaveContentAccessChanges}
+          >
+            {isSaving ? "Saving..." : "Save Content Access Changes"}
+          </button>
+        </div>
+      )}
     </article>
   );
 }
@@ -10719,78 +11431,67 @@ function WebAdminLoginScreen({
   onSubmit,
 }) {
   return (
-    <main className="dashboard-shell">
-      <section className="content-shell">
-        <section className="welcome-hero">
-          <div>
-            <span className="eyebrow">NIMA Admin Login</span>
-            <h1>Sign in with an admin account.</h1>
-            <p>
-              Use the backend admin credentials to open member access controls,
-              promote members to admin, and manage the association workspace
-              from the laptop.
-            </p>
-          </div>
+    <main className="login-shell">
+      <section className="login-card">
+        <div className="login-card-head">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img className="login-logo" src="/nima-logo.png" alt="NIMA" />
+          <h1>Welcome back, Admin</h1>
+          <p>Sign in to continue to your association workspace.</p>
+        </div>
 
-          <div className="hero-spotlight">
-            <span className="spotlight-label">Default bootstrap admin</span>
-            <strong>ritsman@gmail.com</strong>
-            <p>Password: Admin@123</p>
-          </div>
-        </section>
+        <div className="login-form-grid">
+          <label className="profile-field">
+            <span>Email</span>
+            <input
+              type="email"
+              value={form.email}
+              onChange={(event) => onFieldChange("email", event.target.value)}
+            />
+          </label>
 
-        <section className="association-tab-section">
-          <article className="welcome-panel">
-            <div className="panel-topline">
-              <h2>Admin Session</h2>
-              <span className="mini-label">Backend Auth</span>
-            </div>
+          <label className="profile-field">
+            <span>Password</span>
+            <input
+              type="password"
+              value={form.password}
+              onChange={(event) =>
+                onFieldChange("password", event.target.value)
+              }
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  onSubmit();
+                }
+              }}
+            />
+          </label>
+        </div>
 
-            <div className="profile-form-grid">
-              <label className="profile-field">
-                <span>Email</span>
-                <input
-                  type="email"
-                  value={form.email}
-                  onChange={(event) =>
-                    onFieldChange("email", event.target.value)
-                  }
-                />
-              </label>
+        <div className="profile-action-row">
+          <label className="selection-chip">
+            <input
+              type="checkbox"
+              checked={form.rememberMe === true}
+              onChange={(event) =>
+                onFieldChange("rememberMe", event.target.checked)
+              }
+            />
+            <span>Remember me</span>
+          </label>
+        </div>
 
-              <label className="profile-field">
-                <span>Password</span>
-                <input
-                  type="password"
-                  value={form.password}
-                  onChange={(event) =>
-                    onFieldChange("password", event.target.value)
-                  }
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      onSubmit();
-                    }
-                  }}
-                />
-              </label>
-            </div>
+        {errorMessage ? (
+          <p className="form-helper-error">{errorMessage}</p>
+        ) : null}
 
-            {errorMessage ? (
-              <p className="form-helper error-text">{errorMessage}</p>
-            ) : null}
-
-            <div className="profile-action-row">
-              <button
-                className="primary-link admin-action-button"
-                type="button"
-                onClick={onSubmit}
-              >
-                {isSubmitting ? "Signing in..." : "Sign in as Admin"}
-              </button>
-            </div>
-          </article>
-        </section>
+        <button
+          className="primary-link admin-action-button login-submit-button"
+          type="button"
+          onClick={onSubmit}
+        >
+          {isSubmitting ? "Signing in..." : "Sign In"}
+        </button>
       </section>
     </main>
   );
@@ -10805,8 +11506,9 @@ export default function HomePage() {
     activeUsersLastSixMonths: 0,
   });
   const [loginForm, setLoginForm] = useState({
-    email: "ritsman@gmail.com",
-    password: "Admin@123",
+    email: "",
+    password: "",
+    rememberMe: true,
   });
   const [loginError, setLoginError] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -10831,6 +11533,13 @@ export default function HomePage() {
     useState("App Access");
   const [isSavingAppAccess, setIsSavingAppAccess] = useState(false);
   const [appAccessFeedback, setAppAccessFeedback] = useState("");
+  const [managedUsers, setManagedUsers] = useState([]);
+  const [activeUsersTab, setActiveUsersTab] = useState("superAdmin");
+  const [usersSearchQuery, setUsersSearchQuery] = useState("");
+  const [selectedManagedUserIds, setSelectedManagedUserIds] = useState([]);
+  const [isDeletingManagedUsers, setIsDeletingManagedUsers] = useState(false);
+  const [managedUsersFeedback, setManagedUsersFeedback] = useState("");
+  const [isUsersCreateFormOpen, setIsUsersCreateFormOpen] = useState(false);
   const [isSavingMemberAccess, setIsSavingMemberAccess] = useState(false);
   const [memberAccessFeedback, setMemberAccessFeedback] = useState("");
   const [superAdminInviteForm, setSuperAdminInviteForm] = useState({
@@ -10840,6 +11549,8 @@ export default function HomePage() {
   });
   const [isCreatingSuperAdmin, setIsCreatingSuperAdmin] = useState(false);
   const [superAdminInviteFeedback, setSuperAdminInviteFeedback] =
+    useState("");
+  const [backendAdminInviteFeedback, setBackendAdminInviteFeedback] =
     useState("");
   const [appPermissions, setAppPermissions] = useState({
     approveMembersLogin: true,
@@ -10887,6 +11598,8 @@ export default function HomePage() {
   const [galleryFolderFeedback, setGalleryFolderFeedback] = useState("");
   const galleryFolderEditorRef = useRef(null);
   const galleryFolderNameInputRef = useRef(null);
+  const authSessionRef = useRef(null);
+  const refreshSessionPromiseRef = useRef(null);
   const [editingGalleryItemId, setEditingGalleryItemId] = useState(null);
   const [galleryItemForm, setGalleryItemForm] = useState(
     defaultGalleryItemForm,
@@ -10976,26 +11689,32 @@ export default function HomePage() {
   const [isSavingMemberMediaPost, setIsSavingMemberMediaPost] = useState(false);
   const [memberMediaPostFeedback, setMemberMediaPostFeedback] = useState("");
   const [timelinePosts, setTimelinePosts] = useState([]);
+  const [selectedTimelinePostIds, setSelectedTimelinePostIds] = useState([]);
   const [timelinePostForm, setTimelinePostForm] = useState(
     defaultTimelinePostForm,
   );
   const [isSavingTimelinePost, setIsSavingTimelinePost] = useState(false);
+  const [isDeletingTimelinePosts, setIsDeletingTimelinePosts] = useState(false);
   const [timelinePostFeedback, setTimelinePostFeedback] = useState("");
   const [appBanners, setAppBanners] = useState([]);
   const [appBannerForm, setAppBannerForm] = useState(defaultAppBannerForm);
   const [isSavingAppBanner, setIsSavingAppBanner] = useState(false);
   const [appBannerError, setAppBannerError] = useState("");
   const [adminAppBannerSearch, setAdminAppBannerSearch] = useState("");
+  const [selectedAdminAppBannerIds, setSelectedAdminAppBannerIds] = useState([]);
   const [appBannerAccessEdits, setAppBannerAccessEdits] = useState({});
   const [isSavingBannerAccess, setIsSavingBannerAccess] = useState(false);
+  const [isDeletingAppBanners, setIsDeletingAppBanners] = useState(false);
   const [bannerAccessFeedback, setBannerAccessFeedback] = useState("");
   const [bulkMemberFile, setBulkMemberFile] = useState(null);
   const [isBulkMemberUploading, setIsBulkMemberUploading] = useState(false);
   const [bulkMemberError, setBulkMemberError] = useState("");
   const [bulkMemberResult, setBulkMemberResult] = useState(null);
   const [adminTimelineSearch, setAdminTimelineSearch] = useState("");
+  const [selectedAdminTimelinePostIds, setSelectedAdminTimelinePostIds] = useState([]);
   const [timelineAccessEdits, setTimelineAccessEdits] = useState({});
   const [isSavingTimelineAccess, setIsSavingTimelineAccess] = useState(false);
+  const [isDeletingAdminTimelinePosts, setIsDeletingAdminTimelinePosts] = useState(false);
   const [timelineAccessFeedback, setTimelineAccessFeedback] = useState("");
   const [adminVendorSearch, setAdminVendorSearch] = useState("");
   const [adminVendorAccessView, setAdminVendorAccessView] = useState("app");
@@ -11103,6 +11822,10 @@ export default function HomePage() {
     normalizedAuthEmail === bootstrapSuperAdminEmail;
 
   useEffect(() => {
+    authSessionRef.current = authSession;
+  }, [authSession]);
+
+  useEffect(() => {
     if (editingGalleryItemId === null) {
       return;
     }
@@ -11143,6 +11866,7 @@ export default function HomePage() {
 
   const updateSuperAdminInviteField = (field, value) => {
     setSuperAdminInviteFeedback("");
+    setBackendAdminInviteFeedback("");
     setSuperAdminInviteForm((current) => ({
       ...current,
       [field]: value,
@@ -11166,6 +11890,80 @@ export default function HomePage() {
     persistAdminSession(null);
     setAuthSession(null);
     setLoginError("");
+  };
+
+  const isSameSession = (leftSession, rightSession) => {
+    if (!leftSession || !rightSession) {
+      return false;
+    }
+
+    return (
+      leftSession.authToken === rightSession.authToken &&
+      leftSession.refreshToken === rightSession.refreshToken
+    );
+  };
+
+  const clearAdminSessionIfCurrent = (sessionToClear = null) => {
+    if (sessionToClear && !isSameSession(authSessionRef.current, sessionToClear)) {
+      return false;
+    }
+
+    persistAdminSession(null);
+    authSessionRef.current = null;
+    setAuthSession(null);
+    return true;
+  };
+
+  const refreshAdminSession = async (sessionToRefresh) => {
+    if (!sessionToRefresh?.refreshToken) {
+      return null;
+    }
+
+    if (refreshSessionPromiseRef.current) {
+      return refreshSessionPromiseRef.current;
+    }
+
+    const refreshPromise = (async () => {
+      try {
+        const refreshResponse = await fetch(`${apiBaseUrl}/auth/refresh`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            refreshToken: sessionToRefresh.refreshToken,
+          }),
+        });
+
+        if (!refreshResponse.ok) {
+          clearAdminSessionIfCurrent(sessionToRefresh);
+          return null;
+        }
+
+        const refreshPayload = await refreshResponse.json();
+        const nextSession = normalizeAuthSession(
+          refreshPayload,
+          sessionToRefresh,
+        );
+        if (!nextSession || !isElevatedViewerRole(nextSession.viewerRole)) {
+          clearAdminSessionIfCurrent(sessionToRefresh);
+          return null;
+        }
+
+        persistAdminSession(nextSession);
+        authSessionRef.current = nextSession;
+        setAuthSession(nextSession);
+        return nextSession;
+      } catch {
+        clearAdminSessionIfCurrent(sessionToRefresh);
+        return null;
+      } finally {
+        refreshSessionPromiseRef.current = null;
+      }
+    })();
+
+    refreshSessionPromiseRef.current = refreshPromise;
+    return refreshPromise;
   };
 
   const runAuthenticatedFetch = async (
@@ -11196,32 +11994,22 @@ export default function HomePage() {
       return response;
     }
 
-    const refreshResponse = await fetch(`${apiBaseUrl}/auth/refresh`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        refreshToken: sessionOverride.refreshToken,
-      }),
-    });
+    const activeSession = authSessionRef.current;
+    if (
+      activeSession?.authToken &&
+      !isSameSession(activeSession, sessionOverride)
+    ) {
+      response = await makeRequest(activeSession);
+      if (response.status !== 401) {
+        return response;
+      }
+    }
 
-    if (!refreshResponse.ok) {
-      persistAdminSession(null);
-      setAuthSession(null);
+    const nextSession = await refreshAdminSession(sessionOverride);
+    if (!nextSession) {
       return response;
     }
 
-    const refreshPayload = await refreshResponse.json();
-    const nextSession = normalizeAuthSession(refreshPayload, sessionOverride);
-    if (!nextSession || !isElevatedViewerRole(nextSession.viewerRole)) {
-      persistAdminSession(null);
-      setAuthSession(null);
-      return response;
-    }
-
-    persistAdminSession(nextSession);
-    setAuthSession(nextSession);
     response = await makeRequest(nextSession);
     return response;
   };
@@ -11262,6 +12050,23 @@ export default function HomePage() {
         payload?.summary?.activeUsersLastSixMonths || 0,
       ),
     });
+  };
+
+  const loadManagedUsers = async () => {
+    const response = await runAuthenticatedFetch("/users", {
+      method: "GET",
+    });
+
+    if (!response.ok) {
+      throw new Error("Unable to load users.");
+    }
+
+    const payload = await response.json().catch(() => ({}));
+    const nextUsers = Array.isArray(payload?.users) ? payload.users : [];
+    setManagedUsers(nextUsers);
+    setSelectedManagedUserIds((current) =>
+      current.filter((userId) => nextUsers.some((user) => user.id === userId)),
+    );
   };
 
   const saveAppAccessChanges = () => {
@@ -11341,11 +12146,135 @@ export default function HomePage() {
         `${payload?.user?.email || "The user"} is now a super admin. Default password: ${payload?.defaultPassword || "Admin@123"}.`,
       );
       await loadMembers();
+      await loadManagedUsers();
     } catch {
       setSuperAdminInviteFeedback("Could not reach the backend service.");
     } finally {
       setIsCreatingSuperAdmin(false);
     }
+  };
+
+  const submitBackendAdminInvite = async () => {
+    if (!superAdminInviteForm.email.trim()) {
+      setBackendAdminInviteFeedback("Enter the email to create a backend admin.");
+      return;
+    }
+
+    setIsCreatingSuperAdmin(true);
+    setBackendAdminInviteFeedback("");
+
+    try {
+      const response = await runAuthenticatedFetch("/users/backend-admins", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: superAdminInviteForm.email.trim(),
+          firstName: superAdminInviteForm.firstName.trim(),
+          lastName: superAdminInviteForm.lastName.trim(),
+        }),
+      });
+
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        setBackendAdminInviteFeedback(
+          payload?.error || "Unable to create backend admin.",
+        );
+        return;
+      }
+
+      setSuperAdminInviteForm({
+        email: "",
+        firstName: "",
+        lastName: "",
+      });
+      setBackendAdminInviteFeedback(
+        `${payload?.user?.email || "The user"} is now a backend admin. Default password: ${payload?.defaultPassword || "Admin@123"}.`,
+      );
+      await loadManagedUsers();
+    } catch {
+      setBackendAdminInviteFeedback("Could not reach the backend service.");
+    } finally {
+      setIsCreatingSuperAdmin(false);
+    }
+  };
+
+  const toggleManagedUserSelection = (userId) => {
+    setSelectedManagedUserIds((current) =>
+      current.includes(userId)
+        ? current.filter((id) => id !== userId)
+        : [...current, userId],
+    );
+  };
+
+  const toggleSelectAllManagedUsers = () => {
+    setSelectedManagedUserIds((current) =>
+      selectedFilteredManagedUserIds.length === filteredManagedUsers.length
+        ? current.filter(
+            (userId) =>
+              !filteredManagedUsers.some((user) => user.id === userId),
+          )
+        : Array.from(
+            new Set([
+              ...current,
+              ...filteredManagedUsers.map((user) => user.id),
+            ]),
+          ),
+    );
+  };
+
+  const deleteManagedUserIds = (userIds) => {
+    void (async () => {
+      if (userIds.length === 0) {
+        setManagedUsersFeedback("Select at least one user to delete.");
+        return;
+      }
+
+      const confirmed = window.confirm(
+        `Delete ${userIds.length} selected user${userIds.length === 1 ? "" : "s"}?`,
+      );
+      if (!confirmed) {
+        return;
+      }
+
+      setIsDeletingManagedUsers(true);
+      setManagedUsersFeedback("");
+
+      try {
+        await Promise.all(
+          userIds.map(async (userId) => {
+            const response = await runAuthenticatedFetch(`/users/${userId}`, {
+              method: "DELETE",
+            });
+
+            if (!response.ok) {
+              const payload = await response.json().catch(() => null);
+              throw new Error(
+                payload?.error || "Unable to delete one or more users.",
+              );
+            }
+          }),
+        );
+
+        setSelectedManagedUserIds((current) =>
+          current.filter((userId) => !userIds.includes(userId)),
+        );
+        setManagedUsersFeedback("Selected users deleted.");
+        await loadManagedUsers();
+      } catch (error) {
+        setManagedUsersFeedback(
+          error instanceof Error
+            ? error.message
+            : "Unable to delete the selected users right now.",
+        );
+      } finally {
+        setIsDeletingManagedUsers(false);
+      }
+    })();
+  };
+  const deleteSingleManagedUser = (userId) => {
+    deleteManagedUserIds([userId]);
   };
 
   const submitAdminLogin = async () => {
@@ -11381,7 +12310,13 @@ export default function HomePage() {
         return;
       }
 
-      persistAdminSession(nextSession);
+      persistAdminSession(
+        {
+          ...nextSession,
+          rememberMe: loginForm.rememberMe,
+        },
+        loginForm.rememberMe,
+      );
       setAuthSession(nextSession);
     } catch {
       setLoginError("Could not reach the backend login service.");
@@ -11544,6 +12479,12 @@ export default function HomePage() {
       ? payload.posts.map(mapApiTimelinePostToUi)
       : [];
     setTimelinePosts(posts);
+    setSelectedAdminTimelinePostIds((current) =>
+      current.filter((postId) => posts.some((post) => post.id === postId)),
+    );
+    setSelectedTimelinePostIds((current) =>
+      current.filter((postId) => posts.some((post) => post.id === postId)),
+    );
     setTimelineAccessEdits(
       Object.fromEntries(
         posts.map((post) => [
@@ -11569,6 +12510,11 @@ export default function HomePage() {
       ? payload.banners.map(mapApiAppBannerToUi)
       : [];
     setAppBanners(banners);
+    setSelectedAdminAppBannerIds((current) =>
+      current.filter((bannerId) =>
+        banners.some((banner) => banner.id === bannerId),
+      ),
+    );
     setAppBannerAccessEdits(
       Object.fromEntries(
         banners.map((banner) => [
@@ -11812,6 +12758,9 @@ export default function HomePage() {
 
   useEffect(() => {
     if (!authSession) {
+      setManagedUsers([]);
+      setSelectedManagedUserIds([]);
+      setManagedUsersFeedback("");
       setSessionReportSummary({
         activeUsers: 0,
         activeUsersThisMonth: 0,
@@ -11837,6 +12786,15 @@ export default function HomePage() {
           activeUsersThisMonth: 0,
           activeUsersLastSixMonths: 0,
         });
+      }
+    })();
+
+    void (async () => {
+      try {
+        await loadManagedUsers();
+      } catch (_error) {
+        setManagedUsers([]);
+        setManagedUsersFeedback("Unable to load users.");
       }
     })();
   }, [authSession]);
@@ -12041,6 +12999,32 @@ export default function HomePage() {
       .toLowerCase()
       .includes(query);
   });
+  const filteredManagedUsers = managedUsers.filter((user) => {
+    if (getManagedUserBucket(user) !== activeUsersTab) {
+      return false;
+    }
+
+    const query = usersSearchQuery.trim().toLowerCase();
+    if (!query) {
+      return true;
+    }
+
+    return [
+      getManagedUserDisplayName(user),
+      user.email,
+      getManagedUserSourceLabel(user),
+      getManagedUserStatusLabel(user),
+    ]
+      .filter(Boolean)
+      .some((value) => value.toLowerCase().includes(query));
+  });
+  const selectedFilteredManagedUserIds = selectedManagedUserIds.filter((userId) =>
+    filteredManagedUsers.some((user) => user.id === userId),
+  );
+  const selectedFilteredAdminTimelinePostIds =
+    selectedAdminTimelinePostIds.filter((postId) =>
+      filteredAdminTimelinePosts.some((post) => post.id === postId),
+    );
   const adminAppBannerItems = appBanners.filter((banner) => {
     const query = adminAppBannerSearch.trim().toLowerCase();
     if (!query) {
@@ -12051,6 +13035,31 @@ export default function HomePage() {
       .toLowerCase()
       .includes(query);
   });
+  const selectedFilteredAdminAppBannerIds = selectedAdminAppBannerIds.filter(
+    (bannerId) => adminAppBannerItems.some((banner) => banner.id === bannerId),
+  );
+  const toggleAdminAppBannerSelection = (bannerId) => {
+    setSelectedAdminAppBannerIds((current) =>
+      current.includes(bannerId)
+        ? current.filter((id) => id !== bannerId)
+        : [...current, bannerId],
+    );
+  };
+  const toggleSelectAllAdminAppBanners = () => {
+    setSelectedAdminAppBannerIds((current) =>
+      selectedFilteredAdminAppBannerIds.length === adminAppBannerItems.length
+        ? current.filter(
+            (bannerId) =>
+              !adminAppBannerItems.some((banner) => banner.id === bannerId),
+          )
+        : Array.from(
+            new Set([
+              ...current,
+              ...adminAppBannerItems.map((banner) => banner.id),
+            ]),
+          ),
+    );
+  };
   const dashboardAppBanners = appBanners
     .filter(isAppBannerVisibleOnDashboard)
     .sort(
@@ -13290,9 +14299,58 @@ export default function HomePage() {
     setVendorRegistrationForm(buildVendorRegistrationForm(null));
   };
   const openVendorRegistrationEditor = (vendor) => {
+    setActiveSection("Vendor Registration");
     setVendorRegistrationError("");
     setVendorRegistrationSuccess("");
     setVendorRegistrationForm(buildVendorRegistrationForm(vendor));
+  };
+  const deleteVendorRecord = (vendor) => {
+    if (!vendor?.id) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Delete vendor "${vendor.company || vendor.name || "this vendor"}"?`,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    void (async () => {
+      setVendorRegistrationError("");
+      setVendorRegistrationSuccess("");
+      setIsSavingVendorRegistration(true);
+
+      try {
+        const response = await fetch(`${apiBaseUrl}/vendors/${vendor.id}`, {
+          method: "DELETE",
+        });
+
+        if (!response.ok) {
+          let message = "Unable to delete the vendor record right now.";
+          try {
+            const payload = await response.json();
+            if (payload?.error) {
+              message = payload.error;
+            }
+          } catch {}
+          setVendorRegistrationError(message);
+          return;
+        }
+
+        if (vendorRegistrationForm.id === vendor.id) {
+          resetVendorRegistrationForm();
+        }
+        await loadVendors();
+        setVendorRegistrationSuccess("Vendor deleted successfully.");
+      } catch {
+        setVendorRegistrationError(
+          "Could not reach the vendor service right now.",
+        );
+      } finally {
+        setIsSavingVendorRegistration(false);
+      }
+    })();
   };
   const updateVendorFilter = (field, value) => {
     setVendorFilters((current) => ({
@@ -13628,10 +14686,13 @@ export default function HomePage() {
 
       try {
         const isEditingVendor = Boolean(vendorRegistrationForm.id);
-        const response = await runAuthenticatedFetch(
-          `/vendors${isEditingVendor ? `/${vendorRegistrationForm.id}` : ""}`,
+        const response = await fetch(
+          `${apiBaseUrl}/vendors${isEditingVendor ? `/${vendorRegistrationForm.id}` : ""}`,
           {
             method: isEditingVendor ? "PATCH" : "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
             body: JSON.stringify({
             name: vendorRegistrationForm.company.trim(),
             companyName: vendorRegistrationForm.company.trim(),
@@ -13721,6 +14782,25 @@ export default function HomePage() {
       } finally {
         setIsSavingVendorRegistration(false);
       }
+    })();
+  };
+  const updateVendorStatus = (vendorId, nextStatus) => {
+    void (async () => {
+      const response = await fetch(`${apiBaseUrl}/vendors/${vendorId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          status: nextStatus,
+        }),
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      await loadVendors();
     })();
   };
   const applyVendorAccessStatusLocally = (vendorIds, nextStatusLabel) => {
@@ -13828,6 +14908,11 @@ export default function HomePage() {
     setVendorApprovalForm(buildVendorApprovalForm(vendor));
     setVendorApprovalError("");
   };
+  const closeVendorStatusReview = () => {
+    setSelectedVendorReviewId("");
+    setVendorApprovalForm(buildVendorApprovalForm(null));
+    setVendorApprovalError("");
+  };
   const updateVendorApprovalForm = (field, value) => {
     setVendorApprovalForm((current) => ({
       ...current,
@@ -13909,8 +14994,11 @@ export default function HomePage() {
         .join("\n");
 
       try {
-        const vendorResponse = await runAuthenticatedFetch(`/vendors/${vendorId}`, {
+        const vendorResponse = await fetch(`${apiBaseUrl}/vendors/${vendorId}`, {
           method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
           body: JSON.stringify({
             membershipPlan: reviewTarget.membershipPlan.trim(),
             paymentAmount: reviewTarget.paymentAmount.trim(),
@@ -13933,8 +15021,11 @@ export default function HomePage() {
           return;
         }
 
-        const response = await runAuthenticatedFetch(`/vendors/${vendorId}/access`, {
+        const response = await fetch(`${apiBaseUrl}/vendors/${vendorId}/access`, {
           method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
           body: JSON.stringify({ accessStatus }),
         });
 
@@ -13955,8 +15046,7 @@ export default function HomePage() {
           current.filter((id) => id !== vendorId),
         );
         if (selectedVendorReviewId === vendorId) {
-          setSelectedVendorReviewId("");
-          setVendorApprovalForm(buildVendorApprovalForm(null));
+          closeVendorStatusReview();
         }
         await loadVendors();
       } finally {
@@ -13987,10 +15077,13 @@ export default function HomePage() {
       try {
         await Promise.all(
           selectedVendorRequests.map(async (vendorId) => {
-            const response = await runAuthenticatedFetch(
-              `/vendors/${vendorId}/access`,
+            const response = await fetch(
+              `${apiBaseUrl}/vendors/${vendorId}/access`,
               {
                 method: "PATCH",
+                headers: {
+                  "Content-Type": "application/json",
+                },
                 body: JSON.stringify({ accessStatus }),
               },
             );
@@ -14082,8 +15175,198 @@ export default function HomePage() {
       [field]: value,
     }));
   };
+  const resetTimelinePostForm = () => {
+    setTimelinePostFeedback("");
+    setTimelinePostForm({
+      ...defaultTimelinePostForm,
+      postedBy: associationProfile.name || defaultAssociationProfile.name,
+      contactNumber:
+        associationProfile.helpdeskNumber ||
+        associationProfile.contactNumbers ||
+        "",
+    });
+  };
+  const toggleTimelinePostSelection = (postId) => {
+    setSelectedTimelinePostIds((current) =>
+      current.includes(postId)
+        ? current.filter((id) => id !== postId)
+        : [...current, postId],
+    );
+  };
+  const toggleSelectAllTimelinePosts = () => {
+    setSelectedTimelinePostIds((current) =>
+      current.length === timelinePosts.length
+        ? []
+        : timelinePosts.map((post) => post.id),
+    );
+  };
+  const openTimelinePostEditor = (post) => {
+    if (!post?.id) {
+      return;
+    }
+
+    setTimelinePostFeedback("");
+    setActiveSection("Timeline");
+    setTimelinePostForm({
+      ...defaultTimelinePostForm,
+      id: post.id,
+      sourceType: post.sourceType || "ASSOCIATION",
+      memberId: post.sourceType === "MEMBER" ? post.sourceId || "" : "",
+      vendorId: post.sourceType === "VENDOR" ? post.sourceId || "" : "",
+      postedBy: post.postedBy || "",
+      caption: post.caption || "",
+      contactNumber: post.contactNumber || "",
+      landingPageUrl: post.landingPageUrl || "",
+      youtubeUrl: post.youtubeUrl || "",
+      facebookUrl: post.facebookUrl || "",
+      imageUrl: post.imageUrl || "",
+      brochureUrl: post.brochureUrl || "",
+      });
+  };
+  const toggleAdminTimelinePostSelection = (postId) => {
+    setSelectedAdminTimelinePostIds((current) =>
+      current.includes(postId)
+        ? current.filter((id) => id !== postId)
+        : [...current, postId],
+    );
+  };
+  const toggleSelectAllAdminTimelinePosts = () => {
+    setSelectedAdminTimelinePostIds((current) =>
+      selectedFilteredAdminTimelinePostIds.length === filteredAdminTimelinePosts.length
+        ? current.filter(
+            (postId) =>
+              !filteredAdminTimelinePosts.some((post) => post.id === postId),
+          )
+        : Array.from(
+            new Set([
+              ...current,
+              ...filteredAdminTimelinePosts.map((post) => post.id),
+            ]),
+          ),
+    );
+  };
+  const deleteSelectedAdminTimelinePosts = () => {
+    void (async () => {
+      if (selectedAdminTimelinePostIds.length === 0) {
+        setTimelineAccessFeedback("Select at least one timeline post to delete.");
+        return;
+      }
+
+      const selectedCount = selectedAdminTimelinePostIds.length;
+      const confirmed = window.confirm(
+        `Delete ${selectedCount} selected timeline post${selectedCount === 1 ? "" : "s"}?`,
+      );
+
+      if (!confirmed) {
+        return;
+      }
+
+      setIsDeletingAdminTimelinePosts(true);
+      setTimelineAccessFeedback("");
+
+      try {
+        await Promise.all(
+          selectedAdminTimelinePostIds.map(async (postId) => {
+            const response = await runAuthenticatedFetch(`/timeline-posts/${postId}`, {
+              method: "DELETE",
+            });
+
+            if (!response.ok) {
+              let message = "Unable to delete one or more timeline posts.";
+              try {
+                const payload = await response.json();
+                if (payload?.error) {
+                  message = payload.error;
+                }
+              } catch {}
+              throw new Error(message);
+            }
+          }),
+        );
+
+        if (selectedAdminTimelinePostIds.includes(timelinePostForm.id)) {
+          resetTimelinePostForm();
+        }
+        setSelectedAdminTimelinePostIds([]);
+        setTimelineAccessEdits((current) => {
+          const next = { ...current };
+          selectedAdminTimelinePostIds.forEach((postId) => {
+            delete next[postId];
+          });
+          return next;
+        });
+        setTimelineAccessFeedback("Selected timeline posts deleted.");
+        await loadTimelinePosts();
+      } catch (error) {
+        setTimelineAccessFeedback(
+          error instanceof Error
+            ? error.message
+            : "Unable to delete the selected timeline posts right now.",
+        );
+      } finally {
+        setIsDeletingAdminTimelinePosts(false);
+      }
+    })();
+  };
+  const deleteSelectedTimelinePosts = () => {
+    void (async () => {
+      if (selectedTimelinePostIds.length === 0) {
+        setTimelinePostFeedback("Select at least one timeline post to delete.");
+        return;
+      }
+
+      const selectedCount = selectedTimelinePostIds.length;
+      const confirmed = window.confirm(
+        `Delete ${selectedCount} selected timeline post${selectedCount === 1 ? "" : "s"}?`,
+      );
+
+      if (!confirmed) {
+        return;
+      }
+
+      setIsDeletingTimelinePosts(true);
+      setTimelinePostFeedback("");
+
+      try {
+        await Promise.all(
+          selectedTimelinePostIds.map(async (postId) => {
+            const response = await runAuthenticatedFetch(`/timeline-posts/${postId}`, {
+              method: "DELETE",
+            });
+
+            if (!response.ok) {
+              let message = "Unable to delete one or more timeline posts.";
+              try {
+                const payload = await response.json();
+                if (payload?.error) {
+                  message = payload.error;
+                }
+              } catch {}
+              throw new Error(message);
+            }
+          }),
+        );
+
+        if (selectedTimelinePostIds.includes(timelinePostForm.id)) {
+          resetTimelinePostForm();
+        }
+        setSelectedTimelinePostIds([]);
+        setTimelinePostFeedback("Selected timeline posts deleted.");
+        await loadTimelinePosts();
+      } catch (error) {
+        setTimelinePostFeedback(
+          error instanceof Error
+            ? error.message
+            : "Unable to delete the selected timeline posts right now.",
+        );
+      } finally {
+        setIsDeletingTimelinePosts(false);
+      }
+    })();
+  };
   const submitTimelinePost = () => {
     void (async () => {
+      const isEditingTimelinePost = Boolean(timelinePostForm.id);
       const normalizedSourceType = timelinePostForm.sourceType.trim().toUpperCase();
       const requiresMember =
         normalizedSourceType === "MEMBER" && !timelinePostForm.memberId;
@@ -14135,15 +15418,22 @@ export default function HomePage() {
       setTimelinePostFeedback("");
 
       try {
-        const response = await runAuthenticatedFetch("/timeline-posts", {
-          method: "POST",
-          body: payload,
-        });
+        const response = await runAuthenticatedFetch(
+          `/timeline-posts${isEditingTimelinePost ? `/${timelinePostForm.id}` : ""}`,
+          {
+            method: isEditingTimelinePost ? "PATCH" : "POST",
+            body: payload,
+          },
+        );
 
         if (!response.ok) {
           const payload = await response.json().catch(() => null);
           throw new Error(
-            payload?.error || payload?.message || "Unable to save timeline post.",
+            payload?.error ||
+              payload?.message ||
+              (isEditingTimelinePost
+                ? "Unable to update timeline post."
+                : "Unable to save timeline post."),
           );
         }
 
@@ -14161,10 +15451,18 @@ export default function HomePage() {
               : timelinePostForm.postedBy,
           contactNumber: timelinePostForm.contactNumber,
         });
-        setTimelinePostFeedback("Timeline post created.");
+        setTimelinePostFeedback(
+          isEditingTimelinePost
+            ? "Timeline post updated."
+            : "Timeline post created.",
+        );
       } catch (error) {
         setTimelinePostFeedback(
-          error instanceof Error ? error.message : "Unable to save timeline post.",
+          error instanceof Error
+            ? error.message
+            : isEditingTimelinePost
+              ? "Unable to update timeline post."
+              : "Unable to save timeline post.",
         );
       } finally {
         setIsSavingTimelinePost(false);
@@ -14198,8 +15496,32 @@ export default function HomePage() {
       [field]: value,
     }));
   };
+  const resetAppBannerForm = () => {
+    setAppBannerError("");
+    setAppBannerForm(defaultAppBannerForm);
+  };
+  const openAppBannerEditor = (banner) => {
+    if (!banner?.id) {
+      return;
+    }
+
+    setAppBannerError("");
+    setActiveSection("App Banner");
+    setAppBannerForm({
+      ...defaultAppBannerForm,
+      id: banner.id,
+      vendorId: banner.vendorId || "",
+      shortText: banner.shortText || "",
+      contactNumber: banner.contactNumber || "",
+      socialMediaUrl: banner.socialMediaUrl || "",
+      mediaUrl: banner.mediaUrl || "",
+      brochureUrl: banner.brochureUrl || "",
+    });
+  };
   const submitAppBanner = () => {
     void (async () => {
+      const isEditingBanner = Boolean(appBannerForm.id);
+
       if (!appBannerForm.shortText.trim() || !appBannerForm.vendorId) {
         setAppBannerError(
           "Select a vendor and add the banner message before submitting.",
@@ -14207,7 +15529,7 @@ export default function HomePage() {
         return;
       }
 
-      if (!appBannerForm.mediaFile) {
+      if (!isEditingBanner && !appBannerForm.mediaFile) {
         setAppBannerError(
           "Attach a lightweight banner image for the Flutter app.",
         );
@@ -14215,6 +15537,7 @@ export default function HomePage() {
       }
 
       if (
+        appBannerForm.mediaFile &&
         !["image/jpeg", "image/png", "image/webp"].includes(
           appBannerForm.mediaFile.type,
         )
@@ -14223,7 +15546,7 @@ export default function HomePage() {
         return;
       }
 
-      if (appBannerForm.mediaFile.size > 1024 * 1024) {
+      if (appBannerForm.mediaFile && appBannerForm.mediaFile.size > 1024 * 1024) {
         setAppBannerError(
           "Banner image is too large. Keep it at or below 1 MB.",
         );
@@ -14256,13 +15579,18 @@ export default function HomePage() {
 
       setIsSavingAppBanner(true);
       try {
-        const response = await runAuthenticatedFetch("/app-banners", {
-          method: "POST",
-          body: payload,
-        });
+        const response = await runAuthenticatedFetch(
+          `/app-banners${isEditingBanner ? `/${appBannerForm.id}` : ""}`,
+          {
+            method: isEditingBanner ? "PATCH" : "POST",
+            body: payload,
+          },
+        );
 
         if (!response.ok) {
-          let message = "Unable to save the app banner right now.";
+          let message = isEditingBanner
+            ? "Unable to update the app banner right now."
+            : "Unable to save the app banner right now.";
           try {
             const payload = await response.json();
             if (payload?.error) {
@@ -14379,6 +15707,69 @@ export default function HomePage() {
         );
       } finally {
         setIsSavingBannerAccess(false);
+      }
+    })();
+  };
+  const deleteSelectedAppBanners = () => {
+    void (async () => {
+      if (selectedAdminAppBannerIds.length === 0) {
+        setBannerAccessFeedback("Select at least one banner to delete.");
+        return;
+      }
+
+      const selectedCount = selectedAdminAppBannerIds.length;
+      const confirmed = window.confirm(
+        `Delete ${selectedCount} selected banner${selectedCount === 1 ? "" : "s"}?`,
+      );
+
+      if (!confirmed) {
+        return;
+      }
+
+      setIsDeletingAppBanners(true);
+      setBannerAccessFeedback("");
+
+      try {
+        await Promise.all(
+          selectedAdminAppBannerIds.map(async (bannerId) => {
+            const response = await runAuthenticatedFetch(
+              `/app-banners/${bannerId}`,
+              {
+                method: "DELETE",
+              },
+            );
+
+            if (!response.ok) {
+              let message = "Unable to delete one or more app banners.";
+              try {
+                const payload = await response.json();
+                if (payload?.error) {
+                  message = payload.error;
+                }
+              } catch {}
+              throw new Error(message);
+            }
+          }),
+        );
+
+        setSelectedAdminAppBannerIds([]);
+        setAppBannerAccessEdits((current) => {
+          const next = { ...current };
+          selectedAdminAppBannerIds.forEach((bannerId) => {
+            delete next[bannerId];
+          });
+          return next;
+        });
+        setBannerAccessFeedback("Selected app banners deleted.");
+        await loadAppBanners();
+      } catch (error) {
+        setBannerAccessFeedback(
+          error instanceof Error
+            ? error.message
+            : "Unable to delete the selected app banners right now.",
+        );
+      } finally {
+        setIsDeletingAppBanners(false);
       }
     })();
   };
@@ -16305,26 +17696,17 @@ export default function HomePage() {
       className={`admin-shell ${isSidebarOpen ? "sidebar-open" : "sidebar-collapsed"} relative min-h-screen`}
     >
       <aside className={`sidebar ${isSidebarOpen ? "" : "is-collapsed"}`}>
-        <div className="sidebar-brand">
-          <span className="brand-mark">S</span>
-          <div
-            className={`sidebar-brand-copy ${isSidebarOpen ? "" : "is-hidden"}`}
-          >
-            <strong>{authSession.displayName || "NIMA Admin"}</strong>
-            <p>{authSession.email}</p>
-          </div>
-        </div>
-        {isSidebarOpen ? (
-          <div className="sidebar-brand-copy" style={{ paddingBottom: 16 }}>
-            <button
-              className="secondary-link secondary-button"
-              type="button"
-              onClick={logoutAdmin}
-            >
-              Logout
-            </button>
-          </div>
-        ) : null}
+        <button
+          type="button"
+          className="icon-button sidebar-toggle"
+          aria-label="Toggle sidebar"
+          aria-expanded={isSidebarOpen}
+          onClick={() => setIsSidebarOpen((current) => !current)}
+        >
+          <span />
+          <span />
+          <span />
+        </button>
 
         <nav className="sidebar-nav" aria-label="Sidebar">
           {navSections.map((item) => (
@@ -16520,11 +17902,34 @@ export default function HomePage() {
           ))}
         </nav>
 
-        <div className={`sidebar-note ${isSidebarOpen ? "" : "is-hidden"}`}>
-          <span className="mini-label">Current Scope</span>
-          <p>
-            Logged in as Association 1 Admin for one tenant-aware workspace.
-          </p>
+        <div className="sidebar-account">
+          <div className="sidebar-brand">
+            <Link
+              className="avatar-link"
+              href="/profile"
+              aria-label="Open profile settings"
+            >
+              <span className="avatar-circle">
+                {getAccountInitials(authSession.displayName, authSession.email)}
+              </span>
+            </Link>
+            <div
+              className={`sidebar-brand-copy ${isSidebarOpen ? "" : "is-hidden"}`}
+            >
+              <strong>{authSession.displayName || "NIMA Admin"}</strong>
+              <p>{authSession.email}</p>
+            </div>
+          </div>
+
+          {isSidebarOpen ? (
+            <button
+              className="secondary-link secondary-button sidebar-account-logout"
+              type="button"
+              onClick={logoutAdmin}
+            >
+              Logout
+            </button>
+          ) : null}
         </div>
 
         <div
@@ -16535,7 +17940,9 @@ export default function HomePage() {
             href="/profile"
             aria-label="Open profile settings"
           >
-            <span className="avatar-circle">AU</span>
+            <span className="avatar-circle">
+              {getAccountInitials(authSession.displayName, authSession.email)}
+            </span>
             <span className="sidebar-profile-copy">
               <strong>Admin Profile</strong>
               <span>Association 1 administrator</span>
@@ -16598,19 +18005,6 @@ export default function HomePage() {
               </span>
               <span className="icon-chip-count">3</span>
             </button>
-
-            <Link className="text-link top-link" href="#">
-              Logout
-            </Link>
-
-            <Link
-              className="avatar-link"
-              href="/profile"
-              aria-label="Open profile settings"
-            >
-              <span className="avatar-circle">AU</span>
-              <span className="avatar-edit-badge">Edit</span>
-            </Link>
           </div>
         </header>
 
@@ -16631,6 +18025,24 @@ export default function HomePage() {
                   activeUsersLastSixMonthsCount
                 }
                 totalMembersCount={allMembers.length}
+                onOpenPrimaryMembers={() => {
+                  setActiveSection(topLevelSections.members);
+                  setActiveMemberTab("Primary Members");
+                }}
+                onOpenAssociateMembers={() => {
+                  setActiveSection(topLevelSections.members);
+                  setActiveMemberTab("Associate Members");
+                }}
+                onOpenGuestMembers={() => {
+                  setActiveSection(topLevelSections.members);
+                  setActiveMemberTab("Guest");
+                }}
+                onOpenVendorStatus={() => {
+                  setActiveSection("Vendor Status");
+                }}
+                onOpenUsers={() => {
+                  setActiveSection(topLevelSections.users);
+                }}
               />
             </div>
 
@@ -17004,13 +18416,19 @@ export default function HomePage() {
               <TimelinePanel
                 formData={timelinePostForm}
                 posts={timelinePosts}
+                selectedIds={selectedTimelinePostIds}
                 memberOptions={timelineMemberOptions}
                 vendorOptions={timelineVendorOptions}
                 associationLabel={timelineAssociationLabel}
                 isSaving={isSavingTimelinePost}
+                isDeleting={isDeletingTimelinePosts}
                 feedback={timelinePostFeedback}
                 onChange={updateTimelinePostForm}
                 onFileChange={updateTimelinePostFile}
+                onReset={resetTimelinePostForm}
+                onToggleSelectAll={toggleSelectAllTimelinePosts}
+                onToggleSelect={toggleTimelinePostSelection}
+                onDeleteSelected={deleteSelectedTimelinePosts}
                 onSubmit={submitTimelinePost}
               />
             </section>
@@ -17047,13 +18465,15 @@ export default function HomePage() {
                 <VendorRegistrationTable
                   items={filteredVendorOverviewItems}
                   onEdit={openVendorRegistrationEditor}
+                  onDelete={deleteVendorRecord}
+                  onStatusChange={updateVendorStatus}
                 />
               </section>
             </div>
           </section>
         ) : activeSection === "Vendor Registration" ? (
           <section className="association-workspace">
-            <section className="association-header">
+            <section className="association-header vendor-registration-hero">
               <div>
                 <span className="eyebrow">Vendor Registration</span>
                 <h1>Register a New Vendor</h1>
@@ -17064,7 +18484,7 @@ export default function HomePage() {
               </div>
 
               <div className="association-header-meta">
-                <div className="association-dashboard-grid">
+                <div className="association-dashboard-grid vendor-registration-stats">
                   <article className="association-dashboard-card">
                     <strong>Admin</strong>
                     <span>Current Role</span>
@@ -17099,19 +18519,12 @@ export default function HomePage() {
                     phoneCodeOptions={vendorPhoneCodeOptions}
                     planOptions={vendorPlanOptions}
                     paymentModeOptions={vendorPaymentModeOptions}
-                    newCategory={newVendorCategory}
                     onFileChange={updateVendorRegistrationFile}
-                    onNewCategoryChange={setNewVendorCategory}
-                    onAddCategory={addVendorCategory}
                     onReset={resetVendorRegistrationForm}
                     onSubmit={saveVendorRecord}
                     errorMessage={vendorRegistrationError}
                     successMessage={vendorRegistrationSuccess}
                     isSaving={isSavingVendorRegistration}
-                  />
-                  <VendorRegistrationTable
-                    items={vendorRecords}
-                    onEdit={openVendorRegistrationEditor}
                   />
                 </>
               ) : (
@@ -17263,6 +18676,7 @@ export default function HomePage() {
                 onToggleSelect={toggleVendorRequestSelect}
                 onToggleSelectAll={toggleSelectAllVendorRequests}
                 onSelectVendor={openVendorStatusReview}
+                onCancelReview={closeVendorStatusReview}
                 onReviewFieldChange={updateVendorApprovalForm}
                 onReviewFileChange={updateVendorApprovalFile}
                 onApplyBulkDecision={applyBulkVendorRequestDecision}
@@ -17319,6 +18733,7 @@ export default function HomePage() {
                 errorMessage={appBannerError}
                 onChange={updateAppBannerForm}
                 onFileChange={updateAppBannerFile}
+                onReset={resetAppBannerForm}
                 onSubmit={submitAppBanner}
               />
             </section>
@@ -17390,6 +18805,85 @@ export default function HomePage() {
                   </article>
                 </div>
               </div>
+            </section>
+          </section>
+        ) : activeSection === topLevelSections.users ? (
+          <section className="association-workspace">
+            <section className="association-header">
+              <div>
+                <span className="eyebrow">Users</span>
+                <h1>User Access Directory</h1>
+                <p>
+                  Review super admins, backend admins, and Flutter app users
+                  with account access from one place.
+                </p>
+              </div>
+
+              <div className="association-header-meta">
+                <div className="association-dashboard-grid">
+                  <article className="association-dashboard-card">
+                    <strong>
+                      {managedUsers.filter((user) => user.isSuperAdmin).length}
+                    </strong>
+                    <span>Super Admins</span>
+                  </article>
+                  <article className="association-dashboard-card">
+                    <strong>
+                      {
+                        managedUsers.filter(
+                          (user) => user.isAdmin && !user.isSuperAdmin,
+                        ).length
+                      }
+                    </strong>
+                    <span>Backend Admins</span>
+                  </article>
+                  <article className="association-dashboard-card">
+                    <strong>
+                      {
+                        managedUsers.filter(
+                          (user) =>
+                            !user.isAdmin &&
+                            !user.isSuperAdmin &&
+                            (user.isMember || user.isVendor),
+                        ).length
+                      }
+                    </strong>
+                    <span>Flutter App Users</span>
+                  </article>
+                </div>
+              </div>
+            </section>
+
+            <section className="association-content">
+              <UsersManagementPanel
+                activeTab={activeUsersTab}
+                items={filteredManagedUsers}
+                selectedIds={selectedFilteredManagedUserIds}
+                searchQuery={usersSearchQuery}
+                isDeleting={isDeletingManagedUsers}
+                feedbackMessage={managedUsersFeedback}
+                currentUserId={authSession?.userId || ""}
+                canManageSuperAdmins={isSuperAdmin}
+                isCreateFormOpen={isUsersCreateFormOpen}
+                superAdminInviteForm={superAdminInviteForm}
+                isCreatingSuperAdmin={isCreatingSuperAdmin}
+                superAdminInviteFeedback={superAdminInviteFeedback}
+                backendAdminInviteFeedback={backendAdminInviteFeedback}
+                onTabChange={setActiveUsersTab}
+                onSearchChange={setUsersSearchQuery}
+                onToggleSelectAll={toggleSelectAllManagedUsers}
+                onToggleSelect={toggleManagedUserSelection}
+                onDeleteSelected={() =>
+                  deleteManagedUserIds(selectedFilteredManagedUserIds)
+                }
+                onDeleteOne={deleteSingleManagedUser}
+                onToggleCreateForm={() =>
+                  setIsUsersCreateFormOpen((current) => !current)
+                }
+                onSuperAdminInviteFieldChange={updateSuperAdminInviteField}
+                onSubmitSuperAdminInvite={submitSuperAdminInvite}
+                onSubmitBackendAdminInvite={submitBackendAdminInvite}
+              />
             </section>
           </section>
         ) : activeSection === topLevelSections.admin ? (
@@ -17527,10 +19021,16 @@ export default function HomePage() {
                 <AdminTimelineAccessPanel
                   items={filteredAdminTimelinePosts}
                   searchQuery={adminTimelineSearch}
+                  selectedIds={selectedFilteredAdminTimelinePostIds}
                   edits={timelineAccessEdits}
                   isSaving={isSavingTimelineAccess}
+                  isDeleting={isDeletingAdminTimelinePosts}
                   feedbackMessage={timelineAccessFeedback}
                   onSearchChange={setAdminTimelineSearch}
+                  onToggleSelectAll={toggleSelectAllAdminTimelinePosts}
+                  onToggleSelect={toggleAdminTimelinePostSelection}
+                  onDeleteSelected={deleteSelectedAdminTimelinePosts}
+                  onModifyPost={openTimelinePostEditor}
                   onUpdatePost={updateTimelineAccessPost}
                   onSaveTimelineAccessChanges={saveTimelineAccessChanges}
                 />
@@ -17538,10 +19038,16 @@ export default function HomePage() {
                 <AdminAppBannerAccessPanel
                   items={adminAppBannerItems}
                   searchQuery={adminAppBannerSearch}
+                  selectedIds={selectedFilteredAdminAppBannerIds}
                   edits={appBannerAccessEdits}
                   isSaving={isSavingBannerAccess}
+                  isDeleting={isDeletingAppBanners}
                   feedbackMessage={bannerAccessFeedback}
                   onSearchChange={setAdminAppBannerSearch}
+                  onToggleSelectAll={toggleSelectAllAdminAppBanners}
+                  onToggleSelect={toggleAdminAppBannerSelection}
+                  onDeleteSelected={deleteSelectedAppBanners}
+                  onModifyBanner={openAppBannerEditor}
                   onUpdateBanner={updateAppBannerAccessItem}
                   onSaveAppBannerAccessChanges={saveAppBannerAccessChanges}
                 />

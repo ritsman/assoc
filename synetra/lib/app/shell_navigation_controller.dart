@@ -6,6 +6,7 @@ class AppShellNavigationState {
     required this.isDrawerOpen,
     required this.selectedArena,
     required this.memberArenaSection,
+    required this.vendorArenaSection,
     required this.adminArenaSection,
     required this.associationArenaSection,
     required this.eventsArenaSection,
@@ -15,6 +16,7 @@ class AppShellNavigationState {
     : isDrawerOpen = false,
       selectedArena = AppArena.dashboard,
       memberArenaSection = MemberArenaSection.media,
+      vendorArenaSection = VendorArenaSection.category,
       adminArenaSection = AdminArenaSection.appAccess,
       associationArenaSection = AssociationArenaSection.profile,
       eventsArenaSection = EventsArenaSection.master;
@@ -22,6 +24,7 @@ class AppShellNavigationState {
   final bool isDrawerOpen;
   final AppArena selectedArena;
   final MemberArenaSection memberArenaSection;
+  final VendorArenaSection vendorArenaSection;
   final AdminArenaSection adminArenaSection;
   final AssociationArenaSection associationArenaSection;
   final EventsArenaSection eventsArenaSection;
@@ -30,6 +33,7 @@ class AppShellNavigationState {
     bool? isDrawerOpen,
     AppArena? selectedArena,
     MemberArenaSection? memberArenaSection,
+    VendorArenaSection? vendorArenaSection,
     AdminArenaSection? adminArenaSection,
     AssociationArenaSection? associationArenaSection,
     EventsArenaSection? eventsArenaSection,
@@ -38,6 +42,7 @@ class AppShellNavigationState {
       isDrawerOpen: isDrawerOpen ?? this.isDrawerOpen,
       selectedArena: selectedArena ?? this.selectedArena,
       memberArenaSection: memberArenaSection ?? this.memberArenaSection,
+      vendorArenaSection: vendorArenaSection ?? this.vendorArenaSection,
       adminArenaSection: adminArenaSection ?? this.adminArenaSection,
       associationArenaSection:
           associationArenaSection ?? this.associationArenaSection,
@@ -55,6 +60,7 @@ class AppShellNavigationState {
         other.isDrawerOpen == isDrawerOpen &&
         other.selectedArena == selectedArena &&
         other.memberArenaSection == memberArenaSection &&
+        other.vendorArenaSection == vendorArenaSection &&
         other.adminArenaSection == adminArenaSection &&
         other.associationArenaSection == associationArenaSection &&
         other.eventsArenaSection == eventsArenaSection;
@@ -65,6 +71,7 @@ class AppShellNavigationState {
     isDrawerOpen,
     selectedArena,
     memberArenaSection,
+    vendorArenaSection,
     adminArenaSection,
     associationArenaSection,
     eventsArenaSection,
@@ -77,21 +84,50 @@ class ShellNavigationController extends ChangeNotifier {
 
   AppShellNavigationState get state => _state;
 
-  bool arenaHasNestedMenu(AppViewerRole viewerRole, AppArena arena) {
-    return (AppRoleVisibility.canSeeAdminArena(viewerRole) &&
+  bool get _isAtInitialLandingState =>
+      _history.isEmpty &&
+      _state.selectedArena == AppArena.dashboard &&
+      _state.memberArenaSection == MemberArenaSection.media &&
+      _state.vendorArenaSection == VendorArenaSection.category &&
+      _state.adminArenaSection == AdminArenaSection.appAccess &&
+      _state.associationArenaSection == AssociationArenaSection.profile &&
+      _state.eventsArenaSection == EventsArenaSection.master;
+
+  bool arenaHasNestedMenu(
+    AppViewerRole viewerRole,
+    AppArena arena, {
+    bool disableAdminFunctionsFromApp = false,
+  }) {
+    return (AppRoleVisibility.canSeeAdminArena(
+              viewerRole,
+              disableAdminFunctionsFromApp: disableAdminFunctionsFromApp,
+            ) &&
             arena == AppArena.admin) ||
         arena == AppArena.association ||
         arena == AppArena.member ||
+        (AppRoleVisibility.canSeeVendorArena(viewerRole) &&
+            arena == AppArena.vendor) ||
         arena == AppArena.events;
   }
 
-  bool needsNormalization(AppViewerRole viewerRole) {
+  bool needsNormalization(
+    AppViewerRole viewerRole, {
+    bool disableAdminFunctionsFromApp = false,
+  }) {
     if (viewerRole.isAdmin) {
-      return false;
+      return disableAdminFunctionsFromApp &&
+          _state.selectedArena == AppArena.admin;
+    }
+
+    if (_isAtInitialLandingState &&
+        _state.selectedArena !=
+            AppRoleVisibility.preferredHomeArena(viewerRole)) {
+      return true;
     }
 
     return !AppRoleVisibility.visibleArenas(
           viewerRole,
+          disableAdminFunctionsFromApp: disableAdminFunctionsFromApp,
         ).contains(_state.selectedArena) ||
         _state.selectedArena == AppArena.admin ||
         (_state.selectedArena == AppArena.member &&
@@ -114,27 +150,48 @@ class ShellNavigationController extends ChangeNotifier {
                 _state.eventsArenaSection);
   }
 
-  void normalizeForRole(AppViewerRole viewerRole) {
-    if (viewerRole.isAdmin) {
+  void normalizeForRole(
+    AppViewerRole viewerRole, {
+    bool disableAdminFunctionsFromApp = false,
+  }) {
+    if (viewerRole.isAdmin && !disableAdminFunctionsFromApp) {
       return;
     }
 
     var nextState = _state;
+    final preferredHome = AppRoleVisibility.preferredHomeArena(viewerRole);
 
-    if (!AppRoleVisibility.visibleArenas(
-      viewerRole,
-    ).contains(nextState.selectedArena)) {
+    if (_isAtInitialLandingState &&
+        nextState.selectedArena == AppArena.dashboard) {
       nextState = nextState.copyWith(
-        selectedArena:
-            viewerRole.isVendor ? AppArena.vendor : AppArena.dashboard,
+        selectedArena: preferredHome,
+        memberArenaSection: MemberArenaNavigation.defaultSection(viewerRole),
+        vendorArenaSection: VendorArenaNavigation.defaultSection(viewerRole),
+        associationArenaSection: AssociationArenaNavigation.defaultSection(
+          viewerRole,
+        ),
+        eventsArenaSection: EventsArenaNavigation.defaultSection(viewerRole),
         isDrawerOpen: false,
       );
     }
 
-    if (nextState.selectedArena == AppArena.admin) {
+    if (!AppRoleVisibility.visibleArenas(
+      viewerRole,
+      disableAdminFunctionsFromApp: disableAdminFunctionsFromApp,
+    ).contains(nextState.selectedArena)) {
       nextState = nextState.copyWith(
-        selectedArena:
-            viewerRole.isVendor ? AppArena.vendor : AppArena.dashboard,
+        selectedArena: preferredHome,
+        isDrawerOpen: false,
+      );
+    }
+
+    if (nextState.selectedArena == AppArena.admin &&
+        !AppRoleVisibility.canSeeAdminArena(
+          viewerRole,
+          disableAdminFunctionsFromApp: disableAdminFunctionsFromApp,
+        )) {
+      nextState = nextState.copyWith(
+        selectedArena: preferredHome,
         isDrawerOpen: false,
       );
     }
@@ -159,6 +216,16 @@ class ShellNavigationController extends ChangeNotifier {
       );
     }
 
+    if (nextState.selectedArena == AppArena.vendor &&
+        AppRoleVisibility.canSeeVendorArena(viewerRole)) {
+      nextState = nextState.copyWith(
+        vendorArenaSection: VendorArenaNavigation.normalizeSection(
+          viewerRole,
+          nextState.vendorArenaSection,
+        ),
+      );
+    }
+
     if (nextState.selectedArena == AppArena.events &&
         AppRoleVisibility.canSeeEventsArena(viewerRole)) {
       nextState = nextState.copyWith(
@@ -176,8 +243,15 @@ class ShellNavigationController extends ChangeNotifier {
     _setState(_state.copyWith(isDrawerOpen: !_state.isDrawerOpen));
   }
 
-  void selectArena(AppViewerRole viewerRole, AppArena arena) {
-    if (!AppRoleVisibility.visibleArenas(viewerRole).contains(arena)) {
+  void selectArena(
+    AppViewerRole viewerRole,
+    AppArena arena, {
+    bool disableAdminFunctionsFromApp = false,
+  }) {
+    if (!AppRoleVisibility.visibleArenas(
+      viewerRole,
+      disableAdminFunctionsFromApp: disableAdminFunctionsFromApp,
+    ).contains(arena)) {
       return;
     }
 
@@ -185,7 +259,13 @@ class ShellNavigationController extends ChangeNotifier {
       _state.copyWith(
         selectedArena: arena,
         isDrawerOpen:
-            arenaHasNestedMenu(viewerRole, arena) ? _state.isDrawerOpen : false,
+            arenaHasNestedMenu(
+                  viewerRole,
+                  arena,
+                  disableAdminFunctionsFromApp: disableAdminFunctionsFromApp,
+                )
+                ? _state.isDrawerOpen
+                : false,
       ),
     );
   }
@@ -208,8 +288,15 @@ class ShellNavigationController extends ChangeNotifier {
     );
   }
 
-  void selectAdminSection(AppViewerRole viewerRole, AdminArenaSection section) {
-    if (!AppRoleVisibility.canManageAdminArena(viewerRole)) {
+  void selectAdminSection(
+    AppViewerRole viewerRole,
+    AdminArenaSection section, {
+    bool disableAdminFunctionsFromApp = false,
+  }) {
+    if (!AppRoleVisibility.canManageAdminArena(
+      viewerRole,
+      disableAdminFunctionsFromApp: disableAdminFunctionsFromApp,
+    )) {
       return;
     }
 
@@ -235,6 +322,24 @@ class ShellNavigationController extends ChangeNotifier {
       _state.copyWith(
         selectedArena: AppArena.association,
         associationArenaSection: nextSection,
+        isDrawerOpen: false,
+      ),
+    );
+  }
+
+  void selectVendorSection(
+    AppViewerRole viewerRole,
+    VendorArenaSection section,
+  ) {
+    final nextSection = VendorArenaNavigation.normalizeSection(
+      viewerRole,
+      section,
+    );
+
+    _navigateTo(
+      _state.copyWith(
+        selectedArena: AppArena.vendor,
+        vendorArenaSection: nextSection,
         isDrawerOpen: false,
       ),
     );

@@ -35,6 +35,14 @@ const appBannerSchema = z.object({
   reviewStatus: z.nativeEnum(PostReviewStatus).optional(),
 });
 
+const appBannerUpdateSchema = z.object({
+  associationId: z.string().min(1).optional(),
+  vendorId: z.string().optional(),
+  shortText: z.string().min(1),
+  contactNumber: z.string().optional(),
+  socialMediaUrl: z.string().optional(),
+});
+
 const moderationSchema = z.object({
   reviewStatus: z.nativeEnum(PostReviewStatus),
   paymentReceived: z.boolean().optional(),
@@ -246,6 +254,35 @@ async function applyAppBannerModeration(bannerId, updates) {
   });
 }
 
+function removeStoredAppBannerAsset(assetUrl) {
+  const rawValue = String(assetUrl || "").trim();
+  if (!rawValue) {
+    return;
+  }
+
+  let relativePath = rawValue;
+
+  if (/^https?:\/\//i.test(rawValue)) {
+    try {
+      relativePath = new URL(rawValue).pathname;
+    } catch (_error) {
+      return;
+    }
+  }
+
+  const normalizedPath = relativePath.replace(/^\/+/, "");
+
+  if (!normalizedPath.startsWith("uploads/app-banners/")) {
+    return;
+  }
+
+  const absolutePath = path.join(path.dirname(currentFilePath), "../../", normalizedPath);
+
+  if (fs.existsSync(absolutePath)) {
+    fs.unlinkSync(absolutePath);
+  }
+}
+
 router.get("/", async (req, res) => {
   const { associationId, vendorId } = req.query;
 
@@ -344,6 +381,106 @@ router.post(
   },
 );
 
+router.patch(
+  "/:id",
+  appBannerUpload.fields([
+    { name: "mediaFile", maxCount: 1 },
+    { name: "brochureFile", maxCount: 1 },
+  ]),
+  async (req, res) => {
+    const parsed = appBannerUpdateSchema.safeParse(req.body);
+
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: "Invalid app banner payload",
+        details: parsed.error.flatten(),
+      });
+    }
+
+    try {
+      const existingBanner = await prisma.appBanner.findUnique({
+        where: { id: req.params.id },
+      });
+
+      if (!existingBanner) {
+        return res.status(404).json({ error: "App banner not found" });
+      }
+
+      let vendorId = parsed.data.vendorId || null;
+      let associationId =
+        (await ensureAssociation(parsed.data.associationId)) ||
+        existingBanner.associationId;
+
+      if (vendorId) {
+        const vendor = await prisma.vendor.findUnique({
+          where: { id: vendorId },
+        });
+
+        if (!vendor) {
+          return res.status(400).json({ error: "Selected vendor was not found." });
+        }
+
+        associationId = vendor.associationId;
+      }
+
+      const files = req.files || {};
+      const mediaFile = Array.isArray(files.mediaFile) ? files.mediaFile[0] : null;
+      const brochureFile = Array.isArray(files.brochureFile) ? files.brochureFile[0] : null;
+
+      if (mediaFile && mediaFile.size > maxAppBannerImageBytes) {
+        fs.unlinkSync(mediaFile.path);
+        return res.status(400).json({
+          error: "Banner image is too large. Keep it at or below 1 MB.",
+        });
+      }
+
+      if (brochureFile && brochureFile.size > maxAppBannerPdfBytes) {
+        fs.unlinkSync(brochureFile.path);
+        return res.status(400).json({
+          error: "Brochure PDF is too large. Keep it at or below 2 MB.",
+        });
+      }
+
+      const banner = await prisma.appBanner.update({
+        where: { id: existingBanner.id },
+        data: {
+          associationId,
+          vendorId,
+          shortText: parsed.data.shortText,
+          contactNumber: parsed.data.contactNumber,
+          socialMediaUrl: parsed.data.socialMediaUrl,
+          mediaUrl: mediaFile
+            ? buildPublicAssetUrl(req, `uploads/app-banners/${mediaFile.filename}`)
+            : existingBanner.mediaUrl,
+          mediaType: mediaFile?.mimetype || existingBanner.mediaType,
+          brochureUrl: brochureFile
+            ? buildPublicAssetUrl(req, `uploads/app-banners/${brochureFile.filename}`)
+            : existingBanner.brochureUrl,
+          brochureMimeType:
+            brochureFile?.mimetype || existingBanner.brochureMimeType,
+        },
+        include: {
+          vendor: true,
+        },
+      });
+
+      if (mediaFile && existingBanner.mediaUrl !== banner.mediaUrl) {
+        removeStoredAppBannerAsset(existingBanner.mediaUrl);
+      }
+
+      if (brochureFile && existingBanner.brochureUrl !== banner.brochureUrl) {
+        removeStoredAppBannerAsset(existingBanner.brochureUrl);
+      }
+
+      return res.json({ banner: serializeAppBanner(req, banner) });
+    } catch (error) {
+      return res.status(400).json({
+        error: error instanceof Error ? error.message : "Unable to update app banner",
+      });
+    }
+  },
+);
+
 router.patch("/:id/moderation", async (req, res) => {
   const parsed = moderationSchema.safeParse(req.body);
 
@@ -366,6 +503,25 @@ router.patch("/:id/moderation", async (req, res) => {
     const statusCode = message.includes("not found") ? 404 : 400;
     return res.status(statusCode).json({ error: message });
   }
+});
+
+router.delete("/:id", async (req, res) => {
+  const banner = await prisma.appBanner.findUnique({
+    where: { id: req.params.id },
+  });
+
+  if (!banner) {
+    return res.status(404).json({ error: "App banner not found" });
+  }
+
+  await prisma.appBanner.delete({
+    where: { id: banner.id },
+  });
+
+  removeStoredAppBannerAsset(banner.mediaUrl);
+  removeStoredAppBannerAsset(banner.brochureUrl);
+
+  return res.json({ success: true });
 });
 
 export default router;
