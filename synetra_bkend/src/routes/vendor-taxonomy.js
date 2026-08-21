@@ -49,6 +49,19 @@ function serializeCategory(category) {
   };
 }
 
+async function findDuplicateCategoryName(associationId, name, excludedId) {
+  return prisma.vendorCategory.findFirst({
+    where: {
+      associationId,
+      ...(excludedId ? { id: { not: excludedId } } : {}),
+      name: {
+        equals: name,
+        mode: "insensitive",
+      },
+    },
+  });
+}
+
 async function loadCategories(associationId) {
   return prisma.vendorCategory.findMany({
     where: { associationId },
@@ -82,6 +95,11 @@ router.post("/categories", async (req, res) => {
   const name = normalizeTaxonomyName(parsed.data.name);
   if (!name) {
     return res.status(400).json({ error: "Category name is required" });
+  }
+
+  const duplicateCategory = await findDuplicateCategoryName(associationId, name);
+  if (duplicateCategory) {
+    return res.status(409).json({ error: "Vendor category already exists" });
   }
 
   try {
@@ -130,6 +148,15 @@ router.patch("/categories/:id", async (req, res) => {
   const nextName = normalizeTaxonomyName(parsed.data.name);
   if (!nextName) {
     return res.status(400).json({ error: "Category name is required" });
+  }
+
+  const duplicateCategory = await findDuplicateCategoryName(
+    existingCategory.associationId,
+    nextName,
+    existingCategory.id,
+  );
+  if (duplicateCategory) {
+    return res.status(409).json({ error: "Vendor category already exists" });
   }
 
   try {

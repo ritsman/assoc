@@ -96,6 +96,31 @@ const timelinePostUpload = multer({
   },
 });
 
+function handleTimelineUpload(req, res, next) {
+  timelinePostUpload.fields([
+    { name: "imageFile", maxCount: 1 },
+    { name: "brochureFile", maxCount: 1 },
+  ])(req, res, (error) => {
+    if (!error) {
+      next();
+      return;
+    }
+
+    if (error instanceof multer.MulterError) {
+      const message =
+        error.code === "LIMIT_FILE_SIZE"
+          ? "Timeline uploads must be 15 MB or smaller."
+          : error.message;
+      return res.status(400).json({ error: message });
+    }
+
+    return res.status(400).json({
+      error:
+        error instanceof Error ? error.message : "Unable to process timeline upload",
+    });
+  });
+}
+
 async function ensureAssociation(associationId) {
   if (associationId) {
     return associationId;
@@ -293,10 +318,7 @@ router.get("/", async (req, res) => {
 
 router.post(
   "/",
-  timelinePostUpload.fields([
-    { name: "imageFile", maxCount: 1 },
-    { name: "brochureFile", maxCount: 1 },
-  ]),
+  handleTimelineUpload,
   async (req, res) => {
     const parsed = timelinePostSchema.safeParse(req.body);
 
@@ -359,10 +381,7 @@ router.post(
 
 router.patch(
   "/:id",
-  timelinePostUpload.fields([
-    { name: "imageFile", maxCount: 1 },
-    { name: "brochureFile", maxCount: 1 },
-  ]),
+  handleTimelineUpload,
   async (req, res) => {
     const parsed = timelinePostUpdateSchema.safeParse(req.body);
 

@@ -237,9 +237,22 @@ function normalizeMembershipTypeLabel(value) {
   return value.replace(/\s+/g, " ").trim();
 }
 
-function getMembershipTypeDisplayLabel(value) {
+function isGuestMembershipType(value) {
+  const normalizedValue = normalizeMembershipTypeLabel(value).toLowerCase();
+  return (
+    normalizedValue === "guest" ||
+    normalizedValue === "temporary visit" ||
+    normalizedValue === "visitor"
+  );
+}
+
+function getCanonicalMembershipType(value) {
   const normalizedValue = normalizeMembershipTypeLabel(value);
-  return normalizedValue === "Temporary Visit" ? "Guest" : normalizedValue;
+  return isGuestMembershipType(normalizedValue) ? "Guest" : normalizedValue;
+}
+
+function getMembershipTypeDisplayLabel(value) {
+  return getCanonicalMembershipType(value);
 }
 
 function readStoredCommitteePostOptions() {
@@ -1215,7 +1228,9 @@ function mapApiMemberToUi(member, linkedUser = member.user ?? null) {
   const firstName = member.firstName ?? "";
   const lastName = member.lastName ?? "";
   const name = `${firstName} ${lastName}`.trim();
-  const membershipType = member.roleTitle || "Primary";
+  const membershipType = getCanonicalMembershipType(
+    member.roleTitle || "Primary",
+  );
   const membershipStatus = member.membershipStatus ?? "PENDING";
   const isPendingMember = membershipStatus === "PENDING";
   const isInactiveMember = membershipStatus === "INACTIVE";
@@ -1273,7 +1288,7 @@ function mapApiMemberToUi(member, linkedUser = member.user ?? null) {
         ? "Committee Members"
         : membershipType === "Associate"
           ? "Associate Members"
-          : membershipType === "Temporary Visit"
+          : isGuestMembershipType(membershipType)
             ? "Temporary Visitors"
             : "Primary Members",
     expiryStatus: isPendingMember
@@ -2013,7 +2028,7 @@ function DashboardPendingApprovalsPanel({
               {
                 allItems.filter((member) => {
                   if (tab.key === "Guest") {
-                    return member.membershipType === "Temporary Visit";
+                    return isGuestMembershipType(member.membershipType);
                   }
 
                   return member.membershipType === tab.key;
@@ -2041,9 +2056,7 @@ function DashboardPendingApprovalsPanel({
                 <td>{member.name}</td>
                 <td>{member.company}</td>
                 <td>
-                  {member.membershipType === "Temporary Visit"
-                    ? "Guest"
-                    : member.membershipType}
+                  {getMembershipTypeDisplayLabel(member.membershipType)}
                 </td>
                 <td>{member.membershipPeriod}</td>
                 <td>
@@ -13067,7 +13080,7 @@ export default function HomePage() {
     (member) => normalizeMembershipTypeLabel(member.membershipType || "") === "Associate",
   ).length;
   const guestMembersCount = allMembers.filter(
-    (member) => normalizeMembershipTypeLabel(member.membershipType || "") === "Temporary Visit",
+    (member) => isGuestMembershipType(member.membershipType || ""),
   ).length;
   const approvedVendorsCount = vendorRecords.filter(
     (vendor) => vendor.appAccessStatus === "Approved",
@@ -13174,11 +13187,11 @@ export default function HomePage() {
       const query = adminMemberSearch.trim().toLowerCase();
       const matchesFilter =
         activeAdminMemberFilter === "All"
-          ? ["Primary", "Associate", "Temporary Visit", "Committee"].includes(
+          ? ["Primary", "Associate", "Guest", "Committee"].includes(
               member.membershipType,
             )
           : activeAdminMemberFilter === "Guest"
-            ? member.membershipType === "Temporary Visit"
+            ? isGuestMembershipType(member.membershipType)
             : activeAdminMemberFilter === "Committee"
               ? member.membershipType === "Committee"
               : member.membershipType === activeAdminMemberFilter;
@@ -13208,7 +13221,7 @@ export default function HomePage() {
   const dashboardPendingRegistrationRequests = pendingRegistrationRequests.filter(
     (member) => {
       if (dashboardApprovalTab === "Guest") {
-        return member.membershipType === "Temporary Visit";
+        return isGuestMembershipType(member.membershipType);
       }
 
       return member.membershipType === dashboardApprovalTab;
@@ -14474,8 +14487,9 @@ export default function HomePage() {
         );
 
         if (!response.ok) {
+          const payload = await response.json().catch(() => null);
           setVendorTaxonomyError(
-            "Could not update the vendor category right now.",
+            payload?.error || "Could not update the vendor category right now.",
           );
           return;
         }
@@ -14494,8 +14508,9 @@ export default function HomePage() {
         );
 
         if (!response.ok) {
+          const payload = await response.json().catch(() => null);
           setVendorTaxonomyError(
-            "Could not add the vendor category right now.",
+            payload?.error || "Could not add the vendor category right now.",
           );
           return;
         }
@@ -15163,6 +15178,18 @@ export default function HomePage() {
     });
   };
   const updateTimelinePostFile = (field, value) => {
+    if (value) {
+      if (field === "imageFile" && !value.type.startsWith("image/")) {
+        setTimelinePostFeedback("Timeline post images must be image files.");
+        return;
+      }
+
+      if (field === "brochureFile" && value.type !== "application/pdf") {
+        setTimelinePostFeedback("Timeline brochures must be uploaded as PDF files.");
+        return;
+      }
+    }
+
     setTimelinePostFeedback("");
     setTimelinePostForm((current) => ({
       ...current,
