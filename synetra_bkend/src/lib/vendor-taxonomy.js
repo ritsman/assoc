@@ -36,6 +36,17 @@ async function ensureCategory(tx, associationId, name) {
     return null;
   }
 
+  const exactMatch = await tx.vendorCategory.findFirst({
+    where: {
+      associationId,
+      name: normalizedName,
+    },
+  });
+
+  if (exactMatch) {
+    return exactMatch;
+  }
+
   const existing = await tx.vendorCategory.findFirst({
     where: {
       associationId,
@@ -47,14 +58,9 @@ async function ensureCategory(tx, associationId, name) {
   });
 
   if (existing) {
-    if (existing.name === normalizedName) {
-      return existing;
-    }
-
-    return tx.vendorCategory.update({
-      where: { id: existing.id },
-      data: { name: normalizedName },
-    });
+    // Reuse the existing category instead of renaming it during backfills,
+    // which can collide with another row that already has the normalized name.
+    return existing;
   }
 
   const count = await tx.vendorCategory.count({
@@ -76,6 +82,17 @@ async function ensureSubCategory(tx, associationId, categoryId, name) {
     return null;
   }
 
+  const exactMatch = await tx.vendorSubCategory.findFirst({
+    where: {
+      categoryId,
+      name: normalizedName,
+    },
+  });
+
+  if (exactMatch) {
+    return exactMatch;
+  }
+
   const existing = await tx.vendorSubCategory.findFirst({
     where: {
       categoryId,
@@ -87,14 +104,7 @@ async function ensureSubCategory(tx, associationId, categoryId, name) {
   });
 
   if (existing) {
-    if (existing.name === normalizedName) {
-      return existing;
-    }
-
-    return tx.vendorSubCategory.update({
-      where: { id: existing.id },
-      data: { name: normalizedName },
-    });
+    return existing;
   }
 
   const count = await tx.vendorSubCategory.count({
