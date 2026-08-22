@@ -23,9 +23,13 @@ class _MemberArenaPanelState extends ConsumerState<MemberArenaPanel> {
 
   Future<void> _refresh() async {
     ref.invalidate(memberDirectoryProvider);
+    ref.invalidate(memberPostsProvider(widget.viewerRole));
     ref.invalidate(tenantProvider);
-    ref.invalidate(memberArenaDataProvider(widget.viewerRole));
-    await ref.read(memberArenaDataProvider(widget.viewerRole).future);
+    if (widget.section == MemberArenaSection.media) {
+      await ref.read(memberPostsProvider(widget.viewerRole).future);
+      return;
+    }
+    await ref.read(memberDirectoryProvider.future);
   }
 
   Future<void> _updatePostStatus(
@@ -149,18 +153,33 @@ class _MemberArenaPanelState extends ConsumerState<MemberArenaPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final memberDataAsync = ref.watch(
-      memberArenaDataProvider(widget.viewerRole),
-    );
-    return memberDataAsync.when(
+    final isMediaSection = widget.section == MemberArenaSection.media;
+    final postsAsync =
+        isMediaSection
+            ? ref.watch(memberPostsProvider(widget.viewerRole))
+            : null;
+    final membersAsync =
+        isMediaSection ? null : ref.watch(memberDirectoryProvider);
+
+    final activeAsync = isMediaSection ? postsAsync! : membersAsync!;
+
+    return activeAsync.when(
       loading: () => const _LoadingState(),
       error:
           (error, _) => _ErrorState(
-            title: 'Could not load member arena',
+            title: 'Could not load members',
             message: error.toString(),
             onRetry: _refresh,
           ),
-      data: (data) {
+      data: (_) {
+        final posts =
+            isMediaSection
+                ? postsAsync!.requireValue
+                : const <MemberPostItem>[];
+        final members =
+            isMediaSection
+                ? const <MemberDirectoryItem>[]
+                : membersAsync!.requireValue;
         return Column(
           children: [
             Align(
@@ -181,7 +200,7 @@ class _MemberArenaPanelState extends ConsumerState<MemberArenaPanel> {
                       MemberArenaNavigation.defaultSection(widget.viewerRole),
                     ),
                 child: _MemberMediaSection(
-                  posts: data.posts,
+                  posts: posts,
                   viewerRole: widget.viewerRole,
                   updatingPostId: _updatingPostId,
                   onUpdateStatus: _updatePostStatus,
@@ -194,7 +213,7 @@ class _MemberArenaPanelState extends ConsumerState<MemberArenaPanel> {
                     () => widget.onSectionSelected(
                       MemberArenaNavigation.defaultSection(widget.viewerRole),
                     ),
-                child: _MemberDirectorySection(members: data.members),
+                child: _MemberDirectorySection(members: members),
               )
             else if (widget.section == MemberArenaSection.master)
               _MemberMasterView(
@@ -205,7 +224,7 @@ class _MemberArenaPanelState extends ConsumerState<MemberArenaPanel> {
                     ),
                 child: _AssociationMasterSection(
                   canManage: widget.viewerRole.isAdmin,
-                  members: [...data.members]..sort(
+                  members: [...members]..sort(
                     (a, b) =>
                         a.name.toLowerCase().compareTo(b.name.toLowerCase()),
                   ),
@@ -224,7 +243,7 @@ class _MemberArenaPanelState extends ConsumerState<MemberArenaPanel> {
                       MemberArenaNavigation.defaultSection(widget.viewerRole),
                     ),
                 child: _FilteredMemberDirectorySection(
-                  members: data.members,
+                  members: members,
                   section: widget.section,
                 ),
               ),
@@ -3060,7 +3079,7 @@ class _VendorSelfServicePanel extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  'Your vendor area is now private. Other vendors are hidden here, while you can still use the member arena to discover association members.',
+                  'Your vendor area is now private. Other vendors are hidden here, while you can still use the member directory to discover association members.',
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.92),
                     fontSize: 14,
@@ -3127,7 +3146,7 @@ class _VendorSelfServicePanel extends StatelessWidget {
                   icon: Icons.people_alt_rounded,
                   title: 'Members remain visible',
                   subtitle:
-                      'Use the member arena to browse association members and find contacts.',
+                      'Use the member directory to browse association members and find contacts.',
                 ),
                 SizedBox(height: 10),
                 _VendorSelfServicePoint(
@@ -3680,7 +3699,7 @@ class _DashboardArenaGrid extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Explore Arenas',
+            'Explore Sections',
             style: TextStyle(
               color: Color(0xFF171717),
               fontSize: 18,
@@ -4712,7 +4731,12 @@ class _TimelinePanelState extends ConsumerState<TimelinePanel> {
       } else if (widget.viewerRole.isVendor) {
         final normalizedUsername = session.username.trim().toLowerCase();
         for (final vendor in vendorDataAsync!.requireValue) {
-          if (vendor.email.trim().toLowerCase() == normalizedUsername) {
+          final loginEmails = [
+            vendor.email.trim().toLowerCase(),
+            vendor.primaryLoginEmail.trim().toLowerCase(),
+            vendor.secondaryLoginEmail.trim().toLowerCase(),
+          ].where((value) => value.isNotEmpty);
+          if (loginEmails.contains(normalizedUsername)) {
             currentVendor = vendor;
             break;
           }
@@ -5582,7 +5606,7 @@ class _AdminArenaPanelState extends ConsumerState<AdminArenaPanel> {
       loading: () => const _LoadingState(),
       error:
           (error, _) => _ErrorState(
-            title: 'Could not load admin arena',
+            title: 'Could not load admin data',
             message: error.toString(),
             onRetry: _refresh,
           ),
@@ -5928,8 +5952,8 @@ class _AssociationArenaPanelState extends ConsumerState<AssociationArenaPanel> {
               child: const Text('Cancel'),
             ),
             FilledButton(
-              onPressed: () =>
-                  Navigator.of(context).pop(controller.text.trim()),
+              onPressed:
+                  () => Navigator.of(context).pop(controller.text.trim()),
               child: const Text('Save'),
             ),
           ],
@@ -6027,11 +6051,13 @@ class _AssociationArenaPanelState extends ConsumerState<AssociationArenaPanel> {
     });
 
     try {
-      await ref.read(apiClientProvider).renameAssociationGalleryFolder(
-        associationId: associationId,
-        folderId: folder.id,
-        name: nextName,
-      );
+      await ref
+          .read(apiClientProvider)
+          .renameAssociationGalleryFolder(
+            associationId: associationId,
+            folderId: folder.id,
+            name: nextName,
+          );
       if (!mounted) return;
       await _refresh();
       if (!mounted) return;
@@ -6061,10 +6087,12 @@ class _AssociationArenaPanelState extends ConsumerState<AssociationArenaPanel> {
     });
 
     try {
-      await ref.read(apiClientProvider).deleteAssociationGalleryFolder(
-        associationId: associationId,
-        folderId: folder.id,
-      );
+      await ref
+          .read(apiClientProvider)
+          .deleteAssociationGalleryFolder(
+            associationId: associationId,
+            folderId: folder.id,
+          );
       if (!mounted) return;
       await _refresh();
       if (!mounted) return;
@@ -6100,11 +6128,13 @@ class _AssociationArenaPanelState extends ConsumerState<AssociationArenaPanel> {
     });
 
     try {
-      await ref.read(apiClientProvider).deleteAssociationGalleryFolderPhoto(
-        associationId: associationId,
-        folderId: folderId,
-        photoId: photoId,
-      );
+      await ref
+          .read(apiClientProvider)
+          .deleteAssociationGalleryFolderPhoto(
+            associationId: associationId,
+            folderId: folderId,
+            photoId: photoId,
+          );
       if (!mounted) return;
       await _refresh();
       if (!mounted) return;
@@ -6815,23 +6845,22 @@ class _AssociationArenaPanelState extends ConsumerState<AssociationArenaPanel> {
               onRetry: _refresh,
             ),
         data: (profile) {
-          final activeFolder =
-              profile.galleryFolders.firstWhere(
-                (folder) => folder.id == _activeGalleryFolderId,
-                orElse:
-                    () =>
-                        profile.galleryFolders.isNotEmpty
-                            ? profile.galleryFolders.first
-                            : const AssociationGalleryFolder(
-                              id: '',
-                              name: '',
-                              createdAt: '',
-                              updatedAt: '',
-                              photoCount: 0,
-                              previewPhotos: [],
-                              photos: [],
-                            ),
-              );
+          final activeFolder = profile.galleryFolders.firstWhere(
+            (folder) => folder.id == _activeGalleryFolderId,
+            orElse:
+                () =>
+                    profile.galleryFolders.isNotEmpty
+                        ? profile.galleryFolders.first
+                        : const AssociationGalleryFolder(
+                          id: '',
+                          name: '',
+                          createdAt: '',
+                          updatedAt: '',
+                          photoCount: 0,
+                          previewPhotos: [],
+                          photos: [],
+                        ),
+          );
           return _AssociationGallerySection(
             canManage: canManage,
             associationId: profile.id,
@@ -6858,7 +6887,7 @@ class _AssociationArenaPanelState extends ConsumerState<AssociationArenaPanel> {
     return _EmptyStateCard(
       title: '${widget.section.label} is next',
       subtitle:
-          'The Association Arena drawer now matches the web app. Profile, About Us, and Management Committee are live first, and ${widget.section.label} can be layered in next.',
+          'The association menu now matches the web app. Profile, About Us, and Management Committee are live first, and ${widget.section.label} can be layered in next.',
     );
   }
 }
@@ -7622,7 +7651,7 @@ class _DashboardAppBannerCarousel extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(
-          height: 225,
+          height: 235,
           child: PageView.builder(
             controller: pageController,
             itemCount: items.length,
@@ -7630,7 +7659,7 @@ class _DashboardAppBannerCarousel extends StatelessWidget {
             itemBuilder: (context, index) {
               final item = items[index];
               return Padding(
-                padding: const EdgeInsets.only(right: 12),
+                padding: const EdgeInsets.only(right: 12, top: 10),
                 child: InkWell(
                   onTap: () => _openBannerPreview(context, item),
                   borderRadius: BorderRadius.circular(28),
@@ -7653,72 +7682,11 @@ class _DashboardAppBannerCarousel extends StatelessWidget {
                           if (item.mediaUrl.isNotEmpty)
                             _BackendImage(
                               imageUrl: item.mediaUrl,
-                              fit: BoxFit.contain,
+                              fit: BoxFit.cover,
                               fallback: _BannerFallbackCard(item: item),
                             )
                           else
                             _BannerFallbackCard(item: item),
-                          Container(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  Colors.black.withValues(alpha: 0.02),
-                                  Colors.black.withValues(alpha: 0.68),
-                                ],
-                              ),
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.end,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 6,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.9),
-                                    borderRadius: BorderRadius.circular(999),
-                                  ),
-                                  child: Text(
-                                    'Slot ${item.displayIndex}',
-                                    style: const TextStyle(
-                                      color: Color(0xFF171717),
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                Text(
-                                  item.vendorName,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  item.shortText,
-                                  maxLines: 3,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 13,
-                                    height: 1.35,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
                         ],
                       ),
                     ),
@@ -8680,7 +8648,7 @@ class _TimelineLinkChip extends StatelessWidget {
   }
 }
 
-class _AssociationGallerySection extends StatelessWidget {
+class _AssociationGallerySection extends StatefulWidget {
   const _AssociationGallerySection({
     required this.canManage,
     required this.associationId,
@@ -8705,10 +8673,20 @@ class _AssociationGallerySection extends StatelessWidget {
   final ValueChanged<AssociationGalleryFolder> onDeleteFolder;
   final void Function(String folderId, String photoId) onDeletePhoto;
 
-  void _openGalleryImage(
-    BuildContext context,
-    AssociationGalleryPhoto item,
-  ) {
+  @override
+  State<_AssociationGallerySection> createState() =>
+      _AssociationGallerySectionState();
+}
+
+class _AssociationGallerySectionState
+    extends State<_AssociationGallerySection> {
+  static const int _folderPageSize = 12;
+  static const int _photoPageSize = 24;
+
+  int _visibleFolderCount = _folderPageSize;
+  int _visiblePhotoCount = _photoPageSize;
+
+  void _openGalleryImage(BuildContext context, AssociationGalleryPhoto item) {
     final resolvedUrl = _resolveBackendAssetUrl(item.imageUrl);
     final imageBytes = _decodeImageBytes(item.imageUrl);
     if (resolvedUrl.isEmpty && imageBytes == null) {
@@ -8773,37 +8751,54 @@ class _AssociationGallerySection extends StatelessWidget {
   }
 
   @override
+  void didUpdateWidget(covariant _AssociationGallerySection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.folders != widget.folders) {
+      _visibleFolderCount = _folderPageSize;
+      _visiblePhotoCount = _photoPageSize;
+    } else if (oldWidget.activeFolderId != widget.activeFolderId) {
+      _visiblePhotoCount = _photoPageSize;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final activeFolder =
-        folders.firstWhere(
-          (folder) => folder.id == activeFolderId,
-          orElse:
-              () => const AssociationGalleryFolder(
-                id: '',
-                name: '',
-                createdAt: '',
-                updatedAt: '',
-                photoCount: 0,
-                previewPhotos: [],
-                photos: [],
-              ),
-        );
+    final folders = widget.folders;
+    final activeFolder = folders.firstWhere(
+      (folder) => folder.id == widget.activeFolderId,
+      orElse:
+          () => const AssociationGalleryFolder(
+            id: '',
+            name: '',
+            createdAt: '',
+            updatedAt: '',
+            photoCount: 0,
+            previewPhotos: [],
+            photos: [],
+          ),
+    );
+    final visibleFolders = folders.take(_visibleFolderCount).toList();
+    final hasMoreFolders = visibleFolders.length < folders.length;
+    final visiblePhotos = activeFolder.photos.take(_visiblePhotoCount).toList();
+    final hasMorePhotos = visiblePhotos.length < activeFolder.photos.length;
 
     if (folders.isEmpty) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (canManage) ...[
+          if (widget.canManage) ...[
             Row(
               children: [
                 FilledButton.icon(
                   onPressed:
-                      isSaving || associationId.isEmpty ? null : onAddFolder,
+                      widget.isSaving || widget.associationId.isEmpty
+                          ? null
+                          : widget.onAddFolder,
                   style: FilledButton.styleFrom(
                     backgroundColor: const Color(0xFF171717),
                   ),
                   icon: const Icon(Icons.add_photo_alternate_outlined),
-                  label: Text(isSaving ? 'Uploading...' : 'Add Folder'),
+                  label: Text(widget.isSaving ? 'Uploading...' : 'Add Folder'),
                 ),
               ],
             ),
@@ -8831,11 +8826,11 @@ class _AssociationGallerySection extends StatelessWidget {
               ),
             ),
             const Spacer(),
-            if (canManage) ...[
+            if (widget.canManage) ...[
               OutlinedButton.icon(
-                onPressed: isSaving ? null : onAddFolder,
+                onPressed: widget.isSaving ? null : widget.onAddFolder,
                 icon: const Icon(Icons.add_photo_alternate_outlined),
-                label: Text(isSaving ? 'Uploading...' : 'Add Folder'),
+                label: Text(widget.isSaving ? 'Uploading...' : 'Add Folder'),
               ),
             ],
           ],
@@ -8844,7 +8839,7 @@ class _AssociationGallerySection extends StatelessWidget {
         GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: folders.length,
+          itemCount: visibleFolders.length,
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 2,
             crossAxisSpacing: 12,
@@ -8852,13 +8847,13 @@ class _AssociationGallerySection extends StatelessWidget {
             childAspectRatio: 0.74,
           ),
           itemBuilder: (context, index) {
-            final item = folders[index];
+            final item = visibleFolders[index];
             return ClipRRect(
               borderRadius: BorderRadius.circular(22),
               child: Material(
                 color: Colors.white.withValues(alpha: 0.72),
                 child: InkWell(
-                  onTap: () => onOpenFolder(item.id),
+                  onTap: () => widget.onOpenFolder(item.id),
                   child: Stack(
                     children: [
                       Column(
@@ -8913,7 +8908,7 @@ class _AssociationGallerySection extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  item.name.isEmpty ? 'Gallery folder' : item.name,
+                                  item.displayName,
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
@@ -8924,6 +8919,19 @@ class _AssociationGallerySection extends StatelessWidget {
                                   ),
                                 ),
                                 const SizedBox(height: 6),
+                                if (item.createdDateLabel.isNotEmpty) ...[
+                                  Text(
+                                    item.createdDateLabel,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: Color(0xFF64748B),
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                ],
                                 Text(
                                   '${item.photoCount} photo${item.photoCount == 1 ? '' : 's'}',
                                   maxLines: 1,
@@ -8939,16 +8947,16 @@ class _AssociationGallerySection extends StatelessWidget {
                           ),
                         ],
                       ),
-                      if (canManage)
+                      if (widget.canManage)
                         Positioned(
                           top: 12,
                           right: 12,
                           child: PopupMenuButton<String>(
                             onSelected: (value) {
                               if (value == 'edit') {
-                                onRenameFolder(item);
+                                widget.onRenameFolder(item);
                               } else if (value == 'delete') {
-                                onDeleteFolder(item);
+                                widget.onDeleteFolder(item);
                               }
                             },
                             itemBuilder:
@@ -8971,20 +8979,48 @@ class _AssociationGallerySection extends StatelessWidget {
             );
           },
         ),
+        if (hasMoreFolders) ...[
+          const SizedBox(height: 10),
+          Center(
+            child: OutlinedButton.icon(
+              onPressed: () {
+                setState(() {
+                  _visibleFolderCount = (_visibleFolderCount + _folderPageSize)
+                      .clamp(_folderPageSize, folders.length);
+                });
+              },
+              icon: const Icon(Icons.expand_more_rounded),
+              label: Text(
+                'Load more folders (${folders.length - visibleFolders.length} remaining)',
+              ),
+            ),
+          ),
+        ],
         if (activeFolder.id.isNotEmpty) ...[
           const SizedBox(height: 18),
           Text(
-            activeFolder.name,
+            activeFolder.displayName,
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.w800,
               color: const Color(0xFF171717),
             ),
           ),
+          if (activeFolder.createdDateLabel.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              activeFolder.createdDateLabel,
+              style: const TextStyle(
+                color: Color(0xFF64748B),
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            itemCount: activeFolder.photos.length,
+            itemCount: visiblePhotos.length,
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
               crossAxisSpacing: 12,
@@ -8992,7 +9028,7 @@ class _AssociationGallerySection extends StatelessWidget {
               childAspectRatio: 0.74,
             ),
             itemBuilder: (context, index) {
-              final photo = activeFolder.photos[index];
+              final photo = visiblePhotos[index];
               return ClipRRect(
                 borderRadius: BorderRadius.circular(22),
                 child: Material(
@@ -9018,7 +9054,7 @@ class _AssociationGallerySection extends StatelessWidget {
                             Padding(
                               padding: const EdgeInsets.all(12),
                               child: Text(
-                                photo.createdAt,
+                                photo.createdDateLabel,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
@@ -9030,17 +9066,22 @@ class _AssociationGallerySection extends StatelessWidget {
                             ),
                           ],
                         ),
-                        if (canManage)
+                        if (widget.canManage)
                           Positioned(
                             top: 12,
                             right: 12,
                             child: IconButton(
                               onPressed:
-                                  isSaving
+                                  widget.isSaving
                                       ? null
-                                      : () => onDeletePhoto(activeFolder.id, photo.id),
+                                      : () => widget.onDeletePhoto(
+                                        activeFolder.id,
+                                        photo.id,
+                                      ),
                               style: IconButton.styleFrom(
-                                backgroundColor: Colors.white.withValues(alpha: 0.9),
+                                backgroundColor: Colors.white.withValues(
+                                  alpha: 0.9,
+                                ),
                               ),
                               icon: const Icon(Icons.delete_outline_rounded),
                             ),
@@ -9052,12 +9093,28 @@ class _AssociationGallerySection extends StatelessWidget {
               );
             },
           ),
+          if (hasMorePhotos) ...[
+            const SizedBox(height: 10),
+            Center(
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _visiblePhotoCount = (_visiblePhotoCount + _photoPageSize)
+                        .clamp(_photoPageSize, activeFolder.photos.length);
+                  });
+                },
+                icon: const Icon(Icons.expand_more_rounded),
+                label: Text(
+                  'Load more photos (${activeFolder.photos.length - visiblePhotos.length} remaining)',
+                ),
+              ),
+            ),
+          ],
         ],
       ],
     );
   }
 }
-
 
 class _DashboardCommitteeCarousel extends StatelessWidget {
   const _DashboardCommitteeCarousel({
@@ -9093,9 +9150,9 @@ class _DashboardCommitteeCarousel extends StatelessWidget {
         (availableHeight * 0.54).clamp(428.0, 470.0).toDouble();
     final panelHeight =
         (isCompactViewport
-                ? 446.0 + ((textScaleFactor - 1).clamp(0.0, 0.25) * 28)
+                ? 382.0 + ((textScaleFactor - 1).clamp(0.0, 0.25) * 28)
                 : viewportWidth * 1.14)
-            .clamp(424.0, maxPanelHeight)
+            .clamp(378.0, maxPanelHeight)
             .toDouble();
     final heroHeight =
         (isCompactViewport ? 98.0 : viewportWidth * 0.34)
@@ -10124,7 +10181,7 @@ class _AssociationSectionHero extends StatelessWidget {
   const _AssociationSectionHero({
     this.title,
     this.titleSpans,
-    this.arenaLabel = 'Association Arena',
+    this.arenaLabel = 'Association',
     this.footer,
   }) : assert(title != null || titleSpans != null);
 
@@ -10252,7 +10309,7 @@ class _AssociationBreadcrumb extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _ArenaBreadcrumb(
-      rootLabel: 'Association Arena',
+      rootLabel: 'Association',
       currentLabel: currentLabel,
       onRootTap: onRootTap,
     );
@@ -10275,13 +10332,10 @@ class _VendorAdminSectionView extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _AssociationSectionHero(
-          title: currentLabel,
-          arenaLabel: 'Vendor Arena',
-        ),
+        _AssociationSectionHero(title: currentLabel, arenaLabel: 'Vendor'),
         const SizedBox(height: 14),
         _ArenaBreadcrumb(
-          rootLabel: 'Vendor Arena',
+          rootLabel: 'Vendor',
           currentLabel: currentLabel,
           onRootTap: onNavigateToVendorArena,
         ),
@@ -10952,7 +11006,7 @@ class _CommitteeThumbnailFallback extends StatelessWidget {
   }
 }
 
-class _AssociationCircularsSection extends StatelessWidget {
+class _AssociationCircularsSection extends StatefulWidget {
   const _AssociationCircularsSection({
     required this.canManage,
     required this.library,
@@ -10983,9 +11037,30 @@ class _AssociationCircularsSection extends StatelessWidget {
   final Future<void> Function(String circularId) onDelete;
 
   @override
+  State<_AssociationCircularsSection> createState() =>
+      _AssociationCircularsSectionState();
+}
+
+class _AssociationCircularsSectionState
+    extends State<_AssociationCircularsSection> {
+  static const int _pageSize = 20;
+
+  int _visibleCircularCount = _pageSize;
+
+  @override
+  void didUpdateWidget(covariant _AssociationCircularsSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.library.items != widget.library.items) {
+      _visibleCircularCount = _pageSize;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final items = [...library.items]
+    final items = [...widget.library.items]
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    final visibleItems = items.take(_visibleCircularCount).toList();
+    final hasMoreItems = visibleItems.length < items.length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -10999,10 +11074,10 @@ class _AssociationCircularsSection extends StatelessWidget {
                     'Upload PDFs, DOC files, or scanned circulars and make them available across admin surfaces.',
               ),
             ),
-            if (canManage) ...[
+            if (widget.canManage) ...[
               const SizedBox(width: 12),
               FilledButton(
-                onPressed: () => onOpenEditor(null),
+                onPressed: () => widget.onOpenEditor(null),
                 style: FilledButton.styleFrom(
                   backgroundColor: const Color(0xFF171717),
                   shape: RoundedRectangleBorder(
@@ -11014,15 +11089,15 @@ class _AssociationCircularsSection extends StatelessWidget {
             ],
           ],
         ),
-        if (canManage && draft != null) ...[
+        if (widget.canManage && widget.draft != null) ...[
           const SizedBox(height: 16),
           _AssociationCircularEditor(
-            draft: draft!,
-            isSaving: isSaving,
-            onChanged: onDraftChanged,
-            onPickFile: onPickFile,
-            onSave: onSave,
-            onCancel: onCancelEdit,
+            draft: widget.draft!,
+            isSaving: widget.isSaving,
+            onChanged: widget.onDraftChanged,
+            onPickFile: widget.onPickFile,
+            onSave: widget.onSave,
+            onCancel: widget.onCancelEdit,
           ),
         ],
         const SizedBox(height: 16),
@@ -11033,17 +11108,35 @@ class _AssociationCircularsSection extends StatelessWidget {
                 'Upload your first circular to start building the association document library.',
           )
         else
-          ...items.map(
+          ...visibleItems.map(
             (item) => Padding(
               padding: const EdgeInsets.only(bottom: 14),
               child: _AssociationCircularCard(
                 item: item,
-                isEditing: editingCircularId == item.id,
-                onOpenDocument: () => onOpenDocument(item),
-                onDelete: canManage ? () => onDelete(item.id) : null,
+                isEditing: widget.editingCircularId == item.id,
+                onOpenDocument: () => widget.onOpenDocument(item),
+                onDelete:
+                    widget.canManage ? () => widget.onDelete(item.id) : null,
               ),
             ),
           ),
+        if (hasMoreItems) ...[
+          const SizedBox(height: 10),
+          Center(
+            child: OutlinedButton.icon(
+              onPressed: () {
+                setState(() {
+                  _visibleCircularCount = (_visibleCircularCount + _pageSize)
+                      .clamp(_pageSize, items.length);
+                });
+              },
+              icon: const Icon(Icons.expand_more_rounded),
+              label: Text(
+                'Load more circulars (${items.length - visibleItems.length} remaining)',
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -12927,7 +13020,7 @@ class _AdminMemberAccessWorkspaceState
         const _SectionHeader(
           title: 'Member Access',
           subtitle:
-              'Match the same member app access and member content access workflow shown in the web admin arena.',
+              'Match the same member app access and member content access workflow shown in the web admin.',
         ),
         const SizedBox(height: 14),
         Container(
@@ -13453,7 +13546,7 @@ class _AdminContentReviewSection extends StatelessWidget {
         const _SectionHeader(
           title: 'Content Review',
           subtitle:
-              'Moderate member posts from the same queue used by web and member arena.',
+              'Moderate member posts from the same queue used by web and members.',
         ),
         const SizedBox(height: 14),
         ...posts.map(
@@ -16377,9 +16470,11 @@ class _MemberDirectorySection extends StatefulWidget {
 }
 
 class _MemberDirectorySectionState extends State<_MemberDirectorySection> {
+  static const int _pageSize = 60;
   final TextEditingController _searchController = TextEditingController();
   String _query = '';
   late MemberDirectoryFilter _activeFilter;
+  int _visibleMemberCount = _pageSize;
 
   @override
   void initState() {
@@ -16392,6 +16487,10 @@ class _MemberDirectorySectionState extends State<_MemberDirectorySection> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.initialFilter != widget.initialFilter) {
       _activeFilter = widget.initialFilter;
+      _visibleMemberCount = _pageSize;
+    }
+    if (oldWidget.members != widget.members) {
+      _visibleMemberCount = _pageSize;
     }
   }
 
@@ -16431,9 +16530,11 @@ class _MemberDirectorySectionState extends State<_MemberDirectorySection> {
           ..sort(
             (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
           );
+    final visibleMembers = filteredMembers.take(_visibleMemberCount).toList();
+    final hasMoreMembers = visibleMembers.length < filteredMembers.length;
 
     final groupedMembers = <String, List<MemberDirectoryItem>>{};
-    for (final member in filteredMembers) {
+    for (final member in visibleMembers) {
       final label =
           member.name.trim().isEmpty
               ? '#'
@@ -16535,6 +16636,23 @@ class _MemberDirectorySectionState extends State<_MemberDirectorySection> {
               ),
             ),
           ),
+          if (hasMoreMembers) ...[
+            const SizedBox(height: 6),
+            Center(
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _visibleMemberCount = (_visibleMemberCount + _pageSize)
+                        .clamp(_pageSize, filteredMembers.length);
+                  });
+                },
+                icon: const Icon(Icons.expand_more_rounded),
+                label: Text(
+                  'Load more members (${filteredMembers.length - visibleMembers.length} remaining)',
+                ),
+              ),
+            ),
+          ],
         ],
       ],
     );
@@ -17285,7 +17403,7 @@ class _PlaceholderArenaContent extends StatelessWidget {
         SizedBox(height: 14),
         _ActionCard(
           icon: Icons.groups_rounded,
-          title: 'Arena workspace',
+          title: 'Workspace',
           subtitle:
               'Key admin tools live here already, and the remaining workflows can be polished into the same app shell.',
         ),
@@ -17300,28 +17418,103 @@ class _PlaceholderArenaContent extends StatelessWidget {
   }
 }
 
-class _LoadingState extends StatelessWidget {
+class _LoadingState extends StatefulWidget {
   const _LoadingState();
+
+  @override
+  State<_LoadingState> createState() => _LoadingStateState();
+}
+
+class _LoadingStateState extends State<_LoadingState>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 40),
+      padding: const EdgeInsets.symmetric(vertical: 26),
       child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: const [
-            CircularProgressIndicator(),
-            SizedBox(height: 14),
-            Text(
-              'Loading the latest NIMA data...',
-              style: TextStyle(
-                color: Color(0xFF6B7280),
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
+        child: Container(
+          width: double.infinity,
+          constraints: const BoxConstraints(maxWidth: 420),
+          padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: const Color(0xFFF1D6D8)),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x0D0F172A),
+                blurRadius: 18,
+                offset: Offset(0, 10),
               ),
-            ),
-          ],
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedBuilder(
+                animation: _controller,
+                builder: (context, child) {
+                  return Transform.rotate(
+                    angle: _controller.value * 6.283185307179586,
+                    child: child,
+                  );
+                },
+                child: Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF1F2),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: const Icon(
+                    Icons.sync_rounded,
+                    color: _nimaBrandRedDark,
+                    size: 28,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              const Text(
+                'Refreshing your data',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Color(0xFF171717),
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Please wait while the latest updates load into this section.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Color(0xFF6B7280),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  height: 1.45,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const _NimaLoadingDots(),
+            ],
+          ),
         ),
       ),
     );

@@ -429,6 +429,7 @@ final appLockProvider = NotifierProvider<AppLockController, AppLockState>(
 );
 
 final startupWarmupProvider = StateProvider<bool>((ref) => false);
+final associationNotificationRefreshProvider = StateProvider<int>((ref) => 0);
 
 final sessionRestoreProvider = FutureProvider<bool>((ref) async {
   final restored = await ref.read(sessionProvider.notifier).restoreSession();
@@ -461,6 +462,13 @@ final associationCircularLibraryProvider =
 final memberDirectoryProvider = FutureProvider<List<MemberDirectoryItem>>(
   (ref) => ref.watch(apiClientProvider).fetchMembers(),
 );
+
+final memberPostsProvider =
+    FutureProvider.family<List<MemberPostItem>, AppViewerRole>(
+      (ref, viewerRole) => ref
+          .watch(apiClientProvider)
+          .fetchPosts(approvedOnly: !viewerRole.isAdmin),
+    );
 
 final memberArenaDataProvider =
     FutureProvider.family<MemberArenaData, AppViewerRole>(
@@ -502,6 +510,169 @@ final tenantProvider = FutureProvider<TenantContext>((ref) async {
   return TenantContext.fromProfile(profile);
 });
 
+enum AssociationNotificationKind { circular, gallery }
+
+class AssociationNotificationItem {
+  const AssociationNotificationItem({
+    required this.id,
+    required this.kind,
+    required this.title,
+    required this.subtitle,
+    required this.createdAt,
+  });
+
+  final String id;
+  final AssociationNotificationKind kind;
+  final String title;
+  final String subtitle;
+  final DateTime createdAt;
+}
+
+class AssociationNotificationSummary {
+  const AssociationNotificationSummary({
+    required this.items,
+    required this.unseenCircularCount,
+    required this.unseenGalleryCount,
+  });
+
+  const AssociationNotificationSummary.empty()
+    : items = const [],
+      unseenCircularCount = 0,
+      unseenGalleryCount = 0;
+
+  final List<AssociationNotificationItem> items;
+  final int unseenCircularCount;
+  final int unseenGalleryCount;
+
+  int get unseenCount => unseenCircularCount + unseenGalleryCount;
+}
+
+class AssociationNotificationController {
+  const AssociationNotificationController(this.ref);
+
+  final Ref ref;
+
+  static const _circularSeenPrefix = 'notifications.circularSeenAt.';
+  static const _gallerySeenPrefix = 'notifications.gallerySeenAt.';
+
+  SharedPreferences get _preferences => ref.read(sharedPreferencesProvider);
+
+  String _circularSeenKey(String associationId) =>
+      '$_circularSeenPrefix$associationId';
+
+  String _gallerySeenKey(String associationId) =>
+      '$_gallerySeenPrefix$associationId';
+
+  Future<void> markSeen({
+    required String associationId,
+    required AssociationNotificationKind kind,
+    required DateTime seenAt,
+  }) async {
+    final key =
+        kind == AssociationNotificationKind.circular
+            ? _circularSeenKey(associationId)
+            : _gallerySeenKey(associationId);
+    await _preferences.setString(key, seenAt.toUtc().toIso8601String());
+    ref.read(associationNotificationRefreshProvider.notifier).state++;
+  }
+}
+
+final associationNotificationControllerProvider =
+    Provider<AssociationNotificationController>(
+      (ref) => AssociationNotificationController(ref),
+    );
+
+final associationNotificationSummaryProvider = FutureProvider<
+  AssociationNotificationSummary
+>((ref) async {
+  ref.watch(associationNotificationRefreshProvider);
+  final profile = await ref.watch(associationProfileProvider.future);
+  final circularLibrary = await ref.watch(
+    associationCircularLibraryProvider.future,
+  );
+  final preferences = ref.watch(sharedPreferencesProvider);
+  final associationId = profile.id.trim();
+  if (associationId.isEmpty) {
+    return const AssociationNotificationSummary.empty();
+  }
+
+  DateTime? parseSeenAt(String rawValue) {
+    if (rawValue.trim().isEmpty) {
+      return null;
+    }
+    return DateTime.tryParse(rawValue)?.toUtc();
+  }
+
+  final seenCircularAt = parseSeenAt(
+    preferences.getString(
+          '${AssociationNotificationController._circularSeenPrefix}$associationId',
+        ) ??
+        '',
+  );
+  final seenGalleryAt = parseSeenAt(
+    preferences.getString(
+          '${AssociationNotificationController._gallerySeenPrefix}$associationId',
+        ) ??
+        '',
+  );
+
+  final items = <AssociationNotificationItem>[];
+  var unseenCircularCount = 0;
+  for (final item in circularLibrary.items) {
+    final createdAt = DateTime.tryParse(item.createdAt)?.toUtc();
+    if (createdAt == null) {
+      continue;
+    }
+    if (seenCircularAt == null || createdAt.isAfter(seenCircularAt)) {
+      unseenCircularCount++;
+      items.add(
+        AssociationNotificationItem(
+          id: 'circular:${item.id}',
+          kind: AssociationNotificationKind.circular,
+          title:
+              item.headline.trim().isNotEmpty
+                  ? item.headline
+                  : 'New circular uploaded',
+          subtitle:
+              item.tagline.trim().isNotEmpty
+                  ? item.tagline
+                  : item.originalFileName,
+          createdAt: createdAt,
+        ),
+      );
+    }
+  }
+
+  var unseenGalleryCount = 0;
+  for (final folder in profile.galleryFolders) {
+    for (final photo in folder.photos) {
+      final createdAt = DateTime.tryParse(photo.createdAt)?.toUtc();
+      if (createdAt == null) {
+        continue;
+      }
+      if (seenGalleryAt == null || createdAt.isAfter(seenGalleryAt)) {
+        unseenGalleryCount++;
+        items.add(
+          AssociationNotificationItem(
+            id: 'gallery:${photo.id}',
+            kind: AssociationNotificationKind.gallery,
+            title: 'New gallery image added',
+            subtitle: folder.displayName,
+            createdAt: createdAt,
+          ),
+        );
+      }
+    }
+  }
+
+  items.sort((left, right) => right.createdAt.compareTo(left.createdAt));
+  return AssociationNotificationSummary(
+    items: items,
+    unseenCircularCount: unseenCircularCount,
+    unseenGalleryCount: unseenGalleryCount,
+  );
+});
+
 Future<void> _warmAuthenticatedStartup(
   Ref ref,
   AppViewerRole viewerRole,
@@ -509,6 +680,7 @@ Future<void> _warmAuthenticatedStartup(
   final warmupTasks = <Future<void>>[
     ref.read(associationProfileProvider.future).then((_) {}),
     ref.read(tenantProvider.future).then((_) {}),
+    ref.read(associationCircularLibraryProvider.future).then((_) {}),
   ];
 
   if (AppRoleVisibility.preferredHomeArena(viewerRole) == AppArena.dashboard) {
