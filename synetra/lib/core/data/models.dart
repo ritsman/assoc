@@ -2121,8 +2121,8 @@ class MemberDirectoryItem {
       email: json['email']?.toString() ?? '',
       phone: json['phone']?.toString() ?? '',
       photoUrl:
-          json['photoUrl']?.toString() ??
           json['thumbnailUrl']?.toString() ??
+          json['photoUrl']?.toString() ??
           json['imageUrl']?.toString() ??
           '',
     );

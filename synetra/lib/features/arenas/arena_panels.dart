@@ -7063,28 +7063,7 @@ class _MemberDirectoryView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final associationName =
-        tenant?.associationName.trim().isNotEmpty == true
-            ? tenant!.associationName
-            : 'NIMA';
-    final locationLabel = tenant?.locationLabel ?? '';
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _MemberDirectoryHero(
-          associationName: associationName,
-          locationLabel: locationLabel,
-        ),
-        const SizedBox(height: 14),
-        _MemberBreadcrumb(
-          currentLabel: 'Directory',
-          onRootTap: onNavigateToMemberArena,
-        ),
-        const SizedBox(height: 18),
-        child,
-      ],
-    );
+    return child;
   }
 }
 
@@ -7103,29 +7082,7 @@ class _MemberFilteredDirectoryView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final associationName =
-        tenant?.associationName.trim().isNotEmpty == true
-            ? tenant!.associationName
-            : 'NIMA';
-    final locationLabel = tenant?.locationLabel ?? '';
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _MemberFilteredDirectoryHero(
-          associationName: associationName,
-          locationLabel: locationLabel,
-          sectionLabel: section.label,
-        ),
-        const SizedBox(height: 14),
-        _MemberBreadcrumb(
-          currentLabel: section.label,
-          onRootTap: onNavigateToMemberArena,
-        ),
-        const SizedBox(height: 18),
-        child,
-      ],
-    );
+    return child;
   }
 }
 
@@ -7205,78 +7162,6 @@ class _MemberSectionHero extends StatelessWidget {
           height: 1.45,
         ),
       ),
-    );
-  }
-}
-
-class _MemberDirectoryHero extends StatelessWidget {
-  const _MemberDirectoryHero({
-    required this.associationName,
-    required this.locationLabel,
-  });
-
-  final String associationName;
-  final String locationLabel;
-
-  @override
-  Widget build(BuildContext context) {
-    return _AssociationSectionHero(
-      arenaLabel: 'Members',
-      titleSpans: [
-        const TextSpan(text: 'Browse '),
-        TextSpan(
-          text: associationName,
-          style: const TextStyle(fontWeight: FontWeight.w800),
-        ),
-        const TextSpan(text: ' directory'),
-        if (locationLabel.isNotEmpty) ...[
-          const TextSpan(text: ' in '),
-          TextSpan(
-            text: locationLabel,
-            style: const TextStyle(fontWeight: FontWeight.w800),
-          ),
-        ],
-        const TextSpan(text: '.'),
-      ],
-    );
-  }
-}
-
-class _MemberFilteredDirectoryHero extends StatelessWidget {
-  const _MemberFilteredDirectoryHero({
-    required this.associationName,
-    required this.locationLabel,
-    required this.sectionLabel,
-  });
-
-  final String associationName;
-  final String locationLabel;
-  final String sectionLabel;
-
-  @override
-  Widget build(BuildContext context) {
-    return _AssociationSectionHero(
-      arenaLabel: 'Members',
-      titleSpans: [
-        const TextSpan(text: 'Browse '),
-        TextSpan(
-          text: sectionLabel,
-          style: const TextStyle(fontWeight: FontWeight.w800),
-        ),
-        const TextSpan(text: ' in '),
-        TextSpan(
-          text: associationName,
-          style: const TextStyle(fontWeight: FontWeight.w800),
-        ),
-        if (locationLabel.isNotEmpty) ...[
-          const TextSpan(text: ', '),
-          TextSpan(
-            text: locationLabel,
-            style: const TextStyle(fontWeight: FontWeight.w800),
-          ),
-        ],
-        const TextSpan(text: '.'),
-      ],
     );
   }
 }
@@ -16531,11 +16416,11 @@ class _MemberDirectorySection extends ConsumerStatefulWidget {
 
 class _MemberDirectorySectionState
     extends ConsumerState<_MemberDirectorySection> {
-  static const int _pageSize = 50;
-  static const double _scrollPrefetchThreshold = 600;
+  static const int _pageSize = 20;
+  static const double _scrollPrefetchThreshold = 200;
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _listController = ScrollController();
   Timer? _searchDebounce;
-  ScrollPosition? _scrollPosition;
   String _query = '';
   late MemberDirectoryFilter _activeFilter;
   List<MemberDirectoryItem> _members = const [];
@@ -16551,10 +16436,8 @@ class _MemberDirectorySectionState
   void initState() {
     super.initState();
     _activeFilter = widget.initialFilter;
+    _listController.addListener(_handleScroll);
     unawaited(_loadFirstPage());
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _attachScrollListener();
-    });
   }
 
   @override
@@ -16567,46 +16450,23 @@ class _MemberDirectorySectionState
     } else if (oldWidget.refreshToken != widget.refreshToken) {
       unawaited(_loadFirstPage());
     }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _attachScrollListener();
-    });
   }
 
   @override
   void dispose() {
     _searchDebounce?.cancel();
-    _scrollPosition?.removeListener(_handleScroll);
+    _listController
+      ..removeListener(_handleScroll)
+      ..dispose();
     _searchController.dispose();
     super.dispose();
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _attachScrollListener();
-    });
-  }
-
-  void _attachScrollListener() {
-    if (!mounted) {
-      return;
-    }
-    final nextPosition = Scrollable.maybeOf(context)?.position;
-    if (_scrollPosition == nextPosition) {
-      return;
-    }
-    _scrollPosition?.removeListener(_handleScroll);
-    _scrollPosition = nextPosition;
-    _scrollPosition?.addListener(_handleScroll);
-  }
-
   void _handleScroll() {
-    final position = _scrollPosition;
-    if (position == null) {
+    if (!_listController.hasClients) {
       return;
     }
-    if (position.extentAfter <= _scrollPrefetchThreshold) {
+    if (_listController.position.extentAfter <= _scrollPrefetchThreshold) {
       unawaited(_loadNextPage());
     }
   }
@@ -16642,9 +16502,9 @@ class _MemberDirectorySectionState
         _hasMore = page.hasMore;
         _isInitialLoading = false;
       });
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _maybeLoadMoreToFillViewport();
-      });
+      if (_listController.hasClients) {
+        _listController.jumpTo(0);
+      }
     } catch (error) {
       if (!mounted || generation != _requestGeneration) {
         return;
@@ -16694,9 +16554,6 @@ class _MemberDirectorySectionState
         _hasMore = page.hasMore;
         _isLoadingMore = false;
       });
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _maybeLoadMoreToFillViewport();
-      });
     } catch (error) {
       if (!mounted || generation != _requestGeneration) {
         return;
@@ -16705,16 +16562,6 @@ class _MemberDirectorySectionState
         _isLoadingMore = false;
         _errorMessage = error.toString();
       });
-    }
-  }
-
-  void _maybeLoadMoreToFillViewport() {
-    final position = _scrollPosition;
-    if (position == null || _isInitialLoading || _isLoadingMore || !_hasMore) {
-      return;
-    }
-    if (position.maxScrollExtent <= 0 || position.extentAfter <= 200) {
-      unawaited(_loadNextPage());
     }
   }
 
@@ -16731,172 +16578,187 @@ class _MemberDirectorySectionState
 
   @override
   Widget build(BuildContext context) {
-    final groupedMembers = <String, List<MemberDirectoryItem>>{};
-    for (final member in _members) {
-      final label =
-          member.name.trim().isEmpty
-              ? '#'
-              : member.name.trim()[0].toUpperCase().replaceAll(
-                RegExp(r'[^A-Z]'),
-                '#',
-              );
-      groupedMembers.putIfAbsent(label, () => []).add(member);
-    }
-    final sortedLetters = groupedMembers.keys.toList()..sort();
     final hasLoadedMembers = _members.isNotEmpty;
+    final listItemCount =
+        hasLoadedMembers ? _members.length + 1 + (_isLoadingMore ? 1 : 0) : 0;
+    final countLabel = _totalCount <= 0 ? 'Live directory' : '$_totalCount total';
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _SectionHeader(title: widget.title, subtitle: widget.subtitle),
-        const SizedBox(height: 14),
-        if (!widget.lockFilter) ...[
-          SizedBox(
-            height: 44,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
-              itemCount: MemberDirectoryFilter.values.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 10),
-              itemBuilder: (context, index) {
-                final filter = MemberDirectoryFilter.values[index];
-                final selected = filter == _activeFilter;
-                return _DirectoryFilterChip(
-                  label: filter.label,
-                  icon: filter.icon,
-                  selected: selected,
-                  onTap: () {
-                    setState(() {
-                      _activeFilter = filter;
-                    });
-                    unawaited(_loadFirstPage());
-                  },
-                );
-              },
+    return SizedBox(
+      height: MediaQuery.sizeOf(context).height * 0.8,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Members / ${widget.title}',
+            style: const TextStyle(
+              color: Color(0xFF6B7280),
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: 14),
-        ],
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: const Color(0xFFE5E7EB)),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x0A0F172A),
-                blurRadius: 18,
-                offset: Offset(0, 10),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  widget.title,
+                  style: const TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF171717),
+                    height: 1.05,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF7ED),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: const Color(0xFFFED7AA)),
+                ),
+                child: Text(
+                  countLabel,
+                  style: const TextStyle(
+                    color: Color(0xFF9A3412),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
               ),
             ],
           ),
-          child: TextField(
-            controller: _searchController,
-            onChanged: _scheduleSearch,
-            decoration: const InputDecoration(
-              border: InputBorder.none,
-              icon: Icon(Icons.search_rounded),
-              hintText: 'Search by name, company, city, role, or intro',
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: const Color(0xFFE5E7EB)),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x0A0F172A),
+                  blurRadius: 18,
+                  offset: Offset(0, 10),
+                ),
+              ],
+            ),
+            child: TextField(
+              controller: _searchController,
+              onChanged: _scheduleSearch,
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                icon: Icon(Icons.search_rounded),
+                hintText: 'Search by name, company, city, role, or intro',
+              ),
             ),
           ),
-        ),
-        const SizedBox(height: 14),
-        if (_isInitialLoading) ...[
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 24),
-            child: Center(child: CircularProgressIndicator()),
-          ),
-        ] else if (!hasLoadedMembers) ...[
-          if (_errorMessage != null)
-            _ErrorState(
-              title: 'Could not load members',
-              message: _errorMessage!,
-              onRetry: _loadFirstPage,
-            )
-          else
-            const _EmptyStateCard(
-              title: 'No matching members',
-              subtitle:
-                  'Try another search term or add more member records in the backend.',
+          if (!widget.lockFilter) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 44,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                itemCount: MemberDirectoryFilter.values.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 10),
+                itemBuilder: (context, index) {
+                  final filter = MemberDirectoryFilter.values[index];
+                  final selected = filter == _activeFilter;
+                  return _DirectoryFilterChip(
+                    label: filter.label,
+                    icon: filter.icon,
+                    selected: selected,
+                    onTap: () {
+                      setState(() {
+                        _activeFilter = filter;
+                      });
+                      unawaited(_loadFirstPage());
+                    },
+                  );
+                },
+              ),
             ),
-        ] else ...[
-          ...sortedLetters.map(
-            (letter) => Padding(
-              padding: const EdgeInsets.only(bottom: 18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: Text(
-                      letter,
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF171717),
-                      ),
-                    ),
-                  ),
-                  ...groupedMembers[letter]!.map(
-                    (member) => Padding(
+          ],
+          const SizedBox(height: 14),
+          if (_isInitialLoading) ...[
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          ] else if (!hasLoadedMembers) ...[
+            if (_errorMessage != null)
+              _ErrorState(
+                title: 'Could not load members',
+                message: _errorMessage!,
+                onRetry: _loadFirstPage,
+              )
+            else
+              const _EmptyStateCard(
+                title: 'No matching members',
+                subtitle:
+                    'Try another search term or add more member records in the backend.',
+              ),
+          ] else ...[
+            Expanded(
+              child: ListView.builder(
+                controller: _listController,
+                physics: const BouncingScrollPhysics(),
+                itemCount: listItemCount,
+                itemBuilder: (context, index) {
+                  if (index < _members.length) {
+                    final member = _members[index];
+                    return Padding(
                       padding: const EdgeInsets.only(bottom: 14),
                       child: _MemberDirectoryCard(member: member),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          if (_errorMessage != null) ...[
-            const SizedBox(height: 6),
-            _ErrorState(
-              title: 'Could not load more members',
-              message: _errorMessage!,
-              onRetry: _loadNextPage,
-            ),
-          ] else if (_isLoadingMore) ...[
-            const SizedBox(height: 6),
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Column(
-                  children: const [
-                    SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2.4),
-                    ),
-                    SizedBox(height: 10),
-                    Text(
-                      'Loading more members...',
-                      style: TextStyle(
-                        color: Color(0xFF6B7280),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
+                    );
+                  }
+
+                  if (index == _members.length) {
+                    if (_errorMessage != null) {
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 6, bottom: 12),
+                        child: _ErrorState(
+                          title: 'Could not load more members',
+                          message: _errorMessage!,
+                          onRetry: _loadNextPage,
+                        ),
+                      );
+                    }
+
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 6, bottom: 12),
+                      child: Center(
+                        child: Text(
+                          _hasMore
+                              ? 'Scroll to load more members'
+                              : 'Showing all $_totalCount members',
+                          style: const TextStyle(
+                            color: Color(0xFF6B7280),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+
+                  return const Padding(
+                    padding: EdgeInsets.only(bottom: 12),
+                    child: Center(
+                      child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2.4),
                       ),
                     ),
-                  ],
-                ),
-              ),
-            ),
-          ] else ...[
-            const SizedBox(height: 6),
-            Center(
-              child: Text(
-                _hasMore
-                    ? 'Scroll to load more members'
-                    : 'Showing all $_totalCount members',
-                style: const TextStyle(
-                  color: Color(0xFF6B7280),
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
+                  );
+                },
               ),
             ),
           ],
         ],
-      ],
+      ),
     );
   }
 }
