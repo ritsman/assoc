@@ -202,6 +202,42 @@ function splitRepresentativeName(name) {
   };
 }
 
+const legacyPrimaryMembershipTypeValues = new Set([
+  "",
+  "na",
+  "n/a",
+  "none",
+  "null",
+  "undefined",
+]);
+
+function normalizeMembershipTypeValue(value) {
+  const normalizedValue = normalizeExcelValue(value).replace(/\s+/g, " ").trim();
+  const loweredValue = normalizedValue.toLowerCase();
+
+  if (legacyPrimaryMembershipTypeValues.has(loweredValue)) {
+    return "Primary";
+  }
+
+  if (
+    loweredValue === "guest" ||
+    loweredValue === "temporary visit" ||
+    loweredValue === "visitor"
+  ) {
+    return "Guest";
+  }
+
+  if (loweredValue === "associate") {
+    return "Associate";
+  }
+
+  if (loweredValue === "primary") {
+    return "Primary";
+  }
+
+  return normalizedValue || "Primary";
+}
+
 function mapBulkImportRow(headers, rowValues) {
   const row = Object.fromEntries(
     headers.map((header, index) => [header, normalizeExcelValue(rowValues[index])]),
@@ -223,6 +259,9 @@ function mapBulkImportRow(headers, rowValues) {
     dateOfBirth: row.date_of_birth,
     gender: row.gender,
     bloodGroup: row.blood_group,
+    membershipType: normalizeMembershipTypeValue(
+      row.membership_type || row.membership_category || row.member_type,
+    ),
     businessType: row.business_type,
     address: row.address,
   };
@@ -356,18 +395,27 @@ function normalizeMemberPhotoValue(photoUrl, fallbackBaseName) {
 }
 
 async function normalizeMemberRecord(member) {
-  if (!member?.id || !isInlineDataImageUrl(member.photoUrl)) {
+  if (!member?.id) {
     return member;
   }
 
-  const nextPhotoUrl = normalizeMemberPhotoValue(member.photoUrl, member.id);
-  if (nextPhotoUrl === member.photoUrl) {
+  const nextPhotoUrl = isInlineDataImageUrl(member.photoUrl)
+    ? normalizeMemberPhotoValue(member.photoUrl, member.id)
+    : member.photoUrl;
+  const nextRoleTitle = normalizeMembershipTypeValue(member.roleTitle);
+
+  if (nextPhotoUrl === member.photoUrl && nextRoleTitle === (member.roleTitle ?? "")) {
     return member;
   }
 
   return prisma.member.update({
     where: { id: member.id },
-    data: { photoUrl: nextPhotoUrl },
+    data: {
+      ...(nextPhotoUrl !== member.photoUrl ? { photoUrl: nextPhotoUrl } : {}),
+      ...(nextRoleTitle !== (member.roleTitle ?? "")
+        ? { roleTitle: nextRoleTitle }
+        : {}),
+    },
     include: {
       association: true,
       user: true,
@@ -759,7 +807,7 @@ router.post(
                 phone: mappedRow.phone || undefined,
                 address: mappedRow.address || undefined,
                 companyName: mappedRow.companyName || undefined,
-                roleTitle: mappedRow.businessType || undefined,
+                roleTitle: mappedRow.membershipType,
                 membershipDetails: mappedRow.membershipNumber
                   ? `Membership No: ${mappedRow.membershipNumber}`
                   : undefined,

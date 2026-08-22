@@ -10492,6 +10492,11 @@ function AdminBulkMemberPanel({
             Need the correct format first? Download the member import template
             and fill the same headers before uploading.
           </small>
+          <small>
+            Include the <strong>membership_type</strong> column and use
+            Primary, Associate, or Guest. Blank or legacy NA values will be
+            treated as Primary.
+          </small>
         </label>
       </div>
 
