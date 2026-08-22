@@ -111,9 +111,11 @@ export async function attachSessionContext(req, res, next) {
   try {
     const session = await resolveAuthenticatedSession(token);
     if (!session) {
-      return res.status(401).json({
-        error: "Session expired or invalid. Please sign in again.",
-      });
+      // Treat stale bearer tokens as anonymous for routes that do not require
+      // authentication. Protected routes still enforce auth via
+      // requireAuthenticatedSession / requireAdminUser.
+      req.auth = null;
+      return next();
     }
 
     req.auth = {

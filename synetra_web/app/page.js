@@ -6501,6 +6501,8 @@ function MemberTable({
   title = "Members",
 }) {
   const [tableSearchQuery, setTableSearchQuery] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 50;
 
   const normalizedQuery = tableSearchQuery.trim().toLowerCase();
   const visibleItems = normalizedQuery
@@ -6510,11 +6512,31 @@ function MemberTable({
           .some((field) => field.toLowerCase().includes(normalizedQuery));
       })
     : items;
+  const totalPages = Math.max(1, Math.ceil(visibleItems.length / pageSize));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const pageStartIndex = (safeCurrentPage - 1) * pageSize;
+  const paginatedItems = visibleItems.slice(
+    pageStartIndex,
+    pageStartIndex + pageSize,
+  );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [tableSearchQuery, items, title]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   return (
     <section className="member-table-panel">
       <div className="panel-topline">
         <h2>{title}</h2>
+        <span className="mini-label">
+          Page {safeCurrentPage} of {totalPages}
+        </span>
       </div>
 
       <div className="member-table-search">
@@ -6556,7 +6578,7 @@ function MemberTable({
                 </td>
               </tr>
             ) : null}
-            {visibleItems.map((member) => (
+            {paginatedItems.map((member) => (
               <tr
                 key={member.id}
                 className={
@@ -6679,6 +6701,36 @@ function MemberTable({
           </tbody>
         </table>
       </div>
+
+      {visibleItems.length > pageSize ? (
+        <div className="profile-action-row">
+          <span className="mini-label">
+            Showing {pageStartIndex + 1}-
+            {Math.min(pageStartIndex + pageSize, visibleItems.length)} of{" "}
+            {visibleItems.length}
+          </span>
+          <div className="record-actions">
+            <button
+              className="secondary-link secondary-button"
+              type="button"
+              onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+              disabled={safeCurrentPage === 1}
+            >
+              Prev
+            </button>
+            <button
+              className="secondary-link secondary-button"
+              type="button"
+              onClick={() =>
+                setCurrentPage((page) => Math.min(totalPages, page + 1))
+              }
+              disabled={safeCurrentPage === totalPages}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
