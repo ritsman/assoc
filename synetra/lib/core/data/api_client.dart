@@ -26,6 +26,14 @@ class SynetraApiClient {
     'members-admin',
   };
 
+  bool _isMemberVisibleToApp(Map<String, dynamic> item) {
+    final user = item['user'] as Map<String, dynamic>?;
+    final approvalStatus =
+        user?['approvalStatus']?.toString().trim().toUpperCase() ?? '';
+    final isActive = user?['isActive'] == true;
+    return approvalStatus == 'APPROVED' && isActive;
+  }
+
   bool _isVendorVisibleToApp(Map<String, dynamic> item) {
     final vendorStatus = item['status']?.toString().trim().toUpperCase() ?? '';
     if (vendorStatus != 'ACTIVE') {
@@ -137,7 +145,7 @@ class SynetraApiClient {
   }) async {
     final results = await Future.wait<dynamic>([
       fetchPosts(approvedOnly: !viewerRole.isAdmin),
-      fetchMembers(),
+      fetchMembers(approvedOnly: !viewerRole.isAdmin),
     ]);
     final posts = results[0] as List<MemberPostItem>;
     final members = results[1] as List<MemberDirectoryItem>;
@@ -193,7 +201,9 @@ class SynetraApiClient {
         .toList();
   }
 
-  Future<List<MemberDirectoryItem>> fetchMembers() async {
+  Future<List<MemberDirectoryItem>> fetchMembers({
+    bool approvedOnly = false,
+  }) async {
     final json = await _getCachedJson(
       Uri.parse('$_baseUrl/members?view=directory'),
       cacheKey: 'members-directory',
@@ -201,9 +211,9 @@ class SynetraApiClient {
     );
     final items = (json['members'] as List<dynamic>? ?? const []);
     return items
-        .map(
-          (item) => MemberDirectoryItem.fromJson(item as Map<String, dynamic>),
-        )
+        .whereType<Map<String, dynamic>>()
+        .where((item) => !approvedOnly || _isMemberVisibleToApp(item))
+        .map((item) => MemberDirectoryItem.fromJson(item))
         .toList();
   }
 
@@ -490,7 +500,9 @@ class SynetraApiClient {
       return;
     }
 
-    final uri = Uri.parse('$_baseUrl/associations/$associationId/gallery/folders');
+    final uri = Uri.parse(
+      '$_baseUrl/associations/$associationId/gallery/folders',
+    );
     final response = await _authorizedMultipartRequest((overrideAuthToken) {
       final request = http.MultipartRequest('POST', uri);
       request.headers.addAll(
@@ -523,7 +535,9 @@ class SynetraApiClient {
     required String name,
   }) async {
     final response = await _authorizedPatch(
-      Uri.parse('$_baseUrl/associations/$associationId/gallery/folders/$folderId'),
+      Uri.parse(
+        '$_baseUrl/associations/$associationId/gallery/folders/$folderId',
+      ),
       includeJsonContentType: true,
       body: jsonEncode({'name': name.trim()}),
     );
@@ -539,7 +553,9 @@ class SynetraApiClient {
     required String folderId,
   }) async {
     final response = await _authorizedDelete(
-      Uri.parse('$_baseUrl/associations/$associationId/gallery/folders/$folderId'),
+      Uri.parse(
+        '$_baseUrl/associations/$associationId/gallery/folders/$folderId',
+      ),
     );
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -986,6 +1002,7 @@ class SynetraApiClient {
             'imageFile',
             draft.imageFile!.bytes,
             filename: draft.imageFile!.name,
+            contentType: MediaType.parse(draft.imageFile!.mimeType),
           ),
         );
       }
@@ -996,6 +1013,7 @@ class SynetraApiClient {
             'brochureFile',
             draft.brochureFile!.bytes,
             filename: draft.brochureFile!.name,
+            contentType: MediaType.parse(draft.brochureFile!.mimeType),
           ),
         );
       }
@@ -1262,6 +1280,24 @@ class SynetraApiClient {
       Uri.parse('$_baseUrl/members/${draft.id}'),
       includeJsonContentType: true,
       body: jsonEncode(draft.toJson()),
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Status ${response.statusCode}: ${response.body}');
+    }
+    _invalidateCacheKeys({..._memberCacheKeys, 'dashboard-summary'});
+  }
+
+  Future<void> submitPublicMemberRegistration({
+    required MemberMasterDraft draft,
+  }) async {
+    final guestDraft = draft.copyWith(
+      membershipType: 'Guest',
+      paymentStatus: 'Pending',
+    );
+    final response = await _httpClient.post(
+      Uri.parse('$_baseUrl/members'),
+      headers: _buildHeaders(includeJsonContentType: true),
+      body: jsonEncode(guestDraft.toJson()),
     );
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('Status ${response.statusCode}: ${response.body}');

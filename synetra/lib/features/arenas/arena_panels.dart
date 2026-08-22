@@ -22,14 +22,14 @@ class _MemberArenaPanelState extends ConsumerState<MemberArenaPanel> {
   bool _isSavingMemberMaster = false;
 
   Future<void> _refresh() async {
-    ref.invalidate(memberDirectoryProvider);
+    ref.invalidate(memberDirectoryProvider(widget.viewerRole));
     ref.invalidate(memberPostsProvider(widget.viewerRole));
     ref.invalidate(tenantProvider);
     if (widget.section == MemberArenaSection.media) {
       await ref.read(memberPostsProvider(widget.viewerRole).future);
       return;
     }
-    await ref.read(memberDirectoryProvider.future);
+    await ref.read(memberDirectoryProvider(widget.viewerRole).future);
   }
 
   Future<void> _updatePostStatus(
@@ -159,7 +159,9 @@ class _MemberArenaPanelState extends ConsumerState<MemberArenaPanel> {
             ? ref.watch(memberPostsProvider(widget.viewerRole))
             : null;
     final membersAsync =
-        isMediaSection ? null : ref.watch(memberDirectoryProvider);
+        isMediaSection
+            ? null
+            : ref.watch(memberDirectoryProvider(widget.viewerRole));
 
     final activeAsync = isMediaSection ? postsAsync! : membersAsync!;
 
@@ -5877,10 +5879,11 @@ class _AssociationArenaPanelState extends ConsumerState<AssociationArenaPanel> {
   Future<void> _refresh() async {
     ref.invalidate(tenantProvider);
     ref.invalidate(memberArenaDataProvider);
+    ref.invalidate(memberDirectoryProvider(widget.viewerRole));
     await Future.wait([
       ref.refresh(associationProfileProvider.future),
       ref.refresh(associationAboutProvider.future),
-      ref.refresh(memberDirectoryProvider.future),
+      ref.refresh(memberDirectoryProvider(widget.viewerRole).future),
       ref.refresh(associationCircularLibraryProvider.future),
     ]);
   }
@@ -6727,7 +6730,9 @@ class _AssociationArenaPanelState extends ConsumerState<AssociationArenaPanel> {
     }
 
     if (widget.section == AssociationArenaSection.managementCommittee) {
-      final membersAsync = ref.watch(memberDirectoryProvider);
+      final membersAsync = ref.watch(
+        memberDirectoryProvider(widget.viewerRole),
+      );
       return membersAsync.when(
         loading: () => const _LoadingState(),
         error:
@@ -6806,7 +6811,9 @@ class _AssociationArenaPanelState extends ConsumerState<AssociationArenaPanel> {
     }
 
     if (widget.section == AssociationArenaSection.master) {
-      final membersAsync = ref.watch(memberDirectoryProvider);
+      final membersAsync = ref.watch(
+        memberDirectoryProvider(widget.viewerRole),
+      );
       return membersAsync.when(
         loading: () => const _LoadingState(),
         error:

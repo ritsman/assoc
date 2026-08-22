@@ -459,9 +459,12 @@ final associationCircularLibraryProvider =
       (ref) => ref.watch(apiClientProvider).fetchAssociationCircularLibrary(),
     );
 
-final memberDirectoryProvider = FutureProvider<List<MemberDirectoryItem>>(
-  (ref) => ref.watch(apiClientProvider).fetchMembers(),
-);
+final memberDirectoryProvider =
+    FutureProvider.family<List<MemberDirectoryItem>, AppViewerRole>(
+      (ref, viewerRole) => ref
+          .watch(apiClientProvider)
+          .fetchMembers(approvedOnly: !viewerRole.isAdmin),
+    );
 
 final memberPostsProvider =
     FutureProvider.family<List<MemberPostItem>, AppViewerRole>(
