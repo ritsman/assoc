@@ -20,16 +20,25 @@ class _MemberArenaPanelState extends ConsumerState<MemberArenaPanel> {
   String? _updatingPostId;
   String? _editingMemberMasterId;
   bool _isSavingMemberMaster = false;
+  int _directoryRefreshToken = 0;
 
   Future<void> _refresh() async {
-    ref.invalidate(memberDirectoryProvider(widget.viewerRole));
     ref.invalidate(memberPostsProvider(widget.viewerRole));
     ref.invalidate(tenantProvider);
     if (widget.section == MemberArenaSection.media) {
       await ref.read(memberPostsProvider(widget.viewerRole).future);
       return;
     }
-    await ref.read(memberDirectoryProvider(widget.viewerRole).future);
+    if (widget.section == MemberArenaSection.master) {
+      ref.invalidate(memberDirectoryProvider(widget.viewerRole));
+      await ref.read(memberDirectoryProvider(widget.viewerRole).future);
+      return;
+    }
+    if (mounted) {
+      setState(() {
+        _directoryRefreshToken++;
+      });
+    }
   }
 
   Future<void> _updatePostStatus(
@@ -154,104 +163,143 @@ class _MemberArenaPanelState extends ConsumerState<MemberArenaPanel> {
   @override
   Widget build(BuildContext context) {
     final isMediaSection = widget.section == MemberArenaSection.media;
+    final isMasterSection = widget.section == MemberArenaSection.master;
     final postsAsync =
         isMediaSection
             ? ref.watch(memberPostsProvider(widget.viewerRole))
             : null;
     final membersAsync =
-        isMediaSection
+        isMediaSection || !isMasterSection
             ? null
             : ref.watch(memberDirectoryProvider(widget.viewerRole));
-
-    final activeAsync = isMediaSection ? postsAsync! : membersAsync!;
-
-    return activeAsync.when(
-      loading: () => const _LoadingState(),
-      error:
-          (error, _) => _ErrorState(
-            title: 'Could not load members',
-            message: error.toString(),
-            onRetry: _refresh,
-          ),
-      data: (_) {
-        final posts =
-            isMediaSection
-                ? postsAsync!.requireValue
-                : const <MemberPostItem>[];
-        final members =
-            isMediaSection
-                ? const <MemberDirectoryItem>[]
-                : membersAsync!.requireValue;
-        return Column(
-          children: [
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: _refresh,
-                icon: const Icon(Icons.refresh_rounded),
-                label: const Text('Refresh'),
-              ),
+    if (isMediaSection) {
+      return postsAsync!.when(
+        loading: () => const _LoadingState(),
+        error:
+            (error, _) => _ErrorState(
+              title: 'Could not load members',
+              message: error.toString(),
+              onRetry: _refresh,
             ),
-            const SizedBox(height: 8),
-            if (widget.section == MemberArenaSection.media)
-              _MemberMediaView(
-                viewerRole: widget.viewerRole,
-                tenant: ref.watch(tenantProvider).valueOrNull,
-                onNavigateToMemberArena:
-                    () => widget.onSectionSelected(
-                      MemberArenaNavigation.defaultSection(widget.viewerRole),
-                    ),
-                child: _MemberMediaSection(
-                  posts: posts,
-                  viewerRole: widget.viewerRole,
-                  updatingPostId: _updatingPostId,
-                  onUpdateStatus: _updatePostStatus,
-                ),
-              )
-            else if (widget.section == MemberArenaSection.directory)
-              _MemberDirectoryView(
-                tenant: ref.watch(tenantProvider).valueOrNull,
-                onNavigateToMemberArena:
-                    () => widget.onSectionSelected(
-                      MemberArenaNavigation.defaultSection(widget.viewerRole),
-                    ),
-                child: _MemberDirectorySection(members: members),
-              )
-            else if (widget.section == MemberArenaSection.master)
-              _MemberMasterView(
-                tenant: ref.watch(tenantProvider).valueOrNull,
-                onNavigateToMemberArena:
-                    () => widget.onSectionSelected(
-                      MemberArenaNavigation.defaultSection(widget.viewerRole),
-                    ),
-                child: _AssociationMasterSection(
-                  canManage: widget.viewerRole.isAdmin,
-                  members: [...members]..sort(
-                    (a, b) =>
-                        a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+        data:
+            (posts) => Column(
+              children: [
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: _refresh,
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: const Text('Refresh'),
                   ),
-                  editingMemberId: _editingMemberMasterId,
-                  isSaving: _isSavingMemberMaster,
-                  onOpenEditor: _openMemberMasterEditor,
-                  onDelete: _deleteMemberMaster,
                 ),
-              )
-            else
-              _MemberFilteredDirectoryView(
-                tenant: ref.watch(tenantProvider).valueOrNull,
-                section: widget.section,
-                onNavigateToMemberArena:
-                    () => widget.onSectionSelected(
-                      MemberArenaNavigation.defaultSection(widget.viewerRole),
+                const SizedBox(height: 8),
+                _MemberMediaView(
+                  viewerRole: widget.viewerRole,
+                  tenant: ref.watch(tenantProvider).valueOrNull,
+                  onNavigateToMemberArena:
+                      () => widget.onSectionSelected(
+                        MemberArenaNavigation.defaultSection(widget.viewerRole),
+                      ),
+                  child: _MemberMediaSection(
+                    posts: posts,
+                    viewerRole: widget.viewerRole,
+                    updatingPostId: _updatingPostId,
+                    onUpdateStatus: _updatePostStatus,
+                  ),
+                ),
+              ],
+            ),
+      );
+    }
+
+    if (isMasterSection) {
+      return membersAsync!.when(
+        loading: () => const _LoadingState(),
+        error:
+            (error, _) => _ErrorState(
+              title: 'Could not load members',
+              message: error.toString(),
+              onRetry: _refresh,
+            ),
+        data:
+            (members) => Column(
+              children: [
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: _refresh,
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: const Text('Refresh'),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                _MemberMasterView(
+                  tenant: ref.watch(tenantProvider).valueOrNull,
+                  onNavigateToMemberArena:
+                      () => widget.onSectionSelected(
+                        MemberArenaNavigation.defaultSection(widget.viewerRole),
+                      ),
+                  child: _AssociationMasterSection(
+                    canManage: widget.viewerRole.isAdmin,
+                    members: [...members]..sort(
+                      (a, b) =>
+                          a.name.toLowerCase().compareTo(b.name.toLowerCase()),
                     ),
-                child: _FilteredMemberDirectorySection(
-                  members: members,
-                  section: widget.section,
+                    editingMemberId: _editingMemberMasterId,
+                    isSaving: _isSavingMemberMaster,
+                    onOpenEditor: _openMemberMasterEditor,
+                    onDelete: _deleteMemberMaster,
+                  ),
                 ),
-              ),
-          ],
-        );
-      },
+              ],
+            ),
+      );
+    }
+
+    final tenant = ref.watch(tenantProvider).valueOrNull;
+    final directoryChild =
+        widget.section == MemberArenaSection.directory
+            ? _MemberDirectorySection(
+              viewerRole: widget.viewerRole,
+              refreshToken: _directoryRefreshToken,
+            )
+            : _FilteredMemberDirectorySection(
+              viewerRole: widget.viewerRole,
+              section: widget.section,
+              refreshToken: _directoryRefreshToken,
+            );
+
+    return Column(
+      children: [
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton.icon(
+            onPressed: _refresh,
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Refresh'),
+          ),
+        ),
+        const SizedBox(height: 8),
+        if (widget.section == MemberArenaSection.directory)
+          _MemberDirectoryView(
+            tenant: tenant,
+            onNavigateToMemberArena:
+                () => widget.onSectionSelected(
+                  MemberArenaNavigation.defaultSection(widget.viewerRole),
+                ),
+            child: directoryChild,
+          )
+        else
+          _MemberFilteredDirectoryView(
+            tenant: tenant,
+            section: widget.section,
+            onNavigateToMemberArena:
+                () => widget.onSectionSelected(
+                  MemberArenaNavigation.defaultSection(widget.viewerRole),
+                ),
+            child: directoryChild,
+          ),
+      ],
     );
   }
 }
@@ -7383,18 +7431,21 @@ class _MemberBreadcrumb extends StatelessWidget {
 
 class _FilteredMemberDirectorySection extends StatelessWidget {
   const _FilteredMemberDirectorySection({
-    required this.members,
+    required this.viewerRole,
     required this.section,
+    required this.refreshToken,
   });
 
-  final List<MemberDirectoryItem> members;
+  final AppViewerRole viewerRole;
   final MemberArenaSection section;
+  final int refreshToken;
 
   @override
   Widget build(BuildContext context) {
     final config = MemberArenaSectionDirectoryMeta.configFor(section);
     return _MemberDirectorySection(
-      members: members,
+      viewerRole: viewerRole,
+      refreshToken: refreshToken,
       initialFilter: config.filter,
       lockFilter: true,
       title: config.title,
@@ -16455,9 +16506,10 @@ class _PostMediaPreview extends StatelessWidget {
   }
 }
 
-class _MemberDirectorySection extends StatefulWidget {
+class _MemberDirectorySection extends ConsumerStatefulWidget {
   const _MemberDirectorySection({
-    required this.members,
+    required this.viewerRole,
+    this.refreshToken = 0,
     this.initialFilter = MemberDirectoryFilter.all,
     this.lockFilter = false,
     this.title = 'Member Directory',
@@ -16465,83 +16517,222 @@ class _MemberDirectorySection extends StatefulWidget {
         'Browse members alphabetically, filter by membership type, and search by name, company, city, or profile details.',
   });
 
-  final List<MemberDirectoryItem> members;
+  final AppViewerRole viewerRole;
+  final int refreshToken;
   final MemberDirectoryFilter initialFilter;
   final bool lockFilter;
   final String title;
   final String subtitle;
 
   @override
-  State<_MemberDirectorySection> createState() =>
+  ConsumerState<_MemberDirectorySection> createState() =>
       _MemberDirectorySectionState();
 }
 
-class _MemberDirectorySectionState extends State<_MemberDirectorySection> {
-  static const int _pageSize = 60;
+class _MemberDirectorySectionState
+    extends ConsumerState<_MemberDirectorySection> {
+  static const int _pageSize = 50;
+  static const double _scrollPrefetchThreshold = 600;
   final TextEditingController _searchController = TextEditingController();
+  Timer? _searchDebounce;
+  ScrollPosition? _scrollPosition;
   String _query = '';
   late MemberDirectoryFilter _activeFilter;
-  int _visibleMemberCount = _pageSize;
+  List<MemberDirectoryItem> _members = const [];
+  int _currentPage = 0;
+  int _totalCount = 0;
+  int _requestGeneration = 0;
+  bool _isInitialLoading = true;
+  bool _isLoadingMore = false;
+  bool _hasMore = true;
+  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
     _activeFilter = widget.initialFilter;
+    unawaited(_loadFirstPage());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _attachScrollListener();
+    });
   }
 
   @override
   void didUpdateWidget(covariant _MemberDirectorySection oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.initialFilter != widget.initialFilter) {
+    if (oldWidget.initialFilter != widget.initialFilter ||
+        oldWidget.viewerRole != widget.viewerRole) {
       _activeFilter = widget.initialFilter;
-      _visibleMemberCount = _pageSize;
+      unawaited(_loadFirstPage());
+    } else if (oldWidget.refreshToken != widget.refreshToken) {
+      unawaited(_loadFirstPage());
     }
-    if (oldWidget.members != widget.members) {
-      _visibleMemberCount = _pageSize;
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _attachScrollListener();
+    });
   }
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
+    _scrollPosition?.removeListener(_handleScroll);
     _searchController.dispose();
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) {
-    final normalizedQuery = _query.trim().toLowerCase();
-    final filteredMembers =
-        widget.members.where((member) {
-            final matchesFilter = _activeFilter.matches(member);
-            if (!matchesFilter) {
-              return false;
-            }
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _attachScrollListener();
+    });
+  }
 
-            if (normalizedQuery.isEmpty) {
-              return true;
-            }
+  void _attachScrollListener() {
+    if (!mounted) {
+      return;
+    }
+    final nextPosition = Scrollable.maybeOf(context)?.position;
+    if (_scrollPosition == nextPosition) {
+      return;
+    }
+    _scrollPosition?.removeListener(_handleScroll);
+    _scrollPosition = nextPosition;
+    _scrollPosition?.addListener(_handleScroll);
+  }
 
-            final haystack =
-                [
-                  member.name,
-                  member.companyName,
-                  member.roleTitle,
-                  member.address,
-                  member.memberBio,
-                  member.membershipDetails,
-                  member.email,
-                  member.phone,
-                ].join(' ').toLowerCase();
-            return haystack.contains(normalizedQuery);
-          }).toList()
-          ..sort(
-            (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+  void _handleScroll() {
+    final position = _scrollPosition;
+    if (position == null) {
+      return;
+    }
+    if (position.extentAfter <= _scrollPrefetchThreshold) {
+      unawaited(_loadNextPage());
+    }
+  }
+
+  Future<void> _loadFirstPage() async {
+    final generation = ++_requestGeneration;
+    setState(() {
+      _isInitialLoading = true;
+      _isLoadingMore = false;
+      _hasMore = true;
+      _currentPage = 0;
+      _totalCount = 0;
+      _errorMessage = null;
+    });
+
+    try {
+      final page = await ref
+          .read(apiClientProvider)
+          .fetchMemberDirectoryPage(
+            viewerRole: widget.viewerRole,
+            page: 1,
+            pageSize: _pageSize,
+            search: _query,
+            filter: _activeFilter,
           );
-    final visibleMembers = filteredMembers.take(_visibleMemberCount).toList();
-    final hasMoreMembers = visibleMembers.length < filteredMembers.length;
+      if (!mounted || generation != _requestGeneration) {
+        return;
+      }
+      setState(() {
+        _members = page.members;
+        _currentPage = page.page;
+        _totalCount = page.totalCount;
+        _hasMore = page.hasMore;
+        _isInitialLoading = false;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _maybeLoadMoreToFillViewport();
+      });
+    } catch (error) {
+      if (!mounted || generation != _requestGeneration) {
+        return;
+      }
+      setState(() {
+        _members = const [];
+        _errorMessage = error.toString();
+        _isInitialLoading = false;
+      });
+    }
+  }
 
+  Future<void> _loadNextPage() async {
+    if (_isInitialLoading || _isLoadingMore || !_hasMore) {
+      return;
+    }
+
+    final generation = _requestGeneration;
+    setState(() {
+      _isLoadingMore = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final page = await ref
+          .read(apiClientProvider)
+          .fetchMemberDirectoryPage(
+            viewerRole: widget.viewerRole,
+            page: _currentPage + 1,
+            pageSize: _pageSize,
+            search: _query,
+            filter: _activeFilter,
+          );
+      if (!mounted || generation != _requestGeneration) {
+        return;
+      }
+
+      final seenIds = _members.map((member) => member.id).toSet();
+      final appendedMembers = [
+        ..._members,
+        ...page.members.where((member) => !seenIds.contains(member.id)),
+      ];
+      setState(() {
+        _members = appendedMembers;
+        _currentPage = page.page;
+        _totalCount = page.totalCount;
+        _hasMore = page.hasMore;
+        _isLoadingMore = false;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _maybeLoadMoreToFillViewport();
+      });
+    } catch (error) {
+      if (!mounted || generation != _requestGeneration) {
+        return;
+      }
+      setState(() {
+        _isLoadingMore = false;
+        _errorMessage = error.toString();
+      });
+    }
+  }
+
+  void _maybeLoadMoreToFillViewport() {
+    final position = _scrollPosition;
+    if (position == null || _isInitialLoading || _isLoadingMore || !_hasMore) {
+      return;
+    }
+    if (position.maxScrollExtent <= 0 || position.extentAfter <= 200) {
+      unawaited(_loadNextPage());
+    }
+  }
+
+  void _scheduleSearch(String value) {
+    _searchDebounce?.cancel();
+    _query = value.trim();
+    _searchDebounce = Timer(const Duration(milliseconds: 350), () {
+      if (!mounted) {
+        return;
+      }
+      unawaited(_loadFirstPage());
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final groupedMembers = <String, List<MemberDirectoryItem>>{};
-    for (final member in visibleMembers) {
+    for (final member in _members) {
       final label =
           member.name.trim().isEmpty
               ? '#'
@@ -16552,6 +16743,7 @@ class _MemberDirectorySectionState extends State<_MemberDirectorySection> {
       groupedMembers.putIfAbsent(label, () => []).add(member);
     }
     final sortedLetters = groupedMembers.keys.toList()..sort();
+    final hasLoadedMembers = _members.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -16577,6 +16769,7 @@ class _MemberDirectorySectionState extends State<_MemberDirectorySection> {
                     setState(() {
                       _activeFilter = filter;
                     });
+                    unawaited(_loadFirstPage());
                   },
                 );
               },
@@ -16600,7 +16793,7 @@ class _MemberDirectorySectionState extends State<_MemberDirectorySection> {
           ),
           child: TextField(
             controller: _searchController,
-            onChanged: (value) => setState(() => _query = value),
+            onChanged: _scheduleSearch,
             decoration: const InputDecoration(
               border: InputBorder.none,
               icon: Icon(Icons.search_rounded),
@@ -16609,12 +16802,24 @@ class _MemberDirectorySectionState extends State<_MemberDirectorySection> {
           ),
         ),
         const SizedBox(height: 14),
-        if (filteredMembers.isEmpty) ...[
-          const _EmptyStateCard(
-            title: 'No matching members',
-            subtitle:
-                'Try another search term or add more member records in the backend.',
+        if (_isInitialLoading) ...[
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 24),
+            child: Center(child: CircularProgressIndicator()),
           ),
+        ] else if (!hasLoadedMembers) ...[
+          if (_errorMessage != null)
+            _ErrorState(
+              title: 'Could not load members',
+              message: _errorMessage!,
+              onRetry: _loadFirstPage,
+            )
+          else
+            const _EmptyStateCard(
+              title: 'No matching members',
+              subtitle:
+                  'Try another search term or add more member records in the backend.',
+            ),
         ] else ...[
           ...sortedLetters.map(
             (letter) => Padding(
@@ -16643,19 +16848,49 @@ class _MemberDirectorySectionState extends State<_MemberDirectorySection> {
               ),
             ),
           ),
-          if (hasMoreMembers) ...[
+          if (_errorMessage != null) ...[
+            const SizedBox(height: 6),
+            _ErrorState(
+              title: 'Could not load more members',
+              message: _errorMessage!,
+              onRetry: _loadNextPage,
+            ),
+          ] else if (_isLoadingMore) ...[
             const SizedBox(height: 6),
             Center(
-              child: OutlinedButton.icon(
-                onPressed: () {
-                  setState(() {
-                    _visibleMemberCount = (_visibleMemberCount + _pageSize)
-                        .clamp(_pageSize, filteredMembers.length);
-                  });
-                },
-                icon: const Icon(Icons.expand_more_rounded),
-                label: Text(
-                  'Load more members (${filteredMembers.length - visibleMembers.length} remaining)',
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Column(
+                  children: const [
+                    SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2.4),
+                    ),
+                    SizedBox(height: 10),
+                    Text(
+                      'Loading more members...',
+                      style: TextStyle(
+                        color: Color(0xFF6B7280),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ] else ...[
+            const SizedBox(height: 6),
+            Center(
+              child: Text(
+                _hasMore
+                    ? 'Scroll to load more members'
+                    : 'Showing all $_totalCount members',
+                style: const TextStyle(
+                  color: Color(0xFF6B7280),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),

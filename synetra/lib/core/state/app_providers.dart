@@ -474,11 +474,14 @@ final memberPostsProvider =
     );
 
 final memberArenaDataProvider =
-    FutureProvider.family<MemberArenaData, AppViewerRole>(
-      (ref, viewerRole) => ref
+    FutureProvider.family<MemberArenaData, AppViewerRole>((ref, viewerRole) {
+      final username = ref.watch(
+        sessionProvider.select((session) => session.username),
+      );
+      return ref
           .watch(apiClientProvider)
-          .loadMemberArenaData(viewerRole: viewerRole),
-    );
+          .loadMemberArenaData(viewerRole: viewerRole, currentEmail: username);
+    });
 
 final adminArenaDataProvider = FutureProvider<AdminArenaData>(
   (ref) => ref.watch(apiClientProvider).loadAdminArenaData(),

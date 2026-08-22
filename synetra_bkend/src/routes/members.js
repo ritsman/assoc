@@ -42,6 +42,58 @@ const accessStatusSchema = z.object({
   accessStatus: z.enum(["PENDING", "APPROVED", "SUSPENDED", "CANCELLED"]),
 });
 const memberViewQuerySchema = z.enum(["legacy", "directory", "admin"]);
+const positiveIntegerQueryField = z.preprocess(
+  (value) => {
+    if (value === undefined || value === null || value === "") {
+      return undefined;
+    }
+    const normalizedValue = Array.isArray(value) ? value[0] : value;
+    return Number(normalizedValue);
+  },
+  z.number().int().min(1).optional(),
+);
+const optionalTrimmedQueryField = z.preprocess(
+  (value) => {
+    if (value === undefined || value === null) {
+      return undefined;
+    }
+    const normalizedValue = String(Array.isArray(value) ? value[0] : value)
+      .trim();
+    return normalizedValue === "" ? undefined : normalizedValue;
+  },
+  z.string().optional(),
+);
+const memberDirectoryQuerySchema = z.object({
+  page: positiveIntegerQueryField,
+  pageSize: positiveIntegerQueryField,
+  search: optionalTrimmedQueryField,
+  membershipType: optionalTrimmedQueryField,
+  email: optionalTrimmedQueryField,
+  approvedOnly: z.preprocess(
+    (value) => {
+      if (value === undefined || value === null || value === "") {
+        return false;
+      }
+      const normalizedValue = String(Array.isArray(value) ? value[0] : value)
+        .trim()
+        .toLowerCase();
+      return normalizedValue === "true" || normalizedValue === "1";
+    },
+    z.boolean(),
+  ),
+  committeeOnly: z.preprocess(
+    (value) => {
+      if (value === undefined || value === null || value === "") {
+        return false;
+      }
+      const normalizedValue = String(Array.isArray(value) ? value[0] : value)
+        .trim()
+        .toLowerCase();
+      return normalizedValue === "true" || normalizedValue === "1";
+    },
+    z.boolean(),
+  ),
+});
 const optionalStringAsNullField = z.preprocess(
   (value) => {
     if (value === null || value === undefined) {
@@ -236,6 +288,33 @@ function normalizeMembershipTypeValue(value) {
   }
 
   return normalizedValue || "Primary";
+}
+
+function buildMembershipTypeFilter(membershipType) {
+  const normalizedType = normalizeMembershipTypeValue(membershipType)
+    .toLowerCase();
+
+  if (normalizedType === "guest") {
+    return {
+      OR: [
+        { roleTitle: { equals: "Guest", mode: "insensitive" } },
+        { roleTitle: { equals: "temporary visit", mode: "insensitive" } },
+        { roleTitle: { equals: "visitor", mode: "insensitive" } },
+      ],
+    };
+  }
+
+  return {
+    roleTitle: {
+      equals:
+        normalizedType === "associate"
+          ? "Associate"
+          : normalizedType === "primary"
+            ? "Primary"
+            : normalizeMembershipTypeValue(membershipType),
+      mode: "insensitive",
+    },
+  };
 }
 
 function mapBulkImportRow(headers, rowValues) {
@@ -501,48 +580,193 @@ router.get("/", async (req, res) => {
   const { associationId } = req.query;
   const parsedView = memberViewQuerySchema.safeParse(req.query.view);
   const view = parsedView.success ? parsedView.data : "legacy";
-  const where = {
+  const baseWhere = {
     ...(associationId ? { associationId: String(associationId) } : {}),
   };
 
   if (view === "directory") {
-    const members = await prisma.member.findMany({
-      where,
-      select: {
-        id: true,
-        associationId: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        phone: true,
-        address: true,
-        gst: true,
-        photoUrl: true,
-        companyName: true,
-        roleTitle: true,
-        committeePost: true,
-        committeeTenureStart: true,
-        committeeTenureEnd: true,
-        memberBio: true,
-        membershipDetails: true,
-        membershipStartDate: true,
-        membershipEndDate: true,
-        paymentAmount: true,
-        paymentStatus: true,
-      },
-      orderBy: { createdAt: "desc" },
-    });
+    const hasDirectoryControls = [
+      "page",
+      "pageSize",
+      "search",
+      "membershipType",
+      "email",
+      "approvedOnly",
+      "committeeOnly",
+    ].some((key) => req.query[key] !== undefined);
+
+    if (!hasDirectoryControls) {
+      const members = await prisma.member.findMany({
+        where: baseWhere,
+        select: {
+          id: true,
+          associationId: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true,
+          address: true,
+          gst: true,
+          photoUrl: true,
+          companyName: true,
+          roleTitle: true,
+          committeePost: true,
+          committeeTenureStart: true,
+          committeeTenureEnd: true,
+          memberBio: true,
+          membershipDetails: true,
+          membershipStartDate: true,
+          membershipEndDate: true,
+          paymentAmount: true,
+          paymentStatus: true,
+        },
+        orderBy: { createdAt: "desc" },
+      });
+
+      const normalizedMembers = await Promise.all(
+        members.map(normalizeMemberRecord),
+      );
+
+      return res.json({
+        members: normalizedMembers.map((member) =>
+          serializeMemberDirectoryItem(req, member),
+        ),
+      });
+    }
+
+    const parsedDirectoryQuery = memberDirectoryQuerySchema.safeParse(req.query);
+    if (!parsedDirectoryQuery.success) {
+      return res.status(400).json({
+        error: "Invalid member directory query",
+        details: parsedDirectoryQuery.error.flatten(),
+      });
+    }
+
+    const {
+      page = 1,
+      pageSize: rawPageSize,
+      search,
+      membershipType,
+      email,
+      approvedOnly,
+      committeeOnly,
+    } = parsedDirectoryQuery.data;
+    const pageSize = Math.min(rawPageSize ?? 50, 100);
+    const searchValue = search?.trim();
+    const membershipTypeValue = membershipType?.trim();
+    const emailValue = email?.trim().toLowerCase();
+    const where = {
+      ...baseWhere,
+      ...(approvedOnly
+        ? {
+          user: {
+            is: {
+              approvalStatus: ApprovalStatus.APPROVED,
+              isActive: true,
+            },
+          },
+        }
+        : {}),
+      ...(emailValue
+        ? {
+          email: {
+            equals: emailValue,
+            mode: "insensitive",
+          },
+        }
+        : {}),
+      ...(membershipTypeValue
+        ? buildMembershipTypeFilter(membershipTypeValue)
+        : {}),
+      ...(committeeOnly
+        ? {
+          NOT: [
+            { committeePost: null },
+            { committeePost: "" },
+          ],
+        }
+        : {}),
+      ...(searchValue
+        ? {
+          OR: [
+            { firstName: { contains: searchValue, mode: "insensitive" } },
+            { lastName: { contains: searchValue, mode: "insensitive" } },
+            { email: { contains: searchValue, mode: "insensitive" } },
+            { phone: { contains: searchValue, mode: "insensitive" } },
+            { address: { contains: searchValue, mode: "insensitive" } },
+            { gst: { contains: searchValue, mode: "insensitive" } },
+            { companyName: { contains: searchValue, mode: "insensitive" } },
+            { roleTitle: { contains: searchValue, mode: "insensitive" } },
+            { memberBio: { contains: searchValue, mode: "insensitive" } },
+            {
+              membershipDetails: {
+                contains: searchValue,
+                mode: "insensitive",
+              },
+            },
+          ],
+        }
+        : {}),
+    };
+
+    const [members, totalCount] = await Promise.all([
+      prisma.member.findMany({
+        where,
+        select: {
+          id: true,
+          associationId: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true,
+          address: true,
+          gst: true,
+          photoUrl: true,
+          companyName: true,
+          roleTitle: true,
+          committeePost: true,
+          committeeTenureStart: true,
+          committeeTenureEnd: true,
+          memberBio: true,
+          membershipDetails: true,
+          membershipStartDate: true,
+          membershipEndDate: true,
+          paymentAmount: true,
+          paymentStatus: true,
+        },
+        orderBy: [
+          { firstName: "asc" },
+          { lastName: "asc" },
+          { id: "asc" },
+        ],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      prisma.member.count({ where }),
+    ]);
 
     const normalizedMembers = await Promise.all(
       members.map(normalizeMemberRecord),
     );
+    const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
     return res.json({
       members: normalizedMembers.map((member) =>
         serializeMemberDirectoryItem(req, member),
       ),
+      pagination: {
+        page,
+        pageSize,
+        totalCount,
+        totalPages,
+        hasMore: page < totalPages,
+      },
     });
   }
+
+  const where = {
+    ...baseWhere,
+  };
 
   if (view === "admin") {
     const members = await prisma.member.findMany({

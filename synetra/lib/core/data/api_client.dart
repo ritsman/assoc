@@ -142,14 +142,23 @@ class SynetraApiClient {
 
   Future<MemberArenaData> loadMemberArenaData({
     required AppViewerRole viewerRole,
+    String currentEmail = '',
   }) async {
     final results = await Future.wait<dynamic>([
       fetchPosts(approvedOnly: !viewerRole.isAdmin),
-      fetchMembers(approvedOnly: !viewerRole.isAdmin),
+      viewerRole.isMember && currentEmail.trim().isNotEmpty
+          ? fetchCurrentMemberByEmail(
+            email: currentEmail,
+            viewerRole: viewerRole,
+          )
+          : Future<MemberDirectoryItem?>.value(null),
     ]);
     final posts = results[0] as List<MemberPostItem>;
-    final members = results[1] as List<MemberDirectoryItem>;
-    return MemberArenaData(posts: posts, members: members);
+    final member = results[1] as MemberDirectoryItem?;
+    return MemberArenaData(
+      posts: posts,
+      members: member == null ? const [] : [member],
+    );
   }
 
   Future<AdminArenaData> loadAdminArenaData() async {
@@ -215,6 +224,55 @@ class SynetraApiClient {
         .where((item) => !approvedOnly || _isMemberVisibleToApp(item))
         .map((item) => MemberDirectoryItem.fromJson(item))
         .toList();
+  }
+
+  Future<MemberDirectoryPage> fetchMemberDirectoryPage({
+    required AppViewerRole viewerRole,
+    int page = 1,
+    int pageSize = 50,
+    String search = '',
+    MemberDirectoryFilter filter = MemberDirectoryFilter.all,
+    String email = '',
+  }) async {
+    final queryParameters = <String, String>{
+      'view': 'directory',
+      'page': '$page',
+      'pageSize': '$pageSize',
+      if (!viewerRole.isAdmin) 'approvedOnly': 'true',
+      if (search.trim().isNotEmpty) 'search': search.trim(),
+      if (email.trim().isNotEmpty) 'email': email.trim(),
+      if (filter == MemberDirectoryFilter.primary) 'membershipType': 'Primary',
+      if (filter == MemberDirectoryFilter.associate)
+        'membershipType': 'Associate',
+      if (filter == MemberDirectoryFilter.guest) 'membershipType': 'Guest',
+      if (filter == MemberDirectoryFilter.committee) 'committeeOnly': 'true',
+    };
+
+    final uri = Uri.parse(
+      '$_baseUrl/members',
+    ).replace(queryParameters: queryParameters);
+    final json = await _getCachedJson(
+      uri,
+      cacheKey: 'members-directory:${uri.query}',
+      ttl: _shortCacheTtl,
+    );
+    return MemberDirectoryPage.fromJson(json);
+  }
+
+  Future<MemberDirectoryItem?> fetchCurrentMemberByEmail({
+    required String email,
+    required AppViewerRole viewerRole,
+  }) async {
+    final page = await fetchMemberDirectoryPage(
+      viewerRole: viewerRole,
+      page: 1,
+      pageSize: 1,
+      email: email,
+    );
+    if (page.members.isEmpty) {
+      return null;
+    }
+    return page.members.first;
   }
 
   Future<List<AdminMemberAccessItem>> fetchAdminMembers() async {

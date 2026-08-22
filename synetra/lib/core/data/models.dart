@@ -470,6 +470,8 @@ class DashboardVendorItem {
     required this.youtubeUrl,
     required this.linkedinUrl,
     required this.xUrl,
+    required this.primaryLoginEmail,
+    required this.secondaryLoginEmail,
   });
 
   final String id;
@@ -488,6 +490,8 @@ class DashboardVendorItem {
   final String youtubeUrl;
   final String linkedinUrl;
   final String xUrl;
+  final String primaryLoginEmail;
+  final String secondaryLoginEmail;
 
   String get displayName =>
       companyName.trim().isNotEmpty ? companyName : name.trim();
@@ -514,6 +518,8 @@ class DashboardVendorItem {
       youtubeUrl: json['youtubeUrl']?.toString() ?? '',
       linkedinUrl: json['linkedinUrl']?.toString() ?? '',
       xUrl: json['xUrl']?.toString() ?? '',
+      primaryLoginEmail: json['primaryLoginEmail']?.toString() ?? '',
+      secondaryLoginEmail: json['secondaryLoginEmail']?.toString() ?? '',
     );
   }
 }
@@ -1562,6 +1568,9 @@ class AssociationGalleryPhoto {
   final String thumbnailUrl;
   final String createdAt;
 
+  String get createdDateLabel =>
+      createdAt.length >= 10 ? createdAt.substring(0, 10) : createdAt;
+
   factory AssociationGalleryPhoto.fromJson(Map<String, dynamic> json) {
     return AssociationGalleryPhoto(
       id: json['id']?.toString() ?? '',
@@ -1593,6 +1602,20 @@ class AssociationGalleryFolder {
   final int photoCount;
   final List<AssociationGalleryPhoto> previewPhotos;
   final List<AssociationGalleryPhoto> photos;
+
+  String get createdDateLabel =>
+      createdAt.length >= 10 ? createdAt.substring(0, 10) : createdAt;
+
+  String get displayName {
+    final trimmedName = name.trim();
+    if (trimmedName.isNotEmpty) {
+      return trimmedName;
+    }
+    if (createdDateLabel.isNotEmpty) {
+      return createdDateLabel;
+    }
+    return 'Gallery folder';
+  }
 
   factory AssociationGalleryFolder.fromJson(Map<String, dynamic> json) {
     return AssociationGalleryFolder(
@@ -2126,6 +2149,45 @@ class MemberDirectoryItem {
       default:
         return value;
     }
+  }
+}
+
+class MemberDirectoryPage {
+  const MemberDirectoryPage({
+    required this.members,
+    required this.page,
+    required this.pageSize,
+    required this.totalCount,
+    required this.hasMore,
+  });
+
+  const MemberDirectoryPage.empty()
+    : members = const [],
+      page = 1,
+      pageSize = 0,
+      totalCount = 0,
+      hasMore = false;
+
+  final List<MemberDirectoryItem> members;
+  final int page;
+  final int pageSize;
+  final int totalCount;
+  final bool hasMore;
+
+  factory MemberDirectoryPage.fromJson(Map<String, dynamic> json) {
+    final items =
+        (json['members'] as List<dynamic>? ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map(MemberDirectoryItem.fromJson)
+            .toList();
+    final pagination = json['pagination'] as Map<String, dynamic>? ?? const {};
+    return MemberDirectoryPage(
+      members: items,
+      page: (pagination['page'] as num?)?.toInt() ?? 1,
+      pageSize: (pagination['pageSize'] as num?)?.toInt() ?? items.length,
+      totalCount: (pagination['totalCount'] as num?)?.toInt() ?? items.length,
+      hasMore: pagination['hasMore'] == true,
+    );
   }
 }
 
