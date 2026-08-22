@@ -1820,6 +1820,21 @@ function getVendorAccessStatus(linkedUser, vendorStatus) {
   return "Pending Approval";
 }
 
+function getMemberAccessApiValue(nextStatusLabel) {
+  return nextStatusLabel === "Approved"
+    ? "APPROVED"
+    : nextStatusLabel === "Suspended"
+      ? "SUSPENDED"
+      : nextStatusLabel === "Cancelled"
+        ? "CANCELLED"
+        : "PENDING";
+}
+
+async function readErrorMessage(response, fallbackMessage) {
+  const payload = await response.json().catch(() => null);
+  return payload?.error || fallbackMessage;
+}
+
 function splitPhoneNumber(value) {
   const normalizedValue = String(value || "").trim();
   const match = normalizedValue.match(/^(\+\d+)\s*(.*)$/);
@@ -11042,6 +11057,7 @@ function AdminRegistrationRequestsPanel({
   onToggleSelectAll,
   onApplyBulkMemberAccessStatus,
   onUpdateMemberAccessStatus,
+  onApplySingleMemberAccessStatus,
   onSaveMemberAccessChanges,
 }) {
   const allSelected =
@@ -11123,6 +11139,28 @@ function AdminRegistrationRequestsPanel({
                     <option value="Approved">Approved</option>
                     <option value="Cancelled">Rejected</option>
                   </select>
+                  <div className="member-access-inline-actions">
+                    <button
+                      className="secondary-link secondary-button"
+                      type="button"
+                      disabled={isSaving || member.appAccessStatus === "Approved"}
+                      onClick={() =>
+                        onApplySingleMemberAccessStatus(member.id, "Approved")
+                      }
+                    >
+                      Approve Now
+                    </button>
+                    <button
+                      className="secondary-link secondary-button danger-button"
+                      type="button"
+                      disabled={isSaving || member.appAccessStatus === "Cancelled"}
+                      onClick={() =>
+                        onApplySingleMemberAccessStatus(member.id, "Cancelled")
+                      }
+                    >
+                      Reject Now
+                    </button>
+                  </div>
                 </td>
                 <td>
                   <div className="member-table-contact">
@@ -13859,65 +13897,93 @@ export default function HomePage() {
     }));
   };
 
+  const persistMemberAccessChanges = async (updates, successMessage) => {
+    if (updates.length === 0) {
+      setMemberAccessFeedback("No member access changes to save.");
+      return false;
+    }
+
+    await Promise.all(
+      updates.map(async ([memberId, nextStatusLabel]) => {
+        const accessStatus = getMemberAccessApiValue(nextStatusLabel);
+        const response = await runAuthenticatedFetch(`/members/${memberId}/access`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ accessStatus }),
+        });
+
+        if (!response.ok) {
+          throw new Error(
+            await readErrorMessage(
+              response,
+              `Unable to save access for member ${memberId}.`,
+            ),
+          );
+        }
+
+        applyMemberAccessStatusLocally([memberId], nextStatusLabel);
+      }),
+    );
+
+    setMemberAccessEdits((current) => {
+      const nextEdits = { ...current };
+      updates.forEach(([memberId]) => {
+        delete nextEdits[memberId];
+      });
+      return nextEdits;
+    });
+    setSelectedAdminMembers((current) =>
+      current.filter((memberId) => !updates.some(([updatedId]) => updatedId === memberId)),
+    );
+    await loadMembers();
+    setMemberAccessFeedback(successMessage);
+    return true;
+  };
+
   const saveMemberAccessChanges = () => {
     void (async () => {
       setIsSavingMemberAccess(true);
       setMemberAccessFeedback("");
       const updates = Object.entries(memberAccessEdits);
 
-      if (updates.length === 0) {
-        setMemberAccessFeedback("No member access changes to save.");
-        setIsSavingMemberAccess(false);
-        return;
-      }
-
-      const memberLookup = new Map(
-        (memberTabData["All Members"] ?? []).map((member) => [
-          member.id,
-          member,
-        ]),
-      );
-
       try {
-        await Promise.all(
-          updates.map(async ([memberId, nextStatusLabel]) => {
-            const accessStatus =
-              nextStatusLabel === "Approved"
-                ? "APPROVED"
-                : nextStatusLabel === "Suspended"
-                  ? "SUSPENDED"
-                  : nextStatusLabel === "Cancelled"
-                    ? "CANCELLED"
-                    : "PENDING";
-
-            const response = await runAuthenticatedFetch(
-              `/members/${memberId}/access`,
-              {
-                method: "PATCH",
-                headers: {
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({ accessStatus }),
-              },
-            );
-
-            if (!response.ok) {
-              throw new Error(`Unable to save access for member ${memberId}.`);
-            }
-
-            applyMemberAccessStatusLocally([memberId], nextStatusLabel);
-          }),
+        await persistMemberAccessChanges(
+          updates,
+          "Member access changes saved.",
         );
-
-        setMemberAccessEdits({});
-        setSelectedAdminMembers([]);
-        await loadMembers();
-        setMemberAccessFeedback("Member access changes saved.");
       } catch (error) {
         setMemberAccessFeedback(
           error instanceof Error
             ? error.message
             : "Unable to save member access changes.",
+        );
+      } finally {
+        setIsSavingMemberAccess(false);
+      }
+    })();
+  };
+
+  const applySingleMemberAccessStatus = (memberId, nextStatusLabel) => {
+    void (async () => {
+      setIsSavingMemberAccess(true);
+      setMemberAccessFeedback("");
+      setMemberAccessEdits((current) => ({
+        ...current,
+        [memberId]: nextStatusLabel,
+      }));
+
+      try {
+        await persistMemberAccessChanges(
+          [[memberId, nextStatusLabel]],
+          `Registration request ${nextStatusLabel.toLowerCase()} successfully.`,
+        );
+      } catch (error) {
+        setMemberAccessFeedback(
+          error instanceof Error
+            ? error.message
+            : "Unable to update the registration request.",
         );
       } finally {
         setIsSavingMemberAccess(false);
@@ -18998,6 +19064,7 @@ export default function HomePage() {
                   onToggleSelectAll={toggleSelectAllAdminMembers}
                   onApplyBulkMemberAccessStatus={applyBulkMemberAccessStatus}
                   onUpdateMemberAccessStatus={updateMemberAccessStatus}
+                  onApplySingleMemberAccessStatus={applySingleMemberAccessStatus}
                   onSaveMemberAccessChanges={saveMemberAccessChanges}
                 />
               ) : activeAdminAccessSection === "Member Access" ? (

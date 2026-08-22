@@ -16,6 +16,10 @@ import {
   resolvePublicAssetUrl,
 } from "../lib/public-url.js";
 import {
+  requireAdminUser,
+  requireAuthenticatedSession,
+} from "../lib/session-auth.js";
+import {
   deleteLocalAssetIfPresent,
   isInlineDataImageUrl,
   persistInlineImageDataUrl,
@@ -942,7 +946,11 @@ router.patch("/:id", async (req, res) => {
   }
 });
 
-router.patch("/:id/access", async (req, res) => {
+router.patch(
+  "/:id/access",
+  requireAuthenticatedSession,
+  requireAdminUser,
+  async (req, res) => {
   const parsed = accessStatusSchema.safeParse(req.body);
 
   if (!parsed.success) {
@@ -1010,8 +1018,9 @@ router.patch("/:id/access", async (req, res) => {
     });
   });
 
-  return res.json({ member: serializeMember(req, updatedMember) });
-});
+    return res.json({ member: serializeMember(req, updatedMember) });
+  },
+);
 
 router.delete("/:id", async (req, res) => {
   const deleted = await prisma.$transaction(async (tx) => {
