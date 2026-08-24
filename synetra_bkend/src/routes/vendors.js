@@ -1,13 +1,20 @@
+import fs from "fs";
+import path from "path";
+import multer from "multer";
 import { Router } from "express";
 import prismaPkg from "@prisma/client";
 import { z } from "zod";
 import { buildDefaultVendorPasswordHash } from "../lib/auth.js";
 import { ensureAssociationAppAccess } from "../lib/app-access.js";
+import { deleteLocalAssetIfPresent } from "../lib/inline-image-assets.js";
 import { prisma } from "../lib/prisma.js";
+import { buildPublicAssetUrl, resolvePublicAssetUrl } from "../lib/public-url.js";
+import { getUploadSubdirPath } from "../lib/uploads-dir.js";
 import { syncVendorTaxonomyFromVendorInput } from "../lib/vendor-taxonomy.js";
 
 const router = Router();
 const { ApprovalStatus, PaymentStatus, Prisma, VendorStatus } = prismaPkg;
+const vendorUploadsDirPath = getUploadSubdirPath("vendors");
 
 const optionalDateField = z.preprocess(
   (value) => (value === "" || value === null ? null : value),
@@ -21,6 +28,28 @@ const optionalEmailField = z.preprocess(
       : String(value).trim().toLowerCase(),
   z.string().email().optional(),
 );
+
+const optionalBooleanField = z.preprocess((value) => {
+  if (value === "" || value === null || typeof value === "undefined") {
+    return undefined;
+  }
+
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const normalizedValue = value.trim().toLowerCase();
+    if (normalizedValue === "true") {
+      return true;
+    }
+    if (normalizedValue === "false") {
+      return false;
+    }
+  }
+
+  return value;
+}, z.boolean().optional());
 
 const accessStatusSchema = z.object({
   accessStatus: z.enum(["PENDING", "APPROVED", "SUSPENDED", "CANCELLED"]),
@@ -37,7 +66,12 @@ const vendorSchema = z.object({
   phone: z.string().optional(),
   whatsapp: z.string().optional(),
   address: z.string().optional(),
+  country: z.string().optional(),
+  state: z.string().optional(),
   city: z.string().optional(),
+  zipcode: z.string().optional(),
+  website: z.string().optional(),
+  workDescription: z.string().optional(),
   vendorType: z.string().optional(),
   category: z.string().optional(),
   facebookUrl: z.string().optional(),
@@ -51,12 +85,130 @@ const vendorSchema = z.object({
   paymentStatus: z.nativeEnum(PaymentStatus).optional(),
   paymentAmount: z.string().optional(),
   paymentDueDate: optionalDateField,
+  planName: z.string().optional(),
+  openingTime: z.string().optional(),
+  closingTime: z.string().optional(),
+  gstNumber: z.string().optional(),
+  isRestaurant: optionalBooleanField,
+  paymentMode: z.string().optional(),
+  bankName: z.string().optional(),
+  transactionId: z.string().optional(),
+  paymentDescription: z.string().optional(),
+  googleLocation: z.string().optional(),
   badge: z.string().optional(),
   notes: z.string().optional(),
   status: z.nativeEnum(VendorStatus).optional(),
 });
 
 const vendorUpdateSchema = vendorSchema.partial();
+const vendorFileFieldNames = [
+  "companyLogo",
+  "idProof",
+  "locationProof",
+  "companyBrochure",
+  "profilePhoto",
+  "visitingCard",
+];
+const vendorFileUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, callback) => {
+      fs.mkdirSync(vendorUploadsDirPath, { recursive: true });
+      callback(null, vendorUploadsDirPath);
+    },
+    filename: (_req, file, callback) => {
+      const safeBaseName = path
+        .basename(file.originalname, path.extname(file.originalname))
+        .replace(/[^a-zA-Z0-9-_]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 60);
+      callback(
+        null,
+        `${Date.now()}-${safeBaseName || "vendor-asset"}${path.extname(file.originalname)}`,
+      );
+    },
+  }),
+  limits: {
+    fileSize: 15 * 1024 * 1024,
+  },
+  fileFilter: (_req, file, callback) => {
+    const isImage = file.mimetype.startsWith("image/");
+    const isPdf = file.mimetype === "application/pdf";
+
+    if (!isImage && !isPdf) {
+      callback(
+        new Error("Vendor uploads only support images and PDF documents."),
+      );
+      return;
+    }
+
+    callback(null, true);
+  },
+}).fields(vendorFileFieldNames.map((name) => ({ name, maxCount: 1 })));
+
+function buildVendorAsset(req, file) {
+  if (!file) {
+    return undefined;
+  }
+
+  const storagePath = `uploads/vendors/${file.filename}`;
+
+  return {
+    originalFileName: file.originalname,
+    storedFileName: file.filename,
+    storagePath,
+    mimeType: file.mimetype,
+    fileSize: file.size,
+    url: buildPublicAssetUrl(req, storagePath),
+  };
+}
+
+function resolveVendorAsset(req, asset) {
+  if (!asset || typeof asset !== "object" || Array.isArray(asset)) {
+    return null;
+  }
+
+  return {
+    ...asset,
+    url: resolvePublicAssetUrl(req, asset.url || asset.storagePath || ""),
+  };
+}
+
+function collectVendorAssetUpdates(req, files, existingVendor) {
+  const uploadedFiles = files && !Array.isArray(files) ? files : {};
+  const assetFieldMap = {
+    companyLogo: "companyLogoAsset",
+    idProof: "idProofAsset",
+    locationProof: "locationProofAsset",
+    companyBrochure: "companyBrochureAsset",
+    profilePhoto: "profilePhotoAsset",
+    visitingCard: "visitingCardAsset",
+  };
+  const nextAssetValues = {};
+
+  for (const [fileField, assetField] of Object.entries(assetFieldMap)) {
+    const uploadedFile = uploadedFiles[fileField]?.[0];
+    if (!uploadedFile) {
+      continue;
+    }
+
+    nextAssetValues[assetField] = buildVendorAsset(req, uploadedFile);
+  }
+
+  return nextAssetValues;
+}
+
+function cleanupPreviousVendorAssets(existingVendor, nextAssetValues) {
+  for (const assetField of Object.keys(nextAssetValues)) {
+    const previousAsset = existingVendor?.[assetField];
+    if (
+      previousAsset &&
+      typeof previousAsset === "object" &&
+      !Array.isArray(previousAsset)
+    ) {
+      deleteLocalAssetIfPresent(previousAsset.storagePath, "uploads/vendors");
+    }
+  }
+}
 
 function isDuplicateVendorEmailError(error) {
   if (!(error instanceof Prisma.PrismaClientKnownRequestError)) {
@@ -339,13 +491,19 @@ function formatRangeDate(date) {
   return date.toISOString().slice(0, 10);
 }
 
-function serializeVendor(vendor) {
+function serializeVendor(req, vendor) {
   const users = [...(vendor.users ?? [])].sort(
     (left, right) =>
       new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime(),
   );
   return {
     ...vendor,
+    companyLogoAsset: resolveVendorAsset(req, vendor.companyLogoAsset),
+    idProofAsset: resolveVendorAsset(req, vendor.idProofAsset),
+    locationProofAsset: resolveVendorAsset(req, vendor.locationProofAsset),
+    companyBrochureAsset: resolveVendorAsset(req, vendor.companyBrochureAsset),
+    profilePhotoAsset: resolveVendorAsset(req, vendor.profilePhotoAsset),
+    visitingCardAsset: resolveVendorAsset(req, vendor.visitingCardAsset),
     users: users.map(serializeVendorUser),
     loginEmails: users.map((user) => user.email),
     primaryLoginEmail: users[0]?.email ?? "",
@@ -367,10 +525,10 @@ router.get("/", async (req, res) => {
     orderBy: { createdAt: "desc" },
   });
 
-  return res.json({ vendors: vendors.map(serializeVendor) });
+  return res.json({ vendors: vendors.map((vendor) => serializeVendor(req, vendor)) });
 });
 
-router.post("/", async (req, res) => {
+router.post("/", vendorFileUpload, async (req, res) => {
   const parsed = vendorSchema.safeParse(req.body);
 
   if (!parsed.success) {
@@ -385,10 +543,12 @@ router.post("/", async (req, res) => {
   const loginEmails = buildLoginEmails(parsed.data);
 
   try {
+    const assetUpdates = collectVendorAssetUpdates(req, req.files);
     const vendor = await prisma.$transaction(async (tx) => {
       const createdVendor = await tx.vendor.create({
         data: {
           ...extractVendorData(parsed.data, associationId),
+          ...assetUpdates,
           paymentStatus: parsed.data.paymentStatus ?? PaymentStatus.PENDING,
           status:
               parsed.data.status ??
@@ -413,7 +573,7 @@ router.post("/", async (req, res) => {
       });
     });
 
-    return res.status(201).json({ vendor: serializeVendor(vendor) });
+    return res.status(201).json({ vendor: serializeVendor(req, vendor) });
   } catch (error) {
     if (isDuplicateVendorEmailError(error)) {
       return res.status(409).json({
@@ -437,7 +597,7 @@ router.post("/", async (req, res) => {
   }
 });
 
-router.patch("/:id", async (req, res) => {
+router.patch("/:id", vendorFileUpload, async (req, res) => {
   const parsed = vendorUpdateSchema.safeParse(req.body);
 
   if (!parsed.success) {
@@ -457,6 +617,7 @@ router.patch("/:id", async (req, res) => {
   }
 
   try {
+    const assetUpdates = collectVendorAssetUpdates(req, req.files, existingVendor);
     const sortedExistingUsers = [...(existingVendor.users ?? [])].sort(
       (left, right) =>
         new Date(left.createdAt).getTime() -
@@ -478,7 +639,10 @@ router.patch("/:id", async (req, res) => {
     const updatedVendor = await prisma.$transaction(async (tx) => {
       const nextVendor = await tx.vendor.update({
         where: { id: req.params.id },
-        data: extractVendorData(parsed.data),
+        data: {
+          ...extractVendorData(parsed.data),
+          ...assetUpdates,
+        },
         include: vendorInclude,
       });
 
@@ -496,7 +660,8 @@ router.patch("/:id", async (req, res) => {
       });
     });
 
-    return res.json({ vendor: serializeVendor(updatedVendor) });
+    cleanupPreviousVendorAssets(existingVendor, assetUpdates);
+    return res.json({ vendor: serializeVendor(req, updatedVendor) });
   } catch (error) {
     if (isDuplicateVendorEmailError(error)) {
       return res.status(409).json({

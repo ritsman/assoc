@@ -324,7 +324,12 @@ model Vendor {
   phone             String?
   whatsapp          String?
   address           String?
+  country           String?
+  state             String?
   city              String?
+  zipcode           String?
+  website           String?
+  workDescription   String?
   vendorType        String?
   category          String?
   facebookUrl       String?
@@ -332,12 +337,28 @@ model Vendor {
   youtubeUrl        String?
   linkedinUrl       String?
   xUrl              String?
+  companyLogoAsset  Json?
   onboardingStartAt DateTime?
   onboardingEndAt   DateTime?
   membershipPlan    String?
   paymentStatus     PaymentStatus @default(PENDING)
   paymentAmount     String?
   paymentDueDate    DateTime?
+  planName          String?
+  openingTime       String?
+  closingTime       String?
+  gstNumber         String?
+  isRestaurant      Boolean?
+  paymentMode       String?
+  bankName          String?
+  transactionId     String?
+  paymentDescription String?
+  googleLocation    String?
+  idProofAsset      Json?
+  locationProofAsset Json?
+  companyBrochureAsset Json?
+  profilePhotoAsset Json?
+  visitingCardAsset Json?
   badge             String?
   notes             String?
   status            VendorStatus  @default(PENDING)

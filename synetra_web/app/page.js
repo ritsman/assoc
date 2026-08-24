@@ -2312,18 +2312,24 @@ function mapApiVendorToUi(vendor) {
     name,
     company: vendor.companyName || name,
     address: vendor.address || "",
+    country: vendor.country || readVendorNoteValue(vendor.notes, "Country"),
+    state: vendor.state || readVendorNoteValue(vendor.notes, "State"),
     city: vendor.city || "",
+    zipcode: vendor.zipcode || readVendorNoteValue(vendor.notes, "Zipcode"),
     phone: vendor.phone || "",
     whatsapp: (vendor.whatsapp || vendor.phone || "").replace(/\D/g, ""),
     email: vendor.email || "",
     vendorType: vendor.vendorType || "",
     category: vendor.category || "General",
-    website: readVendorNoteValue(vendor.notes, "Website"),
+    website: vendor.website || readVendorNoteValue(vendor.notes, "Website"),
     facebookUrl: vendor.facebookUrl || "",
     instagramUrl: vendor.instagramUrl || "",
     youtubeUrl: vendor.youtubeUrl || "",
     linkedinUrl: vendor.linkedinUrl || "",
     xUrl: vendor.xUrl || "",
+    workDescription:
+      vendor.workDescription || readVendorNoteValue(vendor.notes, "Work Description"),
+    companyLogoAsset: vendor.companyLogoAsset || null,
     onboardingPeriod: formatVendorRange(
       vendor.onboardingStartAt,
       vendor.onboardingEndAt,
@@ -2349,6 +2355,33 @@ function mapApiVendorToUi(vendor) {
             : "Pending",
     paymentAmount: vendor.paymentAmount || "--",
     paymentDue: vendor.paymentDueDate || "--",
+    planName: vendor.planName || readVendorNoteValue(vendor.notes, "Plan Name"),
+    openingTime:
+      vendor.openingTime || readVendorNoteValue(vendor.notes, "Opening Time"),
+    closingTime:
+      vendor.closingTime || readVendorNoteValue(vendor.notes, "Closing Time"),
+    gstNumber: vendor.gstNumber || readVendorNoteValue(vendor.notes, "GST Number"),
+    isRestaurant:
+      typeof vendor.isRestaurant === "boolean"
+        ? vendor.isRestaurant
+        : readVendorNoteValue(vendor.notes, "Is Restaurant") === "Yes",
+    paymentMode:
+      vendor.paymentMode ||
+      readVendorNoteValue(vendor.notes, "Payment Mode") ||
+      "Online/NEFT/IMPS",
+    bankName: vendor.bankName || readVendorNoteValue(vendor.notes, "Bank Name"),
+    transactionId:
+      vendor.transactionId || readVendorNoteValue(vendor.notes, "Transaction ID"),
+    paymentDescription:
+      vendor.paymentDescription ||
+      readVendorNoteValue(vendor.notes, "Payment Description"),
+    googleLocation:
+      vendor.googleLocation || readVendorNoteValue(vendor.notes, "Google Location"),
+    idProofAsset: vendor.idProofAsset || null,
+    locationProofAsset: vendor.locationProofAsset || null,
+    companyBrochureAsset: vendor.companyBrochureAsset || null,
+    profilePhotoAsset: vendor.profilePhotoAsset || null,
+    visitingCardAsset: vendor.visitingCardAsset || null,
     badge: vendor.badge || vendor.category || "Vendor",
     initials: name
       .split(" ")
@@ -2390,9 +2423,11 @@ function readVendorNoteValue(notes, label) {
 
 function buildVendorApprovalForm(vendor) {
   return {
-    planName: readVendorNoteValue(vendor?.notes, "Plan Name"),
-    openingTime: readVendorNoteValue(vendor?.notes, "Opening Time"),
-    closingTime: readVendorNoteValue(vendor?.notes, "Closing Time"),
+    planName: vendor?.planName || readVendorNoteValue(vendor?.notes, "Plan Name"),
+    openingTime:
+      vendor?.openingTime || readVendorNoteValue(vendor?.notes, "Opening Time"),
+    closingTime:
+      vendor?.closingTime || readVendorNoteValue(vendor?.notes, "Closing Time"),
     membershipPlan:
       vendor?.membershipPlan && vendor.membershipPlan !== "Standard Listing"
         ? vendor.membershipPlan
@@ -2405,20 +2440,32 @@ function buildVendorApprovalForm(vendor) {
     onboardingEndAt: vendor?.onboardingEndDate || "",
     idProof: null,
     locationProof: null,
-    gstNumber: readVendorNoteValue(vendor?.notes, "GST Number"),
+    idProofAsset: vendor?.idProofAsset || null,
+    locationProofAsset: vendor?.locationProofAsset || null,
+    gstNumber:
+      vendor?.gstNumber || readVendorNoteValue(vendor?.notes, "GST Number"),
     companyBrochure: null,
     profilePhoto: null,
     visitingCard: null,
-    isRestaurant: readVendorNoteValue(vendor?.notes, "Is Restaurant") === "Yes",
+    companyBrochureAsset: vendor?.companyBrochureAsset || null,
+    profilePhotoAsset: vendor?.profilePhotoAsset || null,
+    visitingCardAsset: vendor?.visitingCardAsset || null,
+    isRestaurant:
+      typeof vendor?.isRestaurant === "boolean"
+        ? vendor.isRestaurant
+        : readVendorNoteValue(vendor?.notes, "Is Restaurant") === "Yes",
     paymentMode:
-      readVendorNoteValue(vendor?.notes, "Payment Mode") || "Online/NEFT/IMPS",
-    bankName: readVendorNoteValue(vendor?.notes, "Bank Name"),
-    transactionId: readVendorNoteValue(vendor?.notes, "Transaction ID"),
-    paymentDescription: readVendorNoteValue(
-      vendor?.notes,
-      "Payment Description",
-    ),
-    googleLocation: readVendorNoteValue(vendor?.notes, "Google Location"),
+      vendor?.paymentMode ||
+      readVendorNoteValue(vendor?.notes, "Payment Mode") ||
+      "Online/NEFT/IMPS",
+    bankName: vendor?.bankName || readVendorNoteValue(vendor?.notes, "Bank Name"),
+    transactionId:
+      vendor?.transactionId || readVendorNoteValue(vendor?.notes, "Transaction ID"),
+    paymentDescription:
+      vendor?.paymentDescription ||
+      readVendorNoteValue(vendor?.notes, "Payment Description"),
+    googleLocation:
+      vendor?.googleLocation || readVendorNoteValue(vendor?.notes, "Google Location"),
     paymentDueDate:
       vendor?.paymentDue && vendor.paymentDue !== "--" ? vendor.paymentDue : "",
   };
@@ -2437,8 +2484,8 @@ function buildVendorRegistrationForm(vendor) {
     phoneCode: phoneParts.code || "+91",
     whatsappCode: whatsappParts.code || "+91",
     whatsapp: whatsappParts.number || "",
-    country: readVendorNoteValue(vendor?.notes, "Country") || "India",
-    state: readVendorNoteValue(vendor?.notes, "State") || "",
+    country: vendor?.country || readVendorNoteValue(vendor?.notes, "Country") || "India",
+    state: vendor?.state || readVendorNoteValue(vendor?.notes, "State") || "",
     membershipPlan: vendor?.membershipPlan || "",
     paymentAmount:
       vendor?.paymentAmount && vendor.paymentAmount !== "--"
@@ -2450,38 +2497,79 @@ function buildVendorRegistrationForm(vendor) {
     email: vendor?.email || "",
     primaryLoginEmail: vendor?.primaryLoginEmail || vendor?.email || "",
     secondaryLoginEmail: vendor?.secondaryLoginEmail || "",
-    website: readVendorNoteValue(vendor?.notes, "Website") || "",
+    website: vendor?.website || readVendorNoteValue(vendor?.notes, "Website") || "",
     facebookUrl: vendor?.facebookUrl || "",
     instagramUrl: vendor?.instagramUrl || "",
     youtubeUrl: vendor?.youtubeUrl || "",
     linkedinUrl: vendor?.linkedinUrl || "",
     xUrl: vendor?.xUrl || "",
     workDescription:
-      readVendorNoteValue(vendor?.notes, "Work Description") || "",
-    zipcode: readVendorNoteValue(vendor?.notes, "Zipcode") || "",
-    planName: readVendorNoteValue(vendor?.notes, "Plan Name") || "",
-    openingTime: readVendorNoteValue(vendor?.notes, "Opening Time") || "",
-    closingTime: readVendorNoteValue(vendor?.notes, "Closing Time") || "",
-    gstNumber: readVendorNoteValue(vendor?.notes, "GST Number") || "",
-    isRestaurant: readVendorNoteValue(vendor?.notes, "Is Restaurant") === "Yes",
+      vendor?.workDescription ||
+      readVendorNoteValue(vendor?.notes, "Work Description") ||
+      "",
+    zipcode: vendor?.zipcode || readVendorNoteValue(vendor?.notes, "Zipcode") || "",
+    planName: vendor?.planName || readVendorNoteValue(vendor?.notes, "Plan Name") || "",
+    openingTime:
+      vendor?.openingTime || readVendorNoteValue(vendor?.notes, "Opening Time") || "",
+    closingTime:
+      vendor?.closingTime || readVendorNoteValue(vendor?.notes, "Closing Time") || "",
+    gstNumber: vendor?.gstNumber || readVendorNoteValue(vendor?.notes, "GST Number") || "",
+    isRestaurant:
+      typeof vendor?.isRestaurant === "boolean"
+        ? vendor.isRestaurant
+        : readVendorNoteValue(vendor?.notes, "Is Restaurant") === "Yes",
     paymentMode:
-      readVendorNoteValue(vendor?.notes, "Payment Mode") || "Online/NEFT/IMPS",
-    bankName: readVendorNoteValue(vendor?.notes, "Bank Name") || "",
-    transactionId: readVendorNoteValue(vendor?.notes, "Transaction ID") || "",
+      vendor?.paymentMode ||
+      readVendorNoteValue(vendor?.notes, "Payment Mode") ||
+      "Online/NEFT/IMPS",
+    bankName: vendor?.bankName || readVendorNoteValue(vendor?.notes, "Bank Name") || "",
+    transactionId:
+      vendor?.transactionId || readVendorNoteValue(vendor?.notes, "Transaction ID") || "",
     paymentDescription:
-      readVendorNoteValue(vendor?.notes, "Payment Description") || "",
-    googleLocation: readVendorNoteValue(vendor?.notes, "Google Location") || "",
+      vendor?.paymentDescription ||
+      readVendorNoteValue(vendor?.notes, "Payment Description") ||
+      "",
+    googleLocation:
+      vendor?.googleLocation || readVendorNoteValue(vendor?.notes, "Google Location") || "",
     companyLogo: null,
+    companyLogoAsset: vendor?.companyLogoAsset || null,
     idProof: null,
+    idProofAsset: vendor?.idProofAsset || null,
     locationProof: null,
+    locationProofAsset: vendor?.locationProofAsset || null,
     companyBrochure: null,
+    companyBrochureAsset: vendor?.companyBrochureAsset || null,
     profilePhoto: null,
+    profilePhotoAsset: vendor?.profilePhotoAsset || null,
     visitingCard: null,
+    visitingCardAsset: vendor?.visitingCardAsset || null,
     onboardingStartAt: vendor?.onboardingStartDate || "",
     onboardingEndAt: vendor?.onboardingEndDate || "",
     paymentDueDate:
       vendor?.paymentDue && vendor.paymentDue !== "--" ? vendor.paymentDue : "",
   };
+}
+
+function getStoredAssetLabel(asset) {
+  if (!asset) {
+    return "";
+  }
+
+  return (
+    asset.originalFileName ||
+    asset.storedFileName ||
+    asset.fileName ||
+    asset.url ||
+    ""
+  );
+}
+
+function appendFormDataValue(formData, key, value) {
+  if (typeof value === "undefined" || value === null) {
+    return;
+  }
+
+  formData.append(key, String(value));
 }
 
 function isLikelyEmail(value) {
@@ -7808,6 +7896,20 @@ function VendorRegistrationForm({
               onFileChange("companyLogo", event.target.files?.[0] ?? null)
             }
           />
+          {formData.companyLogo instanceof File ? (
+            <small>{formData.companyLogo.name}</small>
+          ) : formData.companyLogoAsset?.url ? (
+            <small>
+              Saved:{" "}
+              <a
+                href={formData.companyLogoAsset.url}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {getStoredAssetLabel(formData.companyLogoAsset)}
+              </a>
+            </small>
+          ) : null}
         </label>
         <div className="profile-field profile-field-wide vendor-admin-note">
           <span>Admin Review Fields</span>
@@ -8451,6 +8553,20 @@ function VendorStatusPanel({
                 }
                 disabled={isSaving}
               />
+              {reviewForm.idProof instanceof File ? (
+                <small>{reviewForm.idProof.name}</small>
+              ) : reviewForm.idProofAsset?.url ? (
+                <small>
+                  Saved:{" "}
+                  <a
+                    href={reviewForm.idProofAsset.url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {getStoredAssetLabel(reviewForm.idProofAsset)}
+                  </a>
+                </small>
+              ) : null}
             </label>
             <label className="profile-field">
               <span>Location Proof</span>
@@ -8464,6 +8580,20 @@ function VendorStatusPanel({
                 }
                 disabled={isSaving}
               />
+              {reviewForm.locationProof instanceof File ? (
+                <small>{reviewForm.locationProof.name}</small>
+              ) : reviewForm.locationProofAsset?.url ? (
+                <small>
+                  Saved:{" "}
+                  <a
+                    href={reviewForm.locationProofAsset.url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {getStoredAssetLabel(reviewForm.locationProofAsset)}
+                  </a>
+                </small>
+              ) : null}
             </label>
             <label className="profile-field">
               <span>Company Profile / Brochure</span>
@@ -8477,6 +8607,20 @@ function VendorStatusPanel({
                 }
                 disabled={isSaving}
               />
+              {reviewForm.companyBrochure instanceof File ? (
+                <small>{reviewForm.companyBrochure.name}</small>
+              ) : reviewForm.companyBrochureAsset?.url ? (
+                <small>
+                  Saved:{" "}
+                  <a
+                    href={reviewForm.companyBrochureAsset.url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {getStoredAssetLabel(reviewForm.companyBrochureAsset)}
+                  </a>
+                </small>
+              ) : null}
             </label>
             <label className="profile-field">
               <span>Profile Photo</span>
@@ -8491,6 +8635,20 @@ function VendorStatusPanel({
                 }
                 disabled={isSaving}
               />
+              {reviewForm.profilePhoto instanceof File ? (
+                <small>{reviewForm.profilePhoto.name}</small>
+              ) : reviewForm.profilePhotoAsset?.url ? (
+                <small>
+                  Saved:{" "}
+                  <a
+                    href={reviewForm.profilePhotoAsset.url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {getStoredAssetLabel(reviewForm.profilePhotoAsset)}
+                  </a>
+                </small>
+              ) : null}
             </label>
             <label className="profile-field">
               <span>Visiting Card</span>
@@ -8505,6 +8663,20 @@ function VendorStatusPanel({
                 }
                 disabled={isSaving}
               />
+              {reviewForm.visitingCard instanceof File ? (
+                <small>{reviewForm.visitingCard.name}</small>
+              ) : reviewForm.visitingCardAsset?.url ? (
+                <small>
+                  Saved:{" "}
+                  <a
+                    href={reviewForm.visitingCardAsset.url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {getStoredAssetLabel(reviewForm.visitingCardAsset)}
+                  </a>
+                </small>
+              ) : null}
             </label>
             <label className="profile-field">
               <span>Is Restaurant?</span>
@@ -14818,73 +14990,127 @@ export default function HomePage() {
 
       try {
         const isEditingVendor = Boolean(vendorRegistrationForm.id);
+        const payload = new FormData();
+        appendFormDataValue(payload, "name", vendorRegistrationForm.company.trim());
+        appendFormDataValue(
+          payload,
+          "companyName",
+          vendorRegistrationForm.company.trim(),
+        );
+        appendFormDataValue(
+          payload,
+          "vendorType",
+          vendorRegistrationForm.subCategory.trim(),
+        );
+        appendFormDataValue(
+          payload,
+          "category",
+          vendorRegistrationForm.category.trim(),
+        );
+        appendFormDataValue(
+          payload,
+          "contactPerson",
+          vendorRegistrationForm.contactPerson.trim(),
+        );
+        appendFormDataValue(
+          payload,
+          "membershipPlan",
+          vendorRegistrationForm.membershipPlan.trim(),
+        );
+        appendFormDataValue(
+          payload,
+          "paymentAmount",
+          vendorRegistrationForm.paymentAmount.trim(),
+        );
+        appendFormDataValue(
+          payload,
+          "address",
+          vendorRegistrationForm.address.trim(),
+        );
+        appendFormDataValue(payload, "country", vendorRegistrationForm.country.trim());
+        appendFormDataValue(payload, "state", vendorRegistrationForm.state.trim());
+        appendFormDataValue(payload, "city", vendorRegistrationForm.city.trim());
+        appendFormDataValue(payload, "zipcode", vendorRegistrationForm.zipcode.trim());
+        appendFormDataValue(payload, "website", vendorRegistrationForm.website.trim());
+        appendFormDataValue(
+          payload,
+          "workDescription",
+          vendorRegistrationForm.workDescription.trim(),
+        );
+        appendFormDataValue(
+          payload,
+          "phone",
+          `${vendorRegistrationForm.phoneCode} ${vendorRegistrationForm.phone.trim()}`.trim(),
+        );
+        appendFormDataValue(payload, "email", vendorRegistrationForm.email.trim());
+        appendFormDataValue(
+          payload,
+          "primaryLoginEmail",
+          vendorRegistrationForm.primaryLoginEmail.trim().toLowerCase(),
+        );
+        appendFormDataValue(
+          payload,
+          "secondaryLoginEmail",
+          vendorRegistrationForm.secondaryLoginEmail.trim().toLowerCase(),
+        );
+        appendFormDataValue(
+          payload,
+          "whatsapp",
+          `${vendorRegistrationForm.whatsappCode} ${vendorRegistrationForm.whatsapp.trim()}`.trim(),
+        );
+        appendFormDataValue(
+          payload,
+          "facebookUrl",
+          vendorRegistrationForm.facebookUrl.trim(),
+        );
+        appendFormDataValue(
+          payload,
+          "instagramUrl",
+          vendorRegistrationForm.instagramUrl.trim(),
+        );
+        appendFormDataValue(
+          payload,
+          "youtubeUrl",
+          vendorRegistrationForm.youtubeUrl.trim(),
+        );
+        appendFormDataValue(
+          payload,
+          "linkedinUrl",
+          vendorRegistrationForm.linkedinUrl.trim(),
+        );
+        appendFormDataValue(payload, "xUrl", vendorRegistrationForm.xUrl.trim());
+        appendFormDataValue(
+          payload,
+          "onboardingStartAt",
+          vendorRegistrationForm.onboardingStartAt || undefined,
+        );
+        appendFormDataValue(
+          payload,
+          "onboardingEndAt",
+          vendorRegistrationForm.onboardingEndAt || undefined,
+        );
+        appendFormDataValue(
+          payload,
+          "paymentDueDate",
+          vendorRegistrationForm.paymentDueDate || undefined,
+        );
+        appendFormDataValue(payload, "paymentStatus", "PENDING");
+        appendFormDataValue(payload, "status", "PENDING");
+        appendFormDataValue(
+          payload,
+          "badge",
+          vendorRegistrationForm.subCategory.trim() ||
+            vendorRegistrationForm.category.trim() ||
+            "Vendor",
+        );
+        if (vendorRegistrationForm.companyLogo instanceof File) {
+          payload.append("companyLogo", vendorRegistrationForm.companyLogo);
+        }
         const response = await fetch(
           `${apiBaseUrl}/vendors${isEditingVendor ? `/${vendorRegistrationForm.id}` : ""}`,
           {
             method: isEditingVendor ? "PATCH" : "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-            name: vendorRegistrationForm.company.trim(),
-            companyName: vendorRegistrationForm.company.trim(),
-            vendorType: vendorRegistrationForm.subCategory.trim(),
-            category: vendorRegistrationForm.category.trim(),
-            contactPerson: vendorRegistrationForm.contactPerson.trim(),
-            membershipPlan: vendorRegistrationForm.membershipPlan.trim(),
-            paymentAmount: vendorRegistrationForm.paymentAmount.trim(),
-            address: vendorRegistrationForm.address.trim(),
-            city: vendorRegistrationForm.city.trim(),
-            phone:
-              `${vendorRegistrationForm.phoneCode} ${vendorRegistrationForm.phone.trim()}`.trim(),
-            email: vendorRegistrationForm.email.trim(),
-            primaryLoginEmail: vendorRegistrationForm.primaryLoginEmail
-              .trim()
-              .toLowerCase(),
-            secondaryLoginEmail:
-              vendorRegistrationForm.secondaryLoginEmail.trim().toLowerCase() ||
-              undefined,
-            whatsapp:
-              `${vendorRegistrationForm.whatsappCode} ${vendorRegistrationForm.whatsapp.trim()}`.trim(),
-            facebookUrl: vendorRegistrationForm.facebookUrl.trim(),
-            instagramUrl: vendorRegistrationForm.instagramUrl.trim(),
-            youtubeUrl: vendorRegistrationForm.youtubeUrl.trim(),
-            linkedinUrl: vendorRegistrationForm.linkedinUrl.trim(),
-            xUrl: vendorRegistrationForm.xUrl.trim(),
-            onboardingStartAt:
-              vendorRegistrationForm.onboardingStartAt || undefined,
-            onboardingEndAt:
-              vendorRegistrationForm.onboardingEndAt || undefined,
-            paymentDueDate: vendorRegistrationForm.paymentDueDate || undefined,
-            paymentStatus: "PENDING",
-            status: "PENDING",
-            badge:
-              vendorRegistrationForm.subCategory.trim() ||
-              vendorRegistrationForm.category.trim() ||
-              "Vendor",
-            notes: [
-              vendorRegistrationForm.country
-                ? `Country: ${vendorRegistrationForm.country}`
-                : "",
-              vendorRegistrationForm.state
-                ? `State: ${vendorRegistrationForm.state}`
-                : "",
-              vendorRegistrationForm.zipcode
-                ? `Zipcode: ${vendorRegistrationForm.zipcode}`
-                : "",
-              vendorRegistrationForm.website
-                ? `Website: ${vendorRegistrationForm.website.trim()}`
-                : "",
-              vendorRegistrationForm.workDescription
-                ? `Work Description: ${vendorRegistrationForm.workDescription.trim()}`
-                : "",
-              vendorRegistrationForm.companyLogo?.name
-                ? `Company Logo: ${vendorRegistrationForm.companyLogo.name}`
-                : "",
-            ]
-              .filter(Boolean)
-              .join("\n"),
-            }),
+            body: payload,
           },
         );
 
@@ -15083,62 +15309,81 @@ export default function HomePage() {
       setIsSavingVendorApproval(true);
       setVendorApprovalError("");
 
-      const notes = [
-        reviewTarget.planName ? `Plan Name: ${reviewTarget.planName}` : "",
-        reviewTarget.openingTime
-          ? `Opening Time: ${reviewTarget.openingTime}`
-          : "",
-        reviewTarget.closingTime
-          ? `Closing Time: ${reviewTarget.closingTime}`
-          : "",
-        reviewTarget.gstNumber ? `GST Number: ${reviewTarget.gstNumber}` : "",
-        `Is Restaurant: ${reviewTarget.isRestaurant ? "Yes" : "No"}`,
-        reviewTarget.paymentMode
-          ? `Payment Mode: ${reviewTarget.paymentMode}`
-          : "",
-        reviewTarget.bankName ? `Bank Name: ${reviewTarget.bankName}` : "",
-        reviewTarget.transactionId
-          ? `Transaction ID: ${reviewTarget.transactionId}`
-          : "",
-        reviewTarget.paymentDescription
-          ? `Payment Description: ${reviewTarget.paymentDescription}`
-          : "",
-        reviewTarget.googleLocation
-          ? `Google Location: ${reviewTarget.googleLocation}`
-          : "",
-        reviewTarget.idProof?.name
-          ? `ID Proof: ${reviewTarget.idProof.name}`
-          : "",
-        reviewTarget.locationProof?.name
-          ? `Location Proof: ${reviewTarget.locationProof.name}`
-          : "",
-        reviewTarget.companyBrochure?.name
-          ? `Company Profile/Brochure: ${reviewTarget.companyBrochure.name}`
-          : "",
-        reviewTarget.profilePhoto?.name
-          ? `Profile Photo: ${reviewTarget.profilePhoto.name}`
-          : "",
-        reviewTarget.visitingCard?.name
-          ? `Visiting Card: ${reviewTarget.visitingCard.name}`
-          : "",
-      ]
-        .filter(Boolean)
-        .join("\n");
-
       try {
+        const payload = new FormData();
+        appendFormDataValue(
+          payload,
+          "membershipPlan",
+          reviewTarget.membershipPlan.trim(),
+        );
+        appendFormDataValue(
+          payload,
+          "paymentAmount",
+          reviewTarget.paymentAmount.trim(),
+        );
+        appendFormDataValue(
+          payload,
+          "onboardingStartAt",
+          reviewTarget.onboardingStartAt || undefined,
+        );
+        appendFormDataValue(
+          payload,
+          "onboardingEndAt",
+          reviewTarget.onboardingEndAt || undefined,
+        );
+        appendFormDataValue(
+          payload,
+          "paymentDueDate",
+          reviewTarget.paymentDueDate || undefined,
+        );
+        appendFormDataValue(payload, "planName", reviewTarget.planName.trim());
+        appendFormDataValue(
+          payload,
+          "openingTime",
+          reviewTarget.openingTime.trim(),
+        );
+        appendFormDataValue(
+          payload,
+          "closingTime",
+          reviewTarget.closingTime.trim(),
+        );
+        appendFormDataValue(payload, "gstNumber", reviewTarget.gstNumber.trim());
+        appendFormDataValue(payload, "isRestaurant", reviewTarget.isRestaurant);
+        appendFormDataValue(payload, "paymentMode", reviewTarget.paymentMode.trim());
+        appendFormDataValue(payload, "bankName", reviewTarget.bankName.trim());
+        appendFormDataValue(
+          payload,
+          "transactionId",
+          reviewTarget.transactionId.trim(),
+        );
+        appendFormDataValue(
+          payload,
+          "paymentDescription",
+          reviewTarget.paymentDescription.trim(),
+        );
+        appendFormDataValue(
+          payload,
+          "googleLocation",
+          reviewTarget.googleLocation.trim(),
+        );
+        if (reviewTarget.idProof instanceof File) {
+          payload.append("idProof", reviewTarget.idProof);
+        }
+        if (reviewTarget.locationProof instanceof File) {
+          payload.append("locationProof", reviewTarget.locationProof);
+        }
+        if (reviewTarget.companyBrochure instanceof File) {
+          payload.append("companyBrochure", reviewTarget.companyBrochure);
+        }
+        if (reviewTarget.profilePhoto instanceof File) {
+          payload.append("profilePhoto", reviewTarget.profilePhoto);
+        }
+        if (reviewTarget.visitingCard instanceof File) {
+          payload.append("visitingCard", reviewTarget.visitingCard);
+        }
         const vendorResponse = await fetch(`${apiBaseUrl}/vendors/${vendorId}`, {
           method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            membershipPlan: reviewTarget.membershipPlan.trim(),
-            paymentAmount: reviewTarget.paymentAmount.trim(),
-            onboardingStartAt: reviewTarget.onboardingStartAt || undefined,
-            onboardingEndAt: reviewTarget.onboardingEndAt || undefined,
-            paymentDueDate: reviewTarget.paymentDueDate || undefined,
-            notes,
-          }),
+          body: payload,
         });
 
         if (!vendorResponse.ok) {
