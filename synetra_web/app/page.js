@@ -2572,32 +2572,37 @@ function appendFormDataValue(formData, key, value) {
   formData.append(key, String(value));
 }
 
-function buildVendorApprovalPayload(payload, reviewTarget) {
-  appendFormDataValue(
-    payload,
-    "membershipPlan",
-    reviewTarget.membershipPlan.trim(),
-  );
-  appendFormDataValue(
-    payload,
-    "paymentAmount",
-    reviewTarget.paymentAmount.trim(),
-  );
-  appendFormDataValue(
-    payload,
-    "onboardingStartAt",
-    reviewTarget.onboardingStartAt || undefined,
-  );
-  appendFormDataValue(
-    payload,
-    "onboardingEndAt",
-    reviewTarget.onboardingEndAt || undefined,
-  );
-  appendFormDataValue(
-    payload,
-    "paymentDueDate",
-    reviewTarget.paymentDueDate || undefined,
-  );
+function buildVendorApprovalPayload(payload, reviewTarget, options = {}) {
+  const { includeSharedFields = true } = options;
+
+  if (includeSharedFields) {
+    appendFormDataValue(
+      payload,
+      "membershipPlan",
+      reviewTarget.membershipPlan.trim(),
+    );
+    appendFormDataValue(
+      payload,
+      "paymentAmount",
+      reviewTarget.paymentAmount.trim(),
+    );
+    appendFormDataValue(
+      payload,
+      "onboardingStartAt",
+      reviewTarget.onboardingStartAt || undefined,
+    );
+    appendFormDataValue(
+      payload,
+      "onboardingEndAt",
+      reviewTarget.onboardingEndAt || undefined,
+    );
+    appendFormDataValue(
+      payload,
+      "paymentDueDate",
+      reviewTarget.paymentDueDate || undefined,
+    );
+  }
+
   appendFormDataValue(payload, "planName", reviewTarget.planName.trim());
   appendFormDataValue(payload, "openingTime", reviewTarget.openingTime.trim());
   appendFormDataValue(payload, "closingTime", reviewTarget.closingTime.trim());
@@ -15448,7 +15453,9 @@ export default function HomePage() {
           "paymentDueDate",
           vendorRegistrationForm.paymentDueDate || undefined,
         );
-        buildVendorApprovalPayload(payload, vendorRegistrationForm);
+        buildVendorApprovalPayload(payload, vendorRegistrationForm, {
+          includeSharedFields: false,
+        });
         appendFormDataValue(payload, "paymentStatus", "PENDING");
         appendFormDataValue(payload, "status", "PENDING");
         appendFormDataValue(
