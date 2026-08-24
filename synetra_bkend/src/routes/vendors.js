@@ -492,6 +492,10 @@ function formatRangeDate(date) {
 }
 
 function serializeVendor(req, vendor) {
+  if (!vendor) {
+    return null;
+  }
+
   const users = [...(vendor.users ?? [])].sort(
     (left, right) =>
       new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime(),
@@ -730,7 +734,11 @@ router.patch("/:id/access", async (req, res) => {
     });
   });
 
-  return res.json({ vendor: serializeVendor(updatedVendor) });
+  if (!updatedVendor) {
+    return res.status(404).json({ error: "Vendor not found" });
+  }
+
+  return res.json({ vendor: serializeVendor(req, updatedVendor) });
 });
 
 router.delete("/:id", async (req, res) => {
