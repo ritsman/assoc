@@ -2572,6 +2572,67 @@ function appendFormDataValue(formData, key, value) {
   formData.append(key, String(value));
 }
 
+function buildVendorApprovalPayload(payload, reviewTarget) {
+  appendFormDataValue(
+    payload,
+    "membershipPlan",
+    reviewTarget.membershipPlan.trim(),
+  );
+  appendFormDataValue(
+    payload,
+    "paymentAmount",
+    reviewTarget.paymentAmount.trim(),
+  );
+  appendFormDataValue(
+    payload,
+    "onboardingStartAt",
+    reviewTarget.onboardingStartAt || undefined,
+  );
+  appendFormDataValue(
+    payload,
+    "onboardingEndAt",
+    reviewTarget.onboardingEndAt || undefined,
+  );
+  appendFormDataValue(
+    payload,
+    "paymentDueDate",
+    reviewTarget.paymentDueDate || undefined,
+  );
+  appendFormDataValue(payload, "planName", reviewTarget.planName.trim());
+  appendFormDataValue(payload, "openingTime", reviewTarget.openingTime.trim());
+  appendFormDataValue(payload, "closingTime", reviewTarget.closingTime.trim());
+  appendFormDataValue(payload, "gstNumber", reviewTarget.gstNumber.trim());
+  appendFormDataValue(payload, "isRestaurant", reviewTarget.isRestaurant);
+  appendFormDataValue(payload, "paymentMode", reviewTarget.paymentMode.trim());
+  appendFormDataValue(payload, "bankName", reviewTarget.bankName.trim());
+  appendFormDataValue(payload, "transactionId", reviewTarget.transactionId.trim());
+  appendFormDataValue(
+    payload,
+    "paymentDescription",
+    reviewTarget.paymentDescription.trim(),
+  );
+  appendFormDataValue(
+    payload,
+    "googleLocation",
+    reviewTarget.googleLocation.trim(),
+  );
+  if (reviewTarget.idProof instanceof File) {
+    payload.append("idProof", reviewTarget.idProof);
+  }
+  if (reviewTarget.locationProof instanceof File) {
+    payload.append("locationProof", reviewTarget.locationProof);
+  }
+  if (reviewTarget.companyBrochure instanceof File) {
+    payload.append("companyBrochure", reviewTarget.companyBrochure);
+  }
+  if (reviewTarget.profilePhoto instanceof File) {
+    payload.append("profilePhoto", reviewTarget.profilePhoto);
+  }
+  if (reviewTarget.visitingCard instanceof File) {
+    payload.append("visitingCard", reviewTarget.visitingCard);
+  }
+}
+
 function isLikelyEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
@@ -7918,6 +7979,241 @@ function VendorRegistrationForm({
             completed by the admin during vendor status review.
           </p>
         </div>
+        {formData.id ? (
+          <>
+            <div className="profile-field profile-field-wide vendor-admin-note">
+              <span>Saved Approval Details</span>
+              <p>
+                These values are also editable here when you reopen a saved
+                vendor record.
+              </p>
+            </div>
+            <label className="profile-field">
+              <span>Plan Name</span>
+              <input
+                type="text"
+                value={formData.planName}
+                onChange={(event) => onChange("planName", event.target.value)}
+              />
+            </label>
+            <label className="profile-field">
+              <span>Opening Time</span>
+              <input
+                type="time"
+                value={formData.openingTime}
+                onChange={(event) =>
+                  onChange("openingTime", event.target.value)
+                }
+              />
+            </label>
+            <label className="profile-field">
+              <span>Closing Time</span>
+              <input
+                type="time"
+                value={formData.closingTime}
+                onChange={(event) =>
+                  onChange("closingTime", event.target.value)
+                }
+              />
+            </label>
+            <label className="profile-field">
+              <span>GST Number</span>
+              <input
+                type="text"
+                value={formData.gstNumber}
+                onChange={(event) => onChange("gstNumber", event.target.value)}
+              />
+            </label>
+            <label className="profile-field">
+              <span>Payment Mode</span>
+              <input
+                type="text"
+                value={formData.paymentMode}
+                onChange={(event) =>
+                  onChange("paymentMode", event.target.value)
+                }
+              />
+            </label>
+            <label className="profile-field">
+              <span>Bank Name</span>
+              <input
+                type="text"
+                value={formData.bankName}
+                onChange={(event) => onChange("bankName", event.target.value)}
+              />
+            </label>
+            <label className="profile-field">
+              <span>Transaction ID</span>
+              <input
+                type="text"
+                value={formData.transactionId}
+                onChange={(event) =>
+                  onChange("transactionId", event.target.value)
+                }
+              />
+            </label>
+            <label className="profile-field">
+              <span>Is Restaurant?</span>
+              <div className="inline-choice-row">
+                <label className="inline-choice-option">
+                  <input
+                    type="radio"
+                    name="registration-isRestaurant"
+                    checked={formData.isRestaurant === true}
+                    onChange={() => onChange("isRestaurant", true)}
+                  />
+                  <span>Yes</span>
+                </label>
+                <label className="inline-choice-option">
+                  <input
+                    type="radio"
+                    name="registration-isRestaurant"
+                    checked={formData.isRestaurant === false}
+                    onChange={() => onChange("isRestaurant", false)}
+                  />
+                  <span>No</span>
+                </label>
+              </div>
+            </label>
+            <label className="profile-field profile-field-wide">
+              <span>Payment Description</span>
+              <textarea
+                rows="3"
+                value={formData.paymentDescription}
+                onChange={(event) =>
+                  onChange("paymentDescription", event.target.value)
+                }
+              />
+            </label>
+            <label className="profile-field profile-field-wide">
+              <span>Google Location</span>
+              <input
+                type="text"
+                value={formData.googleLocation}
+                onChange={(event) =>
+                  onChange("googleLocation", event.target.value)
+                }
+              />
+            </label>
+            <label className="profile-field">
+              <span>ID Proof</span>
+              <input
+                type="file"
+                onChange={(event) =>
+                  onFileChange("idProof", event.target.files?.[0] ?? null)
+                }
+              />
+              {formData.idProof instanceof File ? (
+                <small>{formData.idProof.name}</small>
+              ) : formData.idProofAsset?.url ? (
+                <small>
+                  Saved:{" "}
+                  <a
+                    href={formData.idProofAsset.url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {getStoredAssetLabel(formData.idProofAsset)}
+                  </a>
+                </small>
+              ) : null}
+            </label>
+            <label className="profile-field">
+              <span>Location Proof</span>
+              <input
+                type="file"
+                onChange={(event) =>
+                  onFileChange("locationProof", event.target.files?.[0] ?? null)
+                }
+              />
+              {formData.locationProof instanceof File ? (
+                <small>{formData.locationProof.name}</small>
+              ) : formData.locationProofAsset?.url ? (
+                <small>
+                  Saved:{" "}
+                  <a
+                    href={formData.locationProofAsset.url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {getStoredAssetLabel(formData.locationProofAsset)}
+                  </a>
+                </small>
+              ) : null}
+            </label>
+            <label className="profile-field">
+              <span>Company Profile / Brochure</span>
+              <input
+                type="file"
+                onChange={(event) =>
+                  onFileChange("companyBrochure", event.target.files?.[0] ?? null)
+                }
+              />
+              {formData.companyBrochure instanceof File ? (
+                <small>{formData.companyBrochure.name}</small>
+              ) : formData.companyBrochureAsset?.url ? (
+                <small>
+                  Saved:{" "}
+                  <a
+                    href={formData.companyBrochureAsset.url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {getStoredAssetLabel(formData.companyBrochureAsset)}
+                  </a>
+                </small>
+              ) : null}
+            </label>
+            <label className="profile-field">
+              <span>Profile Photo</span>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(event) =>
+                  onFileChange("profilePhoto", event.target.files?.[0] ?? null)
+                }
+              />
+              {formData.profilePhoto instanceof File ? (
+                <small>{formData.profilePhoto.name}</small>
+              ) : formData.profilePhotoAsset?.url ? (
+                <small>
+                  Saved:{" "}
+                  <a
+                    href={formData.profilePhotoAsset.url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {getStoredAssetLabel(formData.profilePhotoAsset)}
+                  </a>
+                </small>
+              ) : null}
+            </label>
+            <label className="profile-field">
+              <span>Visiting Card</span>
+              <input
+                type="file"
+                accept="image/*,.pdf"
+                onChange={(event) =>
+                  onFileChange("visitingCard", event.target.files?.[0] ?? null)
+                }
+              />
+              {formData.visitingCard instanceof File ? (
+                <small>{formData.visitingCard.name}</small>
+              ) : formData.visitingCardAsset?.url ? (
+                <small>
+                  Saved:{" "}
+                  <a
+                    href={formData.visitingCardAsset.url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {getStoredAssetLabel(formData.visitingCardAsset)}
+                  </a>
+                </small>
+              ) : null}
+            </label>
+          </>
+        ) : null}
       </div>
 
       <div className="profile-action-row">
@@ -14606,6 +14902,64 @@ export default function HomePage() {
     setVendorRegistrationSuccess("");
     setVendorRegistrationForm(buildVendorRegistrationForm(vendor));
   };
+  useEffect(() => {
+    if (!vendorRegistrationForm.id) {
+      return;
+    }
+
+    const refreshedVendor = vendorRecords.find(
+      (vendor) => vendor.id === vendorRegistrationForm.id,
+    );
+
+    if (!refreshedVendor) {
+      return;
+    }
+
+    setVendorRegistrationForm((current) => {
+      const nextForm = buildVendorRegistrationForm(refreshedVendor);
+
+      return {
+        ...nextForm,
+        companyLogo:
+          current.companyLogo instanceof File ? current.companyLogo : null,
+        idProof: current.idProof instanceof File ? current.idProof : null,
+        locationProof:
+          current.locationProof instanceof File ? current.locationProof : null,
+        companyBrochure:
+          current.companyBrochure instanceof File ? current.companyBrochure : null,
+        profilePhoto:
+          current.profilePhoto instanceof File ? current.profilePhoto : null,
+        visitingCard:
+          current.visitingCard instanceof File ? current.visitingCard : null,
+      };
+    });
+  }, [vendorRecords, vendorRegistrationForm.id]);
+  useEffect(() => {
+    if (!selectedVendorReviewId) {
+      return;
+    }
+
+    if (!selectedVendorReview) {
+      return;
+    }
+
+    setVendorApprovalForm((current) => {
+      const nextForm = buildVendorApprovalForm(selectedVendorReview);
+
+      return {
+        ...nextForm,
+        idProof: current.idProof instanceof File ? current.idProof : null,
+        locationProof:
+          current.locationProof instanceof File ? current.locationProof : null,
+        companyBrochure:
+          current.companyBrochure instanceof File ? current.companyBrochure : null,
+        profilePhoto:
+          current.profilePhoto instanceof File ? current.profilePhoto : null,
+        visitingCard:
+          current.visitingCard instanceof File ? current.visitingCard : null,
+      };
+    });
+  }, [selectedVendorReview, selectedVendorReviewId]);
   const deleteVendorRecord = (vendor) => {
     if (!vendor?.id) {
       return;
@@ -15094,6 +15448,7 @@ export default function HomePage() {
           "paymentDueDate",
           vendorRegistrationForm.paymentDueDate || undefined,
         );
+        buildVendorApprovalPayload(payload, vendorRegistrationForm);
         appendFormDataValue(payload, "paymentStatus", "PENDING");
         appendFormDataValue(payload, "status", "PENDING");
         appendFormDataValue(
@@ -15311,76 +15666,7 @@ export default function HomePage() {
 
       try {
         const payload = new FormData();
-        appendFormDataValue(
-          payload,
-          "membershipPlan",
-          reviewTarget.membershipPlan.trim(),
-        );
-        appendFormDataValue(
-          payload,
-          "paymentAmount",
-          reviewTarget.paymentAmount.trim(),
-        );
-        appendFormDataValue(
-          payload,
-          "onboardingStartAt",
-          reviewTarget.onboardingStartAt || undefined,
-        );
-        appendFormDataValue(
-          payload,
-          "onboardingEndAt",
-          reviewTarget.onboardingEndAt || undefined,
-        );
-        appendFormDataValue(
-          payload,
-          "paymentDueDate",
-          reviewTarget.paymentDueDate || undefined,
-        );
-        appendFormDataValue(payload, "planName", reviewTarget.planName.trim());
-        appendFormDataValue(
-          payload,
-          "openingTime",
-          reviewTarget.openingTime.trim(),
-        );
-        appendFormDataValue(
-          payload,
-          "closingTime",
-          reviewTarget.closingTime.trim(),
-        );
-        appendFormDataValue(payload, "gstNumber", reviewTarget.gstNumber.trim());
-        appendFormDataValue(payload, "isRestaurant", reviewTarget.isRestaurant);
-        appendFormDataValue(payload, "paymentMode", reviewTarget.paymentMode.trim());
-        appendFormDataValue(payload, "bankName", reviewTarget.bankName.trim());
-        appendFormDataValue(
-          payload,
-          "transactionId",
-          reviewTarget.transactionId.trim(),
-        );
-        appendFormDataValue(
-          payload,
-          "paymentDescription",
-          reviewTarget.paymentDescription.trim(),
-        );
-        appendFormDataValue(
-          payload,
-          "googleLocation",
-          reviewTarget.googleLocation.trim(),
-        );
-        if (reviewTarget.idProof instanceof File) {
-          payload.append("idProof", reviewTarget.idProof);
-        }
-        if (reviewTarget.locationProof instanceof File) {
-          payload.append("locationProof", reviewTarget.locationProof);
-        }
-        if (reviewTarget.companyBrochure instanceof File) {
-          payload.append("companyBrochure", reviewTarget.companyBrochure);
-        }
-        if (reviewTarget.profilePhoto instanceof File) {
-          payload.append("profilePhoto", reviewTarget.profilePhoto);
-        }
-        if (reviewTarget.visitingCard instanceof File) {
-          payload.append("visitingCard", reviewTarget.visitingCard);
-        }
+        buildVendorApprovalPayload(payload, reviewTarget);
         const vendorResponse = await fetch(`${apiBaseUrl}/vendors/${vendorId}`, {
           method: "PATCH",
           body: payload,
