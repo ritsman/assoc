@@ -2696,10 +2696,8 @@ function getVendorRegistrationValidationError(formData, subCategories) {
   if (!formData.category.trim()) {
     return "Select a vendor category before saving.";
   }
-  if (!formData.subCategory.trim()) {
-    return "Select a vendor sub category before saving.";
-  }
   if (
+    formData.subCategory.trim() &&
     Array.isArray(subCategories) &&
     subCategories.length > 0 &&
     !subCategories.includes(formData.subCategory)
@@ -7824,12 +7822,12 @@ function VendorRegistrationForm({
           </select>
         </label>
         <label className="profile-field">
-          <span>Sub Category *</span>
+          <span>Sub Category</span>
           <select
             value={formData.subCategory}
             onChange={(event) => onChange("subCategory", event.target.value)}
           >
-            <option value="">Select sub category</option>
+            <option value="">Select sub category (optional)</option>
             {subCategories.map((subCategory) => (
               <option key={subCategory} value={subCategory}>
                 {subCategory}
@@ -15495,6 +15493,10 @@ export default function HomePage() {
             ? "Vendor record updated successfully."
             : "Vendor saved successfully. You can now review it in Vendor Status.",
         );
+        if (!isEditingVendor) {
+          setActiveSection("Vendor Status");
+          setVendorStatusSearch(vendorRegistrationForm.company.trim());
+        }
       } catch {
         setVendorRegistrationError(
           "Could not reach the vendor registration service right now.",
@@ -18745,8 +18747,7 @@ export default function HomePage() {
               <DashboardPendingVendorApprovalsPanel
                 items={vendorStatusRequests}
                 onOpenRequests={() => {
-                  setActiveSection(topLevelSections.vendors);
-                  setActiveVendorTab("Vendor Status");
+                  setActiveSection("Vendor Status");
                 }}
               />
             </div>
