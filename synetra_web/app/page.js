@@ -71,10 +71,7 @@ function normalizeAuthSession(payload, fallbackSession = null) {
     isSuperAdmin:
       payload.user.isSuperAdmin === true ||
       payload.user.viewerRole === "superAdmin",
-    rememberMe:
-      payload.auth.rememberMe ??
-      fallbackSession?.rememberMe ??
-      true,
+    rememberMe: payload.auth.rememberMe ?? fallbackSession?.rememberMe ?? true,
     displayName:
       payload.user.displayName ||
       [payload.user.firstName, payload.user.lastName]
@@ -131,7 +128,10 @@ function readStoredAdminSession() {
   }
 }
 
-function persistAdminSession(session, rememberMe = session?.rememberMe ?? true) {
+function persistAdminSession(
+  session,
+  rememberMe = session?.rememberMe ?? true,
+) {
   if (typeof window === "undefined") {
     return;
   }
@@ -170,7 +170,11 @@ function getMemberAdminLabel(member) {
 }
 
 function getManagedUserDisplayName(user) {
-  return [user?.firstName, user?.lastName].filter(Boolean).join(" ").trim() || user?.email || "User";
+  return (
+    [user?.firstName, user?.lastName].filter(Boolean).join(" ").trim() ||
+    user?.email ||
+    "User"
+  );
 }
 
 function getManagedUserBucket(user) {
@@ -1140,7 +1144,9 @@ function readStoredMembershipTypeOptions() {
   }
 
   try {
-    const rawValue = window.localStorage.getItem(membershipTypeMasterStorageKey);
+    const rawValue = window.localStorage.getItem(
+      membershipTypeMasterStorageKey,
+    );
     if (!rawValue) {
       return [];
     }
@@ -1207,9 +1213,13 @@ function buildMembershipTypeOptions(allMembers, storedTypes = []) {
     .map((member) => normalizeMembershipTypeLabel(member.membershipType || ""))
     .filter(Boolean);
 
-  return [...new Set([...defaultMembershipTypeOptions, ...storedTypes, ...occupiedTypes])].sort(
-    (left, right) => left.localeCompare(right),
-  );
+  return [
+    ...new Set([
+      ...defaultMembershipTypeOptions,
+      ...storedTypes,
+      ...occupiedTypes,
+    ]),
+  ].sort((left, right) => left.localeCompare(right));
 }
 
 function areStringListsEqual(left, right) {
@@ -1217,7 +1227,11 @@ function areStringListsEqual(left, right) {
     return true;
   }
 
-  if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) {
+  if (
+    !Array.isArray(left) ||
+    !Array.isArray(right) ||
+    left.length !== right.length
+  ) {
     return false;
   }
 
@@ -1736,7 +1750,11 @@ function DashboardAppBannerCarousel({ items }) {
                 type="button"
                 className="dashboard-banner-control"
                 onClick={() => setIsAutoPlaying((current) => !current)}
-                aria-label={isAutoPlaying ? "Pause banner carousel" : "Play banner carousel"}
+                aria-label={
+                  isAutoPlaying
+                    ? "Pause banner carousel"
+                    : "Play banner carousel"
+                }
               >
                 {isAutoPlaying ? "Pause" : "Play"}
               </button>
@@ -1978,7 +1996,8 @@ function DashboardHeroStats({
           </button>
         </div>
         <p className="dashboard-hero-note">
-          Counts are based on authenticated session activity in this association.
+          Counts are based on authenticated session activity in this
+          association.
         </p>
       </article>
 
@@ -2028,7 +2047,11 @@ function DashboardPendingApprovalsPanel({
         </button>
       </div>
 
-      <div className="dashboard-approval-tabs" role="tablist" aria-label="Pending member approval types">
+      <div
+        className="dashboard-approval-tabs"
+        role="tablist"
+        aria-label="Pending member approval types"
+      >
         {dashboardMemberApprovalTabs.map((tab) => (
           <button
             key={tab.key}
@@ -2070,9 +2093,7 @@ function DashboardPendingApprovalsPanel({
               <tr key={member.id}>
                 <td>{member.name}</td>
                 <td>{member.company}</td>
-                <td>
-                  {getMembershipTypeDisplayLabel(member.membershipType)}
-                </td>
+                <td>{getMembershipTypeDisplayLabel(member.membershipType)}</td>
                 <td>{member.membershipPeriod}</td>
                 <td>
                   <div className="member-table-contact">
@@ -2089,7 +2110,10 @@ function DashboardPendingApprovalsPanel({
           <article className="association-empty-state dashboard-approvals-empty">
             <span className="mini-label">No Pending Requests</span>
             <h2>No {activeTab.toLowerCase()} approvals waiting right now.</h2>
-            <p>New requests for this membership type will appear here automatically.</p>
+            <p>
+              New requests for this membership type will appear here
+              automatically.
+            </p>
           </article>
         ) : null}
       </div>
@@ -2097,10 +2121,7 @@ function DashboardPendingApprovalsPanel({
   );
 }
 
-function DashboardPendingVendorApprovalsPanel({
-  items,
-  onOpenRequests,
-}) {
+function DashboardPendingVendorApprovalsPanel({ items, onOpenRequests }) {
   return (
     <article className="dashboard-section-block dashboard-approvals-panel">
       <div className="dashboard-section-head">
@@ -2153,7 +2174,9 @@ function DashboardPendingVendorApprovalsPanel({
           <article className="association-empty-state dashboard-approvals-empty">
             <span className="mini-label">No Pending Requests</span>
             <h2>No vendor approvals are waiting right now.</h2>
-            <p>New vendor registration requests will appear here automatically.</p>
+            <p>
+              New vendor registration requests will appear here automatically.
+            </p>
           </article>
         ) : null}
       </div>
@@ -2170,7 +2193,11 @@ function DashboardVendorStrip({ vendors, onOpenVendors }) {
     <section className="dashboard-section-block">
       <div className="dashboard-section-head">
         <h2>Vendors</h2>
-        <button type="button" className="dashboard-link-button" onClick={onOpenVendors}>
+        <button
+          type="button"
+          className="dashboard-link-button"
+          onClick={onOpenVendors}
+        >
           See all
         </button>
       </div>
@@ -2211,7 +2238,10 @@ function DashboardCommitteeSection({ members }) {
         <article className="association-empty-state">
           <span className="mini-label">Committee</span>
           <h2>No committee members found.</h2>
-          <p>Committee members will appear here once published from member records.</p>
+          <p>
+            Committee members will appear here once published from member
+            records.
+          </p>
         </article>
       </section>
     );
@@ -2328,7 +2358,8 @@ function mapApiVendorToUi(vendor) {
     linkedinUrl: vendor.linkedinUrl || "",
     xUrl: vendor.xUrl || "",
     workDescription:
-      vendor.workDescription || readVendorNoteValue(vendor.notes, "Work Description"),
+      vendor.workDescription ||
+      readVendorNoteValue(vendor.notes, "Work Description"),
     companyLogoAsset: vendor.companyLogoAsset || null,
     onboardingPeriod: formatVendorRange(
       vendor.onboardingStartAt,
@@ -2360,7 +2391,8 @@ function mapApiVendorToUi(vendor) {
       vendor.openingTime || readVendorNoteValue(vendor.notes, "Opening Time"),
     closingTime:
       vendor.closingTime || readVendorNoteValue(vendor.notes, "Closing Time"),
-    gstNumber: vendor.gstNumber || readVendorNoteValue(vendor.notes, "GST Number"),
+    gstNumber:
+      vendor.gstNumber || readVendorNoteValue(vendor.notes, "GST Number"),
     isRestaurant:
       typeof vendor.isRestaurant === "boolean"
         ? vendor.isRestaurant
@@ -2371,12 +2403,14 @@ function mapApiVendorToUi(vendor) {
       "Online/NEFT/IMPS",
     bankName: vendor.bankName || readVendorNoteValue(vendor.notes, "Bank Name"),
     transactionId:
-      vendor.transactionId || readVendorNoteValue(vendor.notes, "Transaction ID"),
+      vendor.transactionId ||
+      readVendorNoteValue(vendor.notes, "Transaction ID"),
     paymentDescription:
       vendor.paymentDescription ||
       readVendorNoteValue(vendor.notes, "Payment Description"),
     googleLocation:
-      vendor.googleLocation || readVendorNoteValue(vendor.notes, "Google Location"),
+      vendor.googleLocation ||
+      readVendorNoteValue(vendor.notes, "Google Location"),
     idProofAsset: vendor.idProofAsset || null,
     locationProofAsset: vendor.locationProofAsset || null,
     companyBrochureAsset: vendor.companyBrochureAsset || null,
@@ -2423,7 +2457,8 @@ function readVendorNoteValue(notes, label) {
 
 function buildVendorApprovalForm(vendor) {
   return {
-    planName: vendor?.planName || readVendorNoteValue(vendor?.notes, "Plan Name"),
+    planName:
+      vendor?.planName || readVendorNoteValue(vendor?.notes, "Plan Name"),
     openingTime:
       vendor?.openingTime || readVendorNoteValue(vendor?.notes, "Opening Time"),
     closingTime:
@@ -2458,14 +2493,17 @@ function buildVendorApprovalForm(vendor) {
       vendor?.paymentMode ||
       readVendorNoteValue(vendor?.notes, "Payment Mode") ||
       "Online/NEFT/IMPS",
-    bankName: vendor?.bankName || readVendorNoteValue(vendor?.notes, "Bank Name"),
+    bankName:
+      vendor?.bankName || readVendorNoteValue(vendor?.notes, "Bank Name"),
     transactionId:
-      vendor?.transactionId || readVendorNoteValue(vendor?.notes, "Transaction ID"),
+      vendor?.transactionId ||
+      readVendorNoteValue(vendor?.notes, "Transaction ID"),
     paymentDescription:
       vendor?.paymentDescription ||
       readVendorNoteValue(vendor?.notes, "Payment Description"),
     googleLocation:
-      vendor?.googleLocation || readVendorNoteValue(vendor?.notes, "Google Location"),
+      vendor?.googleLocation ||
+      readVendorNoteValue(vendor?.notes, "Google Location"),
     paymentDueDate:
       vendor?.paymentDue && vendor.paymentDue !== "--" ? vendor.paymentDue : "",
   };
@@ -2484,7 +2522,10 @@ function buildVendorRegistrationForm(vendor) {
     phoneCode: phoneParts.code || "+91",
     whatsappCode: whatsappParts.code || "+91",
     whatsapp: whatsappParts.number || "",
-    country: vendor?.country || readVendorNoteValue(vendor?.notes, "Country") || "India",
+    country:
+      vendor?.country ||
+      readVendorNoteValue(vendor?.notes, "Country") ||
+      "India",
     state: vendor?.state || readVendorNoteValue(vendor?.notes, "State") || "",
     membershipPlan: vendor?.membershipPlan || "",
     paymentAmount:
@@ -2497,7 +2538,8 @@ function buildVendorRegistrationForm(vendor) {
     email: vendor?.email || "",
     primaryLoginEmail: vendor?.primaryLoginEmail || vendor?.email || "",
     secondaryLoginEmail: vendor?.secondaryLoginEmail || "",
-    website: vendor?.website || readVendorNoteValue(vendor?.notes, "Website") || "",
+    website:
+      vendor?.website || readVendorNoteValue(vendor?.notes, "Website") || "",
     facebookUrl: vendor?.facebookUrl || "",
     instagramUrl: vendor?.instagramUrl || "",
     youtubeUrl: vendor?.youtubeUrl || "",
@@ -2507,13 +2549,22 @@ function buildVendorRegistrationForm(vendor) {
       vendor?.workDescription ||
       readVendorNoteValue(vendor?.notes, "Work Description") ||
       "",
-    zipcode: vendor?.zipcode || readVendorNoteValue(vendor?.notes, "Zipcode") || "",
-    planName: vendor?.planName || readVendorNoteValue(vendor?.notes, "Plan Name") || "",
+    zipcode:
+      vendor?.zipcode || readVendorNoteValue(vendor?.notes, "Zipcode") || "",
+    planName:
+      vendor?.planName || readVendorNoteValue(vendor?.notes, "Plan Name") || "",
     openingTime:
-      vendor?.openingTime || readVendorNoteValue(vendor?.notes, "Opening Time") || "",
+      vendor?.openingTime ||
+      readVendorNoteValue(vendor?.notes, "Opening Time") ||
+      "",
     closingTime:
-      vendor?.closingTime || readVendorNoteValue(vendor?.notes, "Closing Time") || "",
-    gstNumber: vendor?.gstNumber || readVendorNoteValue(vendor?.notes, "GST Number") || "",
+      vendor?.closingTime ||
+      readVendorNoteValue(vendor?.notes, "Closing Time") ||
+      "",
+    gstNumber:
+      vendor?.gstNumber ||
+      readVendorNoteValue(vendor?.notes, "GST Number") ||
+      "",
     isRestaurant:
       typeof vendor?.isRestaurant === "boolean"
         ? vendor.isRestaurant
@@ -2522,15 +2573,20 @@ function buildVendorRegistrationForm(vendor) {
       vendor?.paymentMode ||
       readVendorNoteValue(vendor?.notes, "Payment Mode") ||
       "Online/NEFT/IMPS",
-    bankName: vendor?.bankName || readVendorNoteValue(vendor?.notes, "Bank Name") || "",
+    bankName:
+      vendor?.bankName || readVendorNoteValue(vendor?.notes, "Bank Name") || "",
     transactionId:
-      vendor?.transactionId || readVendorNoteValue(vendor?.notes, "Transaction ID") || "",
+      vendor?.transactionId ||
+      readVendorNoteValue(vendor?.notes, "Transaction ID") ||
+      "",
     paymentDescription:
       vendor?.paymentDescription ||
       readVendorNoteValue(vendor?.notes, "Payment Description") ||
       "",
     googleLocation:
-      vendor?.googleLocation || readVendorNoteValue(vendor?.notes, "Google Location") || "",
+      vendor?.googleLocation ||
+      readVendorNoteValue(vendor?.notes, "Google Location") ||
+      "",
     companyLogo: null,
     companyLogoAsset: vendor?.companyLogoAsset || null,
     idProof: null,
@@ -2610,7 +2666,11 @@ function buildVendorApprovalPayload(payload, reviewTarget, options = {}) {
   appendFormDataValue(payload, "isRestaurant", reviewTarget.isRestaurant);
   appendFormDataValue(payload, "paymentMode", reviewTarget.paymentMode.trim());
   appendFormDataValue(payload, "bankName", reviewTarget.bankName.trim());
-  appendFormDataValue(payload, "transactionId", reviewTarget.transactionId.trim());
+  appendFormDataValue(
+    payload,
+    "transactionId",
+    reviewTarget.transactionId.trim(),
+  );
   appendFormDataValue(
     payload,
     "paymentDescription",
@@ -3214,9 +3274,7 @@ function buildMemberTabData(allMembers) {
     "Associate Members": allMembers.filter(
       (member) => member.group === "Associate Members",
     ),
-    Guest: allMembers.filter(
-      (member) => member.group === "Temporary Visitors",
-    ),
+    Guest: allMembers.filter((member) => member.group === "Temporary Visitors"),
   };
 }
 
@@ -3534,8 +3592,7 @@ function mapAssociationGalleryFolders(items) {
     createdAt: item.createdAt ?? "",
     updatedAt: item.updatedAt ?? "",
     photoCount:
-      item.photoCount ??
-      (Array.isArray(item.photos) ? item.photos.length : 0),
+      item.photoCount ?? (Array.isArray(item.photos) ? item.photos.length : 0),
     previewPhotos: mapAssociationGalleryPhotos(
       item.previewPhotos ?? item.photos,
     ),
@@ -3753,7 +3810,9 @@ function CarouselSection({
     compact && Number.isInteger(compactLimit) && compactLimit > 0
       ? items.slice(0, compactLimit)
       : items;
-  const carouselItems = compact ? [...visibleItems, ...visibleItems] : visibleItems;
+  const carouselItems = compact
+    ? [...visibleItems, ...visibleItems]
+    : visibleItems;
 
   return (
     <section
@@ -3785,7 +3844,9 @@ function CarouselSection({
                   <div className="carousel-doc-fallback">
                     <strong>{item.fileExtension || "DOC"}</strong>
                     <span>{item.headline || item.title || "Circular"}</span>
-                    <small>{item.tagline || item.fileName || "Document update"}</small>
+                    <small>
+                      {item.tagline || item.fileName || "Document update"}
+                    </small>
                   </div>
                 ) : (
                   <span>
@@ -5186,7 +5247,9 @@ function ManagementCommitteePanel({
   const normalizedSelectedPost = normalizeCommitteePostLabel(
     formData.committeePost || "",
   );
-  const selectedPostIsReusable = isReusableCommitteePost(normalizedSelectedPost);
+  const selectedPostIsReusable = isReusableCommitteePost(
+    normalizedSelectedPost,
+  );
   const occupiedSingleSeatPosts = new Set(
     committeeMembers
       .filter(
@@ -5296,7 +5359,8 @@ function ManagementCommitteePanel({
                       value={post}
                       disabled={
                         occupiedSingleSeatPosts.has(post) &&
-                        normalizeCommitteePostLabel(post) !== normalizedSelectedPost
+                        normalizeCommitteePostLabel(post) !==
+                          normalizedSelectedPost
                       }
                     >
                       {post}
@@ -5598,7 +5662,9 @@ function AssociationGalleryPanel({
             <article className="association-profile-card committee-empty-card">
               <span className="mini-label">Gallery Folder</span>
               <h3>No photos in this folder yet</h3>
-              <p>Use Upload Images to add one or many photos into this folder.</p>
+              <p>
+                Use Upload Images to add one or many photos into this folder.
+              </p>
             </article>
           )}
         </section>
@@ -5637,8 +5703,8 @@ function AssociationGalleryPanel({
             ) : null}
           </div>
           <p className="committee-hero-copy">
-            Organize gallery photos into named folders. Newest folders and newest
-            photos appear first.
+            Organize gallery photos into named folders. Newest folders and
+            newest photos appear first.
           </p>
         </article>
 
@@ -5753,9 +5819,12 @@ function AssociationGalleryPanel({
                 <div className="association-gallery-copy">
                   <h3>{folder.name || "Gallery Folder"}</h3>
                   <span className="mini-label">
-                    {folder.photoCount} photo{folder.photoCount === 1 ? "" : "s"}
+                    {folder.photoCount} photo
+                    {folder.photoCount === 1 ? "" : "s"}
                   </span>
-                  <p>{formatGalleryStamp(folder.createdAt) || "No timestamp"}</p>
+                  <p>
+                    {formatGalleryStamp(folder.createdAt) || "No timestamp"}
+                  </p>
                 </div>
                 {isAdmin ? (
                   <div className="record-actions">
@@ -5799,7 +5868,6 @@ function AssociationGalleryPanel({
             </p>
           </article>
         )}
-
       </section>
     </section>
   );
@@ -6061,7 +6129,8 @@ function AssociationMasterPanel({
   const [activeMasterTab, setActiveMasterTab] = useState("committee-posts");
   const postCards = committeePostOptions.map((post) => {
     const assignedMembers = committeeMembers.filter(
-      (member) => normalizeCommitteePostLabel(member.committeePost || "") === post,
+      (member) =>
+        normalizeCommitteePostLabel(member.committeePost || "") === post,
     );
     const assignedMember = assignedMembers[0] ?? null;
     const isDefaultPost = defaultCommitteePostOptions.includes(post);
@@ -6077,7 +6146,8 @@ function AssociationMasterPanel({
   });
   const membershipTypeCards = membershipTypeOptions.map((type) => {
     const assignedMembers = allMembers.filter(
-      (member) => normalizeMembershipTypeLabel(member.membershipType || "") === type,
+      (member) =>
+        normalizeMembershipTypeLabel(member.membershipType || "") === type,
     );
     const isDefaultType = defaultMembershipTypeOptions.includes(type);
 
@@ -6104,7 +6174,10 @@ function AssociationMasterPanel({
           </p>
         </article>
 
-        <nav className="association-tabbar" aria-label="Association master sections">
+        <nav
+          className="association-tabbar"
+          aria-label="Association master sections"
+        >
           <button
             type="button"
             className={`association-tab ${activeMasterTab === "committee-posts" ? "active" : ""}`}
@@ -6136,7 +6209,9 @@ function AssociationMasterPanel({
                 Secretary are shown here automatically.
               </p>
               {committeeFeedbackMessage ? (
-                <p className="admin-access-feedback">{committeeFeedbackMessage}</p>
+                <p className="admin-access-feedback">
+                  {committeeFeedbackMessage}
+                </p>
               ) : null}
             </article>
 
@@ -6284,8 +6359,8 @@ function AssociationMasterPanel({
                 </div>
               </div>
               <p className="committee-hero-copy">
-                Manage the current membership types used in Member Master. Current
-                defaults include Primary, Associate, and Guest.
+                Manage the current membership types used in Member Master.
+                Current defaults include Primary, Associate, and Guest.
               </p>
               {membershipTypeFeedbackMessage ? (
                 <p className="admin-access-feedback">
@@ -6364,56 +6439,58 @@ function AssociationMasterPanel({
             ) : null}
 
             <div className="association-gallery-grid">
-              {membershipTypeCards.map(({ type, assignedMembers, isEditable }) => (
-                <article key={type} className="association-gallery-card">
-                  <div className="association-gallery-copy">
-                    <span className="mini-label">Membership Type</span>
-                    <h3>{getMembershipTypeDisplayLabel(type)}</h3>
-                    <p>
-                      {assignedMembers.length > 0
-                        ? `${assignedMembers.length} member${assignedMembers.length === 1 ? "" : "s"} assigned`
-                        : "No members are using this membership type yet."}
-                    </p>
-                  </div>
-                  <div className="record-actions">
-                    <span className="access-status-chip">
-                      {assignedMembers.length > 0
-                        ? `${assignedMembers.length} Assigned`
-                        : "Vacant"}
-                    </span>
-                    {isAdmin ? (
-                      <>
-                        <button
-                          className="secondary-link secondary-button"
-                          type="button"
-                          onClick={() => onEditMembershipType(type)}
-                          disabled={!isEditable}
-                          title={
-                            isEditable
-                              ? "Edit this membership type"
-                              : "Only custom vacant membership types can be edited"
-                          }
-                        >
-                          Edit
-                        </button>
-                        <button
-                          className="secondary-link secondary-button danger-button"
-                          type="button"
-                          onClick={() => onDeleteMembershipType(type)}
-                          disabled={!isEditable}
-                          title={
-                            isEditable
-                              ? "Delete this membership type"
-                              : "Only custom vacant membership types can be deleted"
-                          }
-                        >
-                          Delete
-                        </button>
-                      </>
-                    ) : null}
-                  </div>
-                </article>
-              ))}
+              {membershipTypeCards.map(
+                ({ type, assignedMembers, isEditable }) => (
+                  <article key={type} className="association-gallery-card">
+                    <div className="association-gallery-copy">
+                      <span className="mini-label">Membership Type</span>
+                      <h3>{getMembershipTypeDisplayLabel(type)}</h3>
+                      <p>
+                        {assignedMembers.length > 0
+                          ? `${assignedMembers.length} member${assignedMembers.length === 1 ? "" : "s"} assigned`
+                          : "No members are using this membership type yet."}
+                      </p>
+                    </div>
+                    <div className="record-actions">
+                      <span className="access-status-chip">
+                        {assignedMembers.length > 0
+                          ? `${assignedMembers.length} Assigned`
+                          : "Vacant"}
+                      </span>
+                      {isAdmin ? (
+                        <>
+                          <button
+                            className="secondary-link secondary-button"
+                            type="button"
+                            onClick={() => onEditMembershipType(type)}
+                            disabled={!isEditable}
+                            title={
+                              isEditable
+                                ? "Edit this membership type"
+                                : "Only custom vacant membership types can be edited"
+                            }
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="secondary-link secondary-button danger-button"
+                            type="button"
+                            onClick={() => onDeleteMembershipType(type)}
+                            disabled={!isEditable}
+                            title={
+                              isEditable
+                                ? "Delete this membership type"
+                                : "Only custom vacant membership types can be deleted"
+                            }
+                          >
+                            Delete
+                          </button>
+                        </>
+                      ) : null}
+                    </div>
+                  </article>
+                ),
+              )}
             </div>
           </>
         )}
@@ -6692,7 +6769,13 @@ function MemberTable({
       </div>
 
       <div className="member-table-search">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          aria-hidden="true"
+        >
           <circle cx="10.5" cy="10.5" r="6.5" />
           <path d="M20 20l-4.3-4.3" />
         </svg>
@@ -6779,7 +6862,11 @@ function MemberTable({
                     aria-label="Open WhatsApp chat"
                     title="Open WhatsApp chat"
                   >
-                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                      aria-hidden="true"
+                    >
                       <path d="M12 2.5a9.5 9.5 0 0 0-8.2 14.4L2.5 21.5l4.7-1.3A9.5 9.5 0 1 0 12 2.5Zm0 1.8a7.7 7.7 0 0 1 6.5 11.8l-.2.4.7 2.5-2.6-.7-.4.2A7.7 7.7 0 1 1 12 4.3Zm-3.2 3.6c-.2 0-.5.1-.7.4-.2.3-.9 1-.9 2.2 0 1.3.9 2.6 1 2.7.1.2 1.8 2.9 4.4 4 .6.3 1.1.4 1.5.5.6.2 1.2.1 1.6.1.5-.1 1.4-.6 1.6-1.1.2-.5.2-1 .1-1.1-.1-.1-.3-.2-.6-.3l-1.6-.8c-.2-.1-.4-.1-.6.1l-.6.8c-.1.2-.3.2-.5.1-.4-.2-1.3-.6-2-1.4-.6-.7-1-1.5-1.1-1.7-.1-.2 0-.4.1-.5l.5-.6c.1-.2.1-.4 0-.6l-.7-1.7c-.1-.2-.3-.4-.6-.4Z" />
                     </svg>
                   </a>
@@ -6793,7 +6880,13 @@ function MemberTable({
                       aria-label="Send reminder"
                       title="Send reminder"
                     >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        aria-hidden="true"
+                      >
                         <path d="M7 10a5 5 0 1 1 10 0v4.2l1.4 2.3H5.6L7 14.2V10Z" />
                         <path d="M10 18.5a2.2 2.2 0 0 0 4 0" />
                       </svg>
@@ -6806,7 +6899,13 @@ function MemberTable({
                       aria-label="Send notice"
                       title="Send notice"
                     >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        aria-hidden="true"
+                      >
                         <path d="M7 10a5 5 0 1 1 10 0v4.2l1.4 2.3H5.6L7 14.2V10Z" />
                         <path d="M10 18.5a2.2 2.2 0 0 0 4 0" />
                       </svg>
@@ -6824,7 +6923,13 @@ function MemberTable({
                         aria-label="Edit member"
                         title="Edit member"
                       >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          aria-hidden="true"
+                        >
                           <path d="M4 20l.9-3.6L15.4 6 18 8.6 7.6 19.1 4 20Z" />
                           <path d="M13.2 7.8l2.6 2.6" />
                         </svg>
@@ -6837,7 +6942,13 @@ function MemberTable({
                         aria-label="Delete member"
                         title="Delete member"
                       >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          aria-hidden="true"
+                        >
                           <path d="M5 7h14" />
                           <path d="M9 7V5.5c0-.6.4-1 1-1h4c.6 0 1 .4 1 1V7" />
                           <path d="M7 7l1 12.5c0 .6.5 1 1 1h6c.5 0 1-.4 1-1L17 7" />
@@ -7367,7 +7478,6 @@ function MemberMasterPanel({
         onFileChange={onBulkMemberFileChange}
         onUpload={onUploadBulkMembers}
       />
-
     </section>
   );
 }
@@ -7483,53 +7593,118 @@ function VendorProfileDialog({ vendor, onClose }) {
           <div className="vendor-profile-grid">
             <div className="vendor-profile-block">
               <span className="mini-label">Basic Info</span>
-              <p><strong>Contact:</strong> {vendor.contactPerson || "--"}</p>
-              <p><strong>Email:</strong> {vendor.email || "--"}</p>
-              <p><strong>Phone:</strong> {vendor.phone || "--"}</p>
-              <p><strong>WhatsApp:</strong> {vendor.whatsapp || "--"}</p>
-              <p><strong>Category:</strong> {vendor.category || "--"}</p>
-              <p><strong>Sub Category:</strong> {vendor.vendorType || "--"}</p>
-              <p><strong>Status:</strong> {vendor.registrationStatus}</p>
+              <p>
+                <strong>Contact:</strong> {vendor.contactPerson || "--"}
+              </p>
+              <p>
+                <strong>Email:</strong> {vendor.email || "--"}
+              </p>
+              <p>
+                <strong>Phone:</strong> {vendor.phone || "--"}
+              </p>
+              <p>
+                <strong>WhatsApp:</strong> {vendor.whatsapp || "--"}
+              </p>
+              <p>
+                <strong>Category:</strong> {vendor.category || "--"}
+              </p>
+              <p>
+                <strong>Sub Category:</strong> {vendor.vendorType || "--"}
+              </p>
+              <p>
+                <strong>Status:</strong> {vendor.registrationStatus}
+              </p>
             </div>
 
             <div className="vendor-profile-block">
               <span className="mini-label">Address</span>
-              <p><strong>Country:</strong> {vendor.country || "--"}</p>
-              <p><strong>State:</strong> {vendor.state || "--"}</p>
-              <p><strong>City:</strong> {vendor.city || "--"}</p>
-              <p><strong>Zipcode:</strong> {vendor.zipcode || "--"}</p>
-              <p><strong>Address:</strong> {vendor.address || "--"}</p>
-              <p><strong>Google Location:</strong> {vendor.googleLocation || "--"}</p>
+              <p>
+                <strong>Country:</strong> {vendor.country || "--"}
+              </p>
+              <p>
+                <strong>State:</strong> {vendor.state || "--"}
+              </p>
+              <p>
+                <strong>City:</strong> {vendor.city || "--"}
+              </p>
+              <p>
+                <strong>Zipcode:</strong> {vendor.zipcode || "--"}
+              </p>
+              <p>
+                <strong>Address:</strong> {vendor.address || "--"}
+              </p>
+              <p>
+                <strong>Google Location:</strong>{" "}
+                {vendor.googleLocation || "--"}
+              </p>
             </div>
 
             <div className="vendor-profile-block">
               <span className="mini-label">Commercial</span>
-              <p><strong>Plan Name:</strong> {vendor.planName || "--"}</p>
-              <p><strong>Membership Plan:</strong> {vendor.membershipPlan || "--"}</p>
-              <p><strong>Payment Amount:</strong> {vendor.paymentAmount || "--"}</p>
-              <p><strong>Payment Mode:</strong> {vendor.paymentMode || "--"}</p>
-              <p><strong>Bank Name:</strong> {vendor.bankName || "--"}</p>
-              <p><strong>Transaction ID:</strong> {vendor.transactionId || "--"}</p>
-              <p><strong>GST Number:</strong> {vendor.gstNumber || "--"}</p>
-              <p><strong>Restaurant:</strong> {vendor.isRestaurant ? "Yes" : "No"}</p>
+              <p>
+                <strong>Plan Name:</strong> {vendor.planName || "--"}
+              </p>
+              <p>
+                <strong>Membership Plan:</strong>{" "}
+                {vendor.membershipPlan || "--"}
+              </p>
+              <p>
+                <strong>Payment Amount:</strong> {vendor.paymentAmount || "--"}
+              </p>
+              <p>
+                <strong>Payment Mode:</strong> {vendor.paymentMode || "--"}
+              </p>
+              <p>
+                <strong>Bank Name:</strong> {vendor.bankName || "--"}
+              </p>
+              <p>
+                <strong>Transaction ID:</strong> {vendor.transactionId || "--"}
+              </p>
+              <p>
+                <strong>GST Number:</strong> {vendor.gstNumber || "--"}
+              </p>
+              <p>
+                <strong>Restaurant:</strong>{" "}
+                {vendor.isRestaurant ? "Yes" : "No"}
+              </p>
             </div>
 
             <div className="vendor-profile-block">
               <span className="mini-label">Schedule</span>
-              <p><strong>Onboarding Start:</strong> {vendor.onboardingStartDate || "--"}</p>
-              <p><strong>Onboarding End:</strong> {vendor.onboardingEndDate || "--"}</p>
-              <p><strong>Payment Due:</strong> {vendor.paymentDue || "--"}</p>
-              <p><strong>Opening Time:</strong> {vendor.openingTime || "--"}</p>
-              <p><strong>Closing Time:</strong> {vendor.closingTime || "--"}</p>
+              <p>
+                <strong>Onboarding Start:</strong>{" "}
+                {vendor.onboardingStartDate || "--"}
+              </p>
+              <p>
+                <strong>Onboarding End:</strong>{" "}
+                {vendor.onboardingEndDate || "--"}
+              </p>
+              <p>
+                <strong>Payment Due:</strong> {vendor.paymentDue || "--"}
+              </p>
+              <p>
+                <strong>Opening Time:</strong> {vendor.openingTime || "--"}
+              </p>
+              <p>
+                <strong>Closing Time:</strong> {vendor.closingTime || "--"}
+              </p>
             </div>
           </div>
 
           <div className="vendor-profile-grid">
             <div className="vendor-profile-block vendor-profile-block-wide">
               <span className="mini-label">Descriptions</span>
-              <p><strong>Work Description:</strong> {vendor.workDescription || "--"}</p>
-              <p><strong>Payment Description:</strong> {vendor.paymentDescription || "--"}</p>
-              <p><strong>Notes:</strong> {vendor.notes || "--"}</p>
+              <p>
+                <strong>Work Description:</strong>{" "}
+                {vendor.workDescription || "--"}
+              </p>
+              <p>
+                <strong>Payment Description:</strong>{" "}
+                {vendor.paymentDescription || "--"}
+              </p>
+              <p>
+                <strong>Notes:</strong> {vendor.notes || "--"}
+              </p>
             </div>
           </div>
 
@@ -7554,7 +7729,11 @@ function VendorProfileDialog({ vendor, onClose }) {
                   <article key={label} className="vendor-profile-asset-card">
                     <strong>{label}</strong>
                     {asset.mimeType?.startsWith("image/") ? (
-                      <img src={asset.url} alt={label} className="vendor-profile-asset-image" />
+                      <img
+                        src={asset.url}
+                        alt={label}
+                        className="vendor-profile-asset-image"
+                      />
                     ) : null}
                     <a href={asset.url} target="_blank" rel="noreferrer">
                       {getStoredAssetLabel(asset)}
@@ -7728,7 +7907,13 @@ function VendorRegistrationTable({
                       aria-label="View vendor"
                       title="View vendor"
                     >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        aria-hidden="true"
+                      >
                         <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" />
                         <circle cx="12" cy="12" r="3.2" />
                       </svg>
@@ -7740,7 +7925,13 @@ function VendorRegistrationTable({
                       aria-label="Edit vendor"
                       title="Edit vendor"
                     >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        aria-hidden="true"
+                      >
                         <path d="M4 20l.9-3.6L15.4 6 18 8.6 7.6 19.1 4 20Z" />
                         <path d="M13.2 7.8l2.6 2.6" />
                       </svg>
@@ -7752,7 +7943,13 @@ function VendorRegistrationTable({
                       aria-label="Delete vendor"
                       title="Delete vendor"
                     >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        aria-hidden="true"
+                      >
                         <path d="M5 7h14" />
                         <path d="M9 7V5.5c0-.6.4-1 1-1h4c.6 0 1 .4 1 1V7" />
                         <path d="M7 7l1 12.5c0 .6.5 1 1 1h6c.5 0 1-.4 1-1L17 7" />
@@ -8303,7 +8500,10 @@ function VendorRegistrationForm({
               <input
                 type="file"
                 onChange={(event) =>
-                  onFileChange("companyBrochure", event.target.files?.[0] ?? null)
+                  onFileChange(
+                    "companyBrochure",
+                    event.target.files?.[0] ?? null,
+                  )
                 }
               />
               {formData.companyBrochure instanceof File ? (
@@ -9481,7 +9681,9 @@ function TimelinePanel({
               }
             />
             {formData.imageUrl ? (
-              <small>Current image attached. Upload a new file only to replace it.</small>
+              <small>
+                Current image attached. Upload a new file only to replace it.
+              </small>
             ) : null}
           </label>
           <label className="profile-field">
@@ -9494,7 +9696,9 @@ function TimelinePanel({
               }
             />
             {formData.brochureUrl ? (
-              <small>Current PDF attached. Upload a new file only to replace it.</small>
+              <small>
+                Current PDF attached. Upload a new file only to replace it.
+              </small>
             ) : null}
           </label>
         </div>
@@ -9575,7 +9779,9 @@ function TimelinePanel({
               }}
             >
               <div className="timeline-feed-avatar">
-                <span>{getInitialsLabel(post.sourceName || post.postedBy)}</span>
+                <span>
+                  {getInitialsLabel(post.sourceName || post.postedBy)}
+                </span>
               </div>
               <div className="timeline-feed-header-copy">
                 <strong>{post.sourceName}</strong>
@@ -9760,7 +9966,9 @@ function AppBannerPanel({
             />
             <small>{appBannerMediaRecommendation}</small>
             {formData.mediaUrl ? (
-              <small>Current media attached. Upload a new file only to replace it.</small>
+              <small>
+                Current media attached. Upload a new file only to replace it.
+              </small>
             ) : null}
           </label>
           <label className="profile-field">
@@ -9774,7 +9982,9 @@ function AppBannerPanel({
             />
             <small>{appBannerPdfRecommendation}</small>
             {formData.brochureUrl ? (
-              <small>Current PDF attached. Upload a new file only to replace it.</small>
+              <small>
+                Current PDF attached. Upload a new file only to replace it.
+              </small>
             ) : null}
           </label>
         </div>
@@ -9945,19 +10155,33 @@ function EventTimelineCards({ groups = [], onSelectEvent }) {
   );
 }
 
-function EventMasterPanel({ groups = [], eventTypes = [], onSelectEvent }) {
+function EventMasterPanel({
+  groups = [],
+  events = [],
+  eventTypes = [],
+  savingEventId = "",
+  onViewEvent,
+  onEditEvent,
+  onDeleteEvent,
+}) {
+  const [previewEventId, setPreviewEventId] = useState("");
   const totalEvents = groups.reduce(
     (count, group) => count + group.items.length,
     0,
   );
-  const pastCount = groups.find((group) => group.title === "Past Events")?.items
-    .length ?? 0;
-  const currentCount = groups.find(
-    (group) => group.title === "Current Events",
-  )?.items.length ?? 0;
-  const upcomingCount = groups.find(
-    (group) => group.title === "Coming Events",
-  )?.items.length ?? 0;
+  const pastCount =
+    groups.find((group) => group.title === "Past Events")?.items.length ?? 0;
+  const currentCount =
+    groups.find((group) => group.title === "Current Events")?.items.length ?? 0;
+  const upcomingCount =
+    groups.find((group) => group.title === "Coming Events")?.items.length ?? 0;
+  const sortedEvents = [...events].sort((left, right) => {
+    const rightDate = new Date(right.date || 0).getTime();
+    const leftDate = new Date(left.date || 0).getTime();
+    return rightDate - leftDate;
+  });
+  const previewEvent =
+    sortedEvents.find((eventItem) => eventItem.id === previewEventId) ?? null;
 
   return (
     <section className="association-tab-section">
@@ -10000,7 +10224,185 @@ function EventMasterPanel({ groups = [], eventTypes = [], onSelectEvent }) {
         </p>
       ) : null}
 
-      <EventTimelineCards groups={groups} onSelectEvent={onSelectEvent} />
+      {previewEvent ? (
+        <section className="member-table-panel">
+          <div className="panel-topline">
+            <h2>{previewEvent.name || "Event Preview"}</h2>
+            <span className="mini-label">
+              {previewEvent.liveStatus || "Event"}
+            </span>
+          </div>
+          <div className="member-record-details">
+            <p>
+              <strong>Type:</strong> {previewEvent.type || "Not set"}
+            </p>
+            <p>
+              <strong>Date:</strong> {previewEvent.date || "Not set"}
+            </p>
+            <p>
+              <strong>Venue:</strong> {previewEvent.venue || "Not set"}
+            </p>
+            <p>
+              <strong>Audience:</strong> {previewEvent.audience || "Not set"}
+            </p>
+            <p>
+              <strong>Entry:</strong> {previewEvent.entryType || "Not set"}
+            </p>
+            <p>
+              <strong>Summary:</strong> {previewEvent.summary || "Not set"}
+            </p>
+            {previewEvent.bannerUrl ? (
+              <p>
+                <strong>Banner:</strong>{" "}
+                <a
+                  href={previewEvent.bannerUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Open banner
+                </a>
+              </p>
+            ) : null}
+            {previewEvent.promoVideoUrl ? (
+              <p>
+                <strong>Promo Video:</strong>{" "}
+                <a
+                  href={previewEvent.promoVideoUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Open promo video
+                </a>
+              </p>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+
+      <section className="member-table-panel">
+        <div className="panel-topline">
+          <h2>All Events</h2>
+          <span className="mini-label">View, Edit, Delete</span>
+        </div>
+
+        <div className="member-table-wrap">
+          <table className="member-table">
+            <thead>
+              <tr>
+                <th>Event</th>
+                <th>Type</th>
+                <th>Date</th>
+                <th>Venue</th>
+                <th>Status</th>
+                <th>Media</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedEvents.length ? (
+                sortedEvents.map((eventItem) => (
+                  <tr key={eventItem.id}>
+                    <td>
+                      <div className="member-table-name">
+                        <strong>{eventItem.name || "Untitled Event"}</strong>
+                        <span>
+                          {eventItem.summary ||
+                            eventItem.audience ||
+                            "No summary"}
+                        </span>
+                      </div>
+                    </td>
+                    <td>{eventItem.type || "Not set"}</td>
+                    <td>{eventItem.date || "Not set"}</td>
+                    <td>{eventItem.venue || "Not set"}</td>
+                    <td>{eventItem.liveStatus || "Scheduled"}</td>
+                    <td>
+                      <div className="member-table-contact">
+                        <span>
+                          {eventItem.bannerUrl ? "Banner" : "No banner"}
+                        </span>
+                        <span>
+                          {eventItem.promoVideoUrl
+                            ? "Video attached"
+                            : "No video"}
+                        </span>
+                      </div>
+                    </td>
+                    <td>
+                      <div className="member-master-actions">
+                        <button
+                          className="secondary-link secondary-button table-button table-icon-only"
+                          type="button"
+                          onClick={() => {
+                            setPreviewEventId(eventItem.id);
+                            onViewEvent?.(eventItem.id);
+                          }}
+                          aria-label="View event"
+                          title="View event"
+                        >
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            aria-hidden="true"
+                          >
+                            <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" />
+                            <circle cx="12" cy="12" r="3" />
+                          </svg>
+                        </button>
+                        <button
+                          className="secondary-link secondary-button table-button table-icon-only"
+                          type="button"
+                          onClick={() => onEditEvent?.(eventItem.id)}
+                          disabled={Boolean(savingEventId)}
+                          aria-label="Edit event"
+                          title="Edit event"
+                        >
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            aria-hidden="true"
+                          >
+                            <path d="M4 20l.9-3.6L15.4 6 18 8.6 7.6 19.1 4 20Z" />
+                            <path d="M13.2 7.8l2.6 2.6" />
+                          </svg>
+                        </button>
+                        <button
+                          className="secondary-link secondary-button danger-button table-button table-icon-only"
+                          type="button"
+                          onClick={() => onDeleteEvent?.(eventItem.id)}
+                          disabled={Boolean(savingEventId)}
+                          aria-label="Delete event"
+                          title="Delete event"
+                        >
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            aria-hidden="true"
+                          >
+                            <path d="M4 7h16" />
+                            <path d="M9 7V4h6v3" />
+                            <path d="M7.5 7l.8 12h7.4l.8-12" />
+                          </svg>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="7">No events created yet.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </section>
   );
 }
@@ -10305,8 +10707,11 @@ function EventsArenaContent({
   onSaveEvent,
   onCancelEventEdit,
   onEditEvent,
+  onDeleteEvent,
   eventTypes,
   eventTypeDraft,
+  isSavingEventType,
+  eventTypeFeedback,
   onEventTypeDraftChange,
   onAddEventType,
   onUpdateEventType,
@@ -10315,8 +10720,12 @@ function EventsArenaContent({
     return (
       <EventMasterPanel
         groups={eventTimelineGroups}
+        events={events}
         eventTypes={eventTypes}
-        onSelectEvent={onEditEvent}
+        savingEventId={savingEventId}
+        onViewEvent={() => {}}
+        onEditEvent={onEditEvent}
+        onDeleteEvent={onDeleteEvent}
       />
     );
   }
@@ -10436,7 +10845,9 @@ function AdminEventAccessPanel({
                       onClick={() => onDeleteEvent(eventItem.id)}
                       disabled={Boolean(savingEventId)}
                     >
-                      {savingEventId === eventItem.id ? "Deleting..." : "Delete"}
+                      {savingEventId === eventItem.id
+                        ? "Deleting..."
+                        : "Delete"}
                     </button>
                   </div>
                 </td>
@@ -10994,7 +11405,9 @@ function UsersManagementPanel({
       {showPrivilegedCreate && isCreateFormOpen ? (
         <div className="admin-super-admin-card">
           <div className="panel-topline">
-            <h3>{isSuperAdminTab ? "Create Super Admin" : "Create Backend Admin"}</h3>
+            <h3>
+              {isSuperAdminTab ? "Create Super Admin" : "Create Backend Admin"}
+            </h3>
             <span className="mini-label">Email Access</span>
           </div>
           <p className="admin-access-helper-copy">
@@ -11039,9 +11452,11 @@ function UsersManagementPanel({
           </div>
 
           <div className="profile-action-row">
-            {(isSuperAdminTab
-              ? superAdminInviteFeedback
-              : backendAdminInviteFeedback) ? (
+            {(
+              isSuperAdminTab
+                ? superAdminInviteFeedback
+                : backendAdminInviteFeedback
+            ) ? (
               <p className="admin-access-feedback">
                 {isSuperAdminTab
                   ? superAdminInviteFeedback
@@ -11162,17 +11577,17 @@ function AdminBulkMemberPanel({
             `Nima@123`.
           </small>
           <small>
-            Members can log in with that password first and then change it
-            later from their account settings.
+            Members can log in with that password first and then change it later
+            from their account settings.
           </small>
           <small>
             Need the correct format first? Download the member import template
             and fill the same headers before uploading.
           </small>
           <small>
-            Include the <strong>membership_type</strong> column and use
-            Primary, Associate, or Guest. Blank or legacy NA values will be
-            treated as Primary.
+            Include the <strong>membership_type</strong> column and use Primary,
+            Associate, or Guest. Blank or legacy NA values will be treated as
+            Primary.
           </small>
         </label>
       </div>
@@ -11306,7 +11721,8 @@ function AdminMemberAccessPanel({
   feedbackMessage,
 }) {
   const allSelected =
-    items.length > 0 && items.every((member) => selectedIds.includes(member.id));
+    items.length > 0 &&
+    items.every((member) => selectedIds.includes(member.id));
 
   return (
     <article className="admin-access-panel">
@@ -11393,9 +11809,7 @@ function AdminMemberAccessPanel({
                   disabled={isCreatingSuperAdmin}
                   onClick={onSubmitSuperAdminInvite}
                 >
-                  {isCreatingSuperAdmin
-                    ? "Creating..."
-                    : "Create Super Admin"}
+                  {isCreatingSuperAdmin ? "Creating..." : "Create Super Admin"}
                 </button>
               </div>
             </div>
@@ -11743,7 +12157,8 @@ function AdminRegistrationRequestsPanel({
   onSaveMemberAccessChanges,
 }) {
   const allSelected =
-    items.length > 0 && items.every((member) => selectedIds.includes(member.id));
+    items.length > 0 &&
+    items.every((member) => selectedIds.includes(member.id));
 
   return (
     <article className="admin-access-panel">
@@ -11825,7 +12240,9 @@ function AdminRegistrationRequestsPanel({
                     <button
                       className="secondary-link secondary-button"
                       type="button"
-                      disabled={isSaving || member.appAccessStatus === "Approved"}
+                      disabled={
+                        isSaving || member.appAccessStatus === "Approved"
+                      }
                       onClick={() =>
                         onApplySingleMemberAccessStatus(member.id, "Approved")
                       }
@@ -11835,7 +12252,9 @@ function AdminRegistrationRequestsPanel({
                     <button
                       className="secondary-link secondary-button danger-button"
                       type="button"
-                      disabled={isSaving || member.appAccessStatus === "Cancelled"}
+                      disabled={
+                        isSaving || member.appAccessStatus === "Cancelled"
+                      }
                       onClick={() =>
                         onApplySingleMemberAccessStatus(member.id, "Cancelled")
                       }
@@ -12246,7 +12665,9 @@ export default function HomePage() {
   const [dashboardApprovalTab, setDashboardApprovalTab] = useState("Primary");
   const [vendorOverviewStatusFilter, setVendorOverviewStatusFilter] =
     useState("");
-  const [activeSection, setActiveSection] = useState(topLevelSections.dashboard);
+  const [activeSection, setActiveSection] = useState(
+    topLevelSections.dashboard,
+  );
   const [activeAssociationTab, setActiveAssociationTab] = useState("Profile");
   const [activeFinanceTab, setActiveFinanceTab] = useState("Income");
   const [activeEventsTab, setActiveEventsTab] = useState("Master");
@@ -12275,8 +12696,7 @@ export default function HomePage() {
     lastName: "",
   });
   const [isCreatingSuperAdmin, setIsCreatingSuperAdmin] = useState(false);
-  const [superAdminInviteFeedback, setSuperAdminInviteFeedback] =
-    useState("");
+  const [superAdminInviteFeedback, setSuperAdminInviteFeedback] = useState("");
   const [backendAdminInviteFeedback, setBackendAdminInviteFeedback] =
     useState("");
   const [appPermissions, setAppPermissions] = useState({
@@ -12353,14 +12773,12 @@ export default function HomePage() {
   const [committeeMemberForm, setCommitteeMemberForm] = useState(
     defaultCommitteeMemberForm,
   );
-  const [isSavingCommitteeMember, setIsSavingCommitteeMember] =
-    useState(false);
+  const [isSavingCommitteeMember, setIsSavingCommitteeMember] = useState(false);
   const [committeeMemberFeedback, setCommitteeMemberFeedback] = useState("");
   const [committeePostMasterList, setCommitteePostMasterList] = useState(
     defaultCommitteePostOptions,
   );
-  const [committeePostMasterDraft, setCommitteePostMasterDraft] =
-    useState("");
+  const [committeePostMasterDraft, setCommitteePostMasterDraft] = useState("");
   const [editingCommitteePostMaster, setEditingCommitteePostMaster] =
     useState("");
   const [committeePostMasterEditDraft, setCommitteePostMasterEditDraft] =
@@ -12428,7 +12846,9 @@ export default function HomePage() {
   const [isSavingAppBanner, setIsSavingAppBanner] = useState(false);
   const [appBannerError, setAppBannerError] = useState("");
   const [adminAppBannerSearch, setAdminAppBannerSearch] = useState("");
-  const [selectedAdminAppBannerIds, setSelectedAdminAppBannerIds] = useState([]);
+  const [selectedAdminAppBannerIds, setSelectedAdminAppBannerIds] = useState(
+    [],
+  );
   const [appBannerAccessEdits, setAppBannerAccessEdits] = useState({});
   const [isSavingBannerAccess, setIsSavingBannerAccess] = useState(false);
   const [isDeletingAppBanners, setIsDeletingAppBanners] = useState(false);
@@ -12438,10 +12858,12 @@ export default function HomePage() {
   const [bulkMemberError, setBulkMemberError] = useState("");
   const [bulkMemberResult, setBulkMemberResult] = useState(null);
   const [adminTimelineSearch, setAdminTimelineSearch] = useState("");
-  const [selectedAdminTimelinePostIds, setSelectedAdminTimelinePostIds] = useState([]);
+  const [selectedAdminTimelinePostIds, setSelectedAdminTimelinePostIds] =
+    useState([]);
   const [timelineAccessEdits, setTimelineAccessEdits] = useState({});
   const [isSavingTimelineAccess, setIsSavingTimelineAccess] = useState(false);
-  const [isDeletingAdminTimelinePosts, setIsDeletingAdminTimelinePosts] = useState(false);
+  const [isDeletingAdminTimelinePosts, setIsDeletingAdminTimelinePosts] =
+    useState(false);
   const [timelineAccessFeedback, setTimelineAccessFeedback] = useState("");
   const [adminVendorSearch, setAdminVendorSearch] = useState("");
   const [adminVendorAccessView, setAdminVendorAccessView] = useState("app");
@@ -12632,7 +13054,10 @@ export default function HomePage() {
   };
 
   const clearAdminSessionIfCurrent = (sessionToClear = null) => {
-    if (sessionToClear && !isSameSession(authSessionRef.current, sessionToClear)) {
+    if (
+      sessionToClear &&
+      !isSameSession(authSessionRef.current, sessionToClear)
+    ) {
       return false;
     }
 
@@ -12704,10 +13129,7 @@ export default function HomePage() {
       if (resolvedSession?.authToken) {
         headers.set("Authorization", `Bearer ${resolvedSession.authToken}`);
       }
-      if (
-        typeof options.body === "string" &&
-        !headers.has("Content-Type")
-      ) {
+      if (typeof options.body === "string" && !headers.has("Content-Type")) {
         headers.set("Content-Type", "application/json");
       }
 
@@ -12884,7 +13306,9 @@ export default function HomePage() {
 
   const submitBackendAdminInvite = async () => {
     if (!superAdminInviteForm.email.trim()) {
-      setBackendAdminInviteFeedback("Enter the email to create a backend admin.");
+      setBackendAdminInviteFeedback(
+        "Enter the email to create a backend admin.",
+      );
       return;
     }
 
@@ -13131,10 +13555,10 @@ export default function HomePage() {
     }
 
     setMembershipTypeMasterList((current) =>
-      buildMembershipTypeOptions(
-        memberTabData["All Members"] ?? [],
-        [...current, ...storedTypes],
-      ),
+      buildMembershipTypeOptions(memberTabData["All Members"] ?? [], [
+        ...current,
+        ...storedTypes,
+      ]),
     );
   }, []);
 
@@ -13302,9 +13726,7 @@ export default function HomePage() {
       );
     });
     setActiveGalleryFolderId((current) =>
-      nextGalleryFolders.some((folder) => folder.id === current)
-        ? current
-        : "",
+      nextGalleryFolders.some((folder) => folder.id === current) ? current : "",
     );
     setGalleryItems(
       mapAssociationGalleryItems(payload.association?.galleryItems),
@@ -13746,8 +14168,8 @@ export default function HomePage() {
       .filter(Boolean)
       .some((value) => value.toLowerCase().includes(query));
   });
-  const selectedFilteredManagedUserIds = selectedManagedUserIds.filter((userId) =>
-    filteredManagedUsers.some((user) => user.id === userId),
+  const selectedFilteredManagedUserIds = selectedManagedUserIds.filter(
+    (userId) => filteredManagedUsers.some((user) => user.id === userId),
   );
   const selectedFilteredAdminTimelinePostIds =
     selectedAdminTimelinePostIds.filter((postId) =>
@@ -13795,13 +14217,15 @@ export default function HomePage() {
     );
   const allMembers = memberTabData["All Members"] ?? [];
   const primaryMembersCount = allMembers.filter(
-    (member) => normalizeMembershipTypeLabel(member.membershipType || "") === "Primary",
+    (member) =>
+      normalizeMembershipTypeLabel(member.membershipType || "") === "Primary",
   ).length;
   const associateMembersCount = allMembers.filter(
-    (member) => normalizeMembershipTypeLabel(member.membershipType || "") === "Associate",
+    (member) =>
+      normalizeMembershipTypeLabel(member.membershipType || "") === "Associate",
   ).length;
-  const guestMembersCount = allMembers.filter(
-    (member) => isGuestMembershipType(member.membershipType || ""),
+  const guestMembersCount = allMembers.filter((member) =>
+    isGuestMembershipType(member.membershipType || ""),
   ).length;
   const approvedVendorsCount = vendorRecords.filter(
     (vendor) => vendor.appAccessStatus === "Approved",
@@ -13813,8 +14237,7 @@ export default function HomePage() {
     (vendor) => vendor.appAccessStatus === "Suspended",
   ).length;
   const activeUsersCount = sessionReportSummary.activeUsers;
-  const activeUsersThisMonthCount =
-    sessionReportSummary.activeUsersThisMonth;
+  const activeUsersThisMonthCount = sessionReportSummary.activeUsersThisMonth;
   const activeUsersLastSixMonthsCount =
     sessionReportSummary.activeUsersLastSixMonths;
   const featuredDashboardVendors = vendorRecords
@@ -13939,15 +14362,14 @@ export default function HomePage() {
       appAccessStatus: memberAccessEdits[member.id] ?? member.appAccessStatus,
     }))
     .filter((member) => member.appAccessStatus === "Pending Approval");
-  const dashboardPendingRegistrationRequests = pendingRegistrationRequests.filter(
-    (member) => {
+  const dashboardPendingRegistrationRequests =
+    pendingRegistrationRequests.filter((member) => {
       if (dashboardApprovalTab === "Guest") {
         return isGuestMembershipType(member.membershipType);
       }
 
       return member.membershipType === dashboardApprovalTab;
-    },
-  );
+    });
   const contentMemberMatches = (memberTabData["All Members"] ?? []).filter(
     (member) => {
       const query = adminContentMemberSearch.trim().toLowerCase();
@@ -14034,7 +14456,8 @@ export default function HomePage() {
     vendorRecords.find((vendor) => vendor.id === selectedVendorReviewId) ??
     null;
   const selectedVendorProfile =
-    vendorRecords.find((vendor) => vendor.id === selectedVendorProfileId) ?? null;
+    vendorRecords.find((vendor) => vendor.id === selectedVendorProfileId) ??
+    null;
   const filteredVendorContentPosts = vendorContentPosts.filter((post) => {
     const query = adminVendorSearch.trim().toLowerCase();
     const postStatus = (
@@ -14179,9 +14602,12 @@ export default function HomePage() {
       try {
         await Promise.all(
           selectedIds.map(async (memberId) => {
-            const response = await runAuthenticatedFetch(`/members/${memberId}`, {
-              method: "DELETE",
-            });
+            const response = await runAuthenticatedFetch(
+              `/members/${memberId}`,
+              {
+                method: "DELETE",
+              },
+            );
 
             if (!response.ok && response.status !== 204) {
               let message = "Unable to delete one or more selected members.";
@@ -14205,7 +14631,9 @@ export default function HomePage() {
         );
 
         setSelectedMemberRecords(
-          Object.fromEntries(memberArenaTabs.map((memberTab) => [memberTab, []])),
+          Object.fromEntries(
+            memberArenaTabs.map((memberTab) => [memberTab, []]),
+          ),
         );
         setMemberDirectoryFeedback(
           `${selectedIds.length} member${selectedIds.length === 1 ? "" : "s"} deleted.`,
@@ -14246,7 +14674,9 @@ export default function HomePage() {
 
         setMemberTabData((current) =>
           buildMemberTabData(
-            (current["All Members"] ?? []).filter((item) => item.id !== recordId),
+            (current["All Members"] ?? []).filter(
+              (item) => item.id !== recordId,
+            ),
           ),
         );
 
@@ -14591,13 +15021,16 @@ export default function HomePage() {
     await Promise.all(
       updates.map(async ([memberId, nextStatusLabel]) => {
         const accessStatus = getMemberAccessApiValue(nextStatusLabel);
-        const response = await runAuthenticatedFetch(`/members/${memberId}/access`, {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
+        const response = await runAuthenticatedFetch(
+          `/members/${memberId}/access`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ accessStatus }),
           },
-          body: JSON.stringify({ accessStatus }),
-        });
+        );
 
         if (!response.ok) {
           throw new Error(
@@ -14620,7 +15053,9 @@ export default function HomePage() {
       return nextEdits;
     });
     setSelectedAdminMembers((current) =>
-      current.filter((memberId) => !updates.some(([updatedId]) => updatedId === memberId)),
+      current.filter(
+        (memberId) => !updates.some(([updatedId]) => updatedId === memberId),
+      ),
     );
     await loadMembers();
     setMemberAccessFeedback(successMessage);
@@ -14948,19 +15383,24 @@ export default function HomePage() {
                   ? "REJECTED"
                   : "PENDING";
 
-            return runAuthenticatedFetch(`/member-posts/${post.id}/moderation`, {
-              method: "PATCH",
-              headers: {
-                "Content-Type": "application/json",
+            return runAuthenticatedFetch(
+              `/member-posts/${post.id}/moderation`,
+              {
+                method: "PATCH",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  reviewStatus,
+                  displayStart: nextEdit.displayStart || null,
+                  displayEnd: nextEdit.displayEnd || null,
+                }),
               },
-              body: JSON.stringify({
-                reviewStatus,
-                displayStart: nextEdit.displayStart || null,
-                displayEnd: nextEdit.displayEnd || null,
-              }),
-            }).then((response) => {
+            ).then((response) => {
               if (!response.ok) {
-                throw new Error(`Unable to save content access for post ${post.id}.`);
+                throw new Error(
+                  `Unable to save content access for post ${post.id}.`,
+                );
               }
             });
           }),
@@ -15086,7 +15526,9 @@ export default function HomePage() {
         locationProof:
           current.locationProof instanceof File ? current.locationProof : null,
         companyBrochure:
-          current.companyBrochure instanceof File ? current.companyBrochure : null,
+          current.companyBrochure instanceof File
+            ? current.companyBrochure
+            : null,
         profilePhoto:
           current.profilePhoto instanceof File ? current.profilePhoto : null,
         visitingCard:
@@ -15112,7 +15554,9 @@ export default function HomePage() {
         locationProof:
           current.locationProof instanceof File ? current.locationProof : null,
         companyBrochure:
-          current.companyBrochure instanceof File ? current.companyBrochure : null,
+          current.companyBrochure instanceof File
+            ? current.companyBrochure
+            : null,
         profilePhoto:
           current.profilePhoto instanceof File ? current.profilePhoto : null,
         visitingCard:
@@ -15505,7 +15949,11 @@ export default function HomePage() {
       try {
         const isEditingVendor = Boolean(vendorRegistrationForm.id);
         const payload = new FormData();
-        appendFormDataValue(payload, "name", vendorRegistrationForm.company.trim());
+        appendFormDataValue(
+          payload,
+          "name",
+          vendorRegistrationForm.company.trim(),
+        );
         appendFormDataValue(
           payload,
           "companyName",
@@ -15541,11 +15989,31 @@ export default function HomePage() {
           "address",
           vendorRegistrationForm.address.trim(),
         );
-        appendFormDataValue(payload, "country", vendorRegistrationForm.country.trim());
-        appendFormDataValue(payload, "state", vendorRegistrationForm.state.trim());
-        appendFormDataValue(payload, "city", vendorRegistrationForm.city.trim());
-        appendFormDataValue(payload, "zipcode", vendorRegistrationForm.zipcode.trim());
-        appendFormDataValue(payload, "website", vendorRegistrationForm.website.trim());
+        appendFormDataValue(
+          payload,
+          "country",
+          vendorRegistrationForm.country.trim(),
+        );
+        appendFormDataValue(
+          payload,
+          "state",
+          vendorRegistrationForm.state.trim(),
+        );
+        appendFormDataValue(
+          payload,
+          "city",
+          vendorRegistrationForm.city.trim(),
+        );
+        appendFormDataValue(
+          payload,
+          "zipcode",
+          vendorRegistrationForm.zipcode.trim(),
+        );
+        appendFormDataValue(
+          payload,
+          "website",
+          vendorRegistrationForm.website.trim(),
+        );
         appendFormDataValue(
           payload,
           "workDescription",
@@ -15556,7 +16024,11 @@ export default function HomePage() {
           "phone",
           `${vendorRegistrationForm.phoneCode} ${vendorRegistrationForm.phone.trim()}`.trim(),
         );
-        appendFormDataValue(payload, "email", vendorRegistrationForm.email.trim());
+        appendFormDataValue(
+          payload,
+          "email",
+          vendorRegistrationForm.email.trim(),
+        );
         appendFormDataValue(
           payload,
           "primaryLoginEmail",
@@ -15592,7 +16064,11 @@ export default function HomePage() {
           "linkedinUrl",
           vendorRegistrationForm.linkedinUrl.trim(),
         );
-        appendFormDataValue(payload, "xUrl", vendorRegistrationForm.xUrl.trim());
+        appendFormDataValue(
+          payload,
+          "xUrl",
+          vendorRegistrationForm.xUrl.trim(),
+        );
         appendFormDataValue(
           payload,
           "onboardingStartAt",
@@ -15833,10 +16309,13 @@ export default function HomePage() {
       try {
         const payload = new FormData();
         buildVendorApprovalPayload(payload, reviewTarget);
-        const vendorResponse = await fetch(`${apiBaseUrl}/vendors/${vendorId}`, {
-          method: "PATCH",
-          body: payload,
-        });
+        const vendorResponse = await fetch(
+          `${apiBaseUrl}/vendors/${vendorId}`,
+          {
+            method: "PATCH",
+            body: payload,
+          },
+        );
 
         if (!vendorResponse.ok) {
           let message = "Unable to save vendor approval details right now.";
@@ -15850,13 +16329,16 @@ export default function HomePage() {
           return;
         }
 
-        const response = await fetch(`${apiBaseUrl}/vendors/${vendorId}/access`, {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
+        const response = await fetch(
+          `${apiBaseUrl}/vendors/${vendorId}/access`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ accessStatus }),
           },
-          body: JSON.stringify({ accessStatus }),
-        });
+        );
 
         if (!response.ok) {
           let message = "Unable to update vendor access right now.";
@@ -16005,7 +16487,9 @@ export default function HomePage() {
       }
 
       if (field === "brochureFile" && value.type !== "application/pdf") {
-        setTimelinePostFeedback("Timeline brochures must be uploaded as PDF files.");
+        setTimelinePostFeedback(
+          "Timeline brochures must be uploaded as PDF files.",
+        );
         return;
       }
     }
@@ -16062,7 +16546,7 @@ export default function HomePage() {
       facebookUrl: post.facebookUrl || "",
       imageUrl: post.imageUrl || "",
       brochureUrl: post.brochureUrl || "",
-      });
+    });
   };
   const toggleAdminTimelinePostSelection = (postId) => {
     setSelectedAdminTimelinePostIds((current) =>
@@ -16073,7 +16557,8 @@ export default function HomePage() {
   };
   const toggleSelectAllAdminTimelinePosts = () => {
     setSelectedAdminTimelinePostIds((current) =>
-      selectedFilteredAdminTimelinePostIds.length === filteredAdminTimelinePosts.length
+      selectedFilteredAdminTimelinePostIds.length ===
+      filteredAdminTimelinePosts.length
         ? current.filter(
             (postId) =>
               !filteredAdminTimelinePosts.some((post) => post.id === postId),
@@ -16089,7 +16574,9 @@ export default function HomePage() {
   const deleteSelectedAdminTimelinePosts = () => {
     void (async () => {
       if (selectedAdminTimelinePostIds.length === 0) {
-        setTimelineAccessFeedback("Select at least one timeline post to delete.");
+        setTimelineAccessFeedback(
+          "Select at least one timeline post to delete.",
+        );
         return;
       }
 
@@ -16108,9 +16595,12 @@ export default function HomePage() {
       try {
         await Promise.all(
           selectedAdminTimelinePostIds.map(async (postId) => {
-            const response = await runAuthenticatedFetch(`/timeline-posts/${postId}`, {
-              method: "DELETE",
-            });
+            const response = await runAuthenticatedFetch(
+              `/timeline-posts/${postId}`,
+              {
+                method: "DELETE",
+              },
+            );
 
             if (!response.ok) {
               let message = "Unable to delete one or more timeline posts.";
@@ -16171,9 +16661,12 @@ export default function HomePage() {
       try {
         await Promise.all(
           selectedTimelinePostIds.map(async (postId) => {
-            const response = await runAuthenticatedFetch(`/timeline-posts/${postId}`, {
-              method: "DELETE",
-            });
+            const response = await runAuthenticatedFetch(
+              `/timeline-posts/${postId}`,
+              {
+                method: "DELETE",
+              },
+            );
 
             if (!response.ok) {
               let message = "Unable to delete one or more timeline posts.";
@@ -16208,7 +16701,9 @@ export default function HomePage() {
   const submitTimelinePost = () => {
     void (async () => {
       const isEditingTimelinePost = Boolean(timelinePostForm.id);
-      const normalizedSourceType = timelinePostForm.sourceType.trim().toUpperCase();
+      const normalizedSourceType = timelinePostForm.sourceType
+        .trim()
+        .toUpperCase();
       const requiresMember =
         normalizedSourceType === "MEMBER" && !timelinePostForm.memberId;
       const requiresVendor =
@@ -16387,7 +16882,10 @@ export default function HomePage() {
         return;
       }
 
-      if (appBannerForm.mediaFile && appBannerForm.mediaFile.size > 1024 * 1024) {
+      if (
+        appBannerForm.mediaFile &&
+        appBannerForm.mediaFile.size > 1024 * 1024
+      ) {
         setAppBannerError(
           "Banner image is too large. Keep it at or below 1 MB.",
         );
@@ -16479,7 +16977,8 @@ export default function HomePage() {
         await Promise.all(
           updates.map(async ([bannerId, edit]) => {
             const banner = appBanners.find((item) => item.id === bannerId);
-            const nextStatus = edit.status ?? banner?.status ?? "Pending Review";
+            const nextStatus =
+              edit.status ?? banner?.status ?? "Pending Review";
             const reviewStatus =
               nextStatus === "Approved"
                 ? "APPROVED"
@@ -16491,7 +16990,7 @@ export default function HomePage() {
             const isApproved = reviewStatus === "APPROVED";
             const paymentReceived =
               edit.paymentReceived ??
-              (isApproved ? true : banner?.paymentReceived ?? false);
+              (isApproved ? true : (banner?.paymentReceived ?? false));
             const paymentMode =
               edit.paymentMode ??
               (isApproved
@@ -16510,9 +17009,8 @@ export default function HomePage() {
                   paymentMode,
                   paymentRemarks,
                   displayIndex: isApproved
-                    ? Number(
-                        edit.displayIndex ?? banner?.displayIndex ?? 1,
-                      ) || 1
+                    ? Number(edit.displayIndex ?? banner?.displayIndex ?? 1) ||
+                      1
                     : null,
                   displayStart: isApproved
                     ? edit.displayStart || banner?.displayStart || null
@@ -17292,7 +17790,9 @@ export default function HomePage() {
   };
 
   const addCommitteePostMaster = () => {
-    const normalizedPost = normalizeCommitteePostLabel(committeePostMasterDraft);
+    const normalizedPost = normalizeCommitteePostLabel(
+      committeePostMasterDraft,
+    );
     if (!normalizedPost) {
       setCommitteePostMasterFeedback("Enter a committee post name first.");
       return;
@@ -17318,7 +17818,8 @@ export default function HomePage() {
     const normalizedPost = normalizeCommitteePostLabel(post);
     const isOccupied = committeeMembers.some(
       (member) =>
-        normalizeCommitteePostLabel(member.committeePost || "") === normalizedPost,
+        normalizeCommitteePostLabel(member.committeePost || "") ===
+        normalizedPost,
     );
     const isDefaultPost = defaultCommitteePostOptions.includes(normalizedPost);
 
@@ -17400,7 +17901,8 @@ export default function HomePage() {
     const normalizedPost = normalizeCommitteePostLabel(post);
     const isOccupied = committeeMembers.some(
       (member) =>
-        normalizeCommitteePostLabel(member.committeePost || "") === normalizedPost,
+        normalizeCommitteePostLabel(member.committeePost || "") ===
+        normalizedPost,
     );
     const isDefaultPost = defaultCommitteePostOptions.includes(normalizedPost);
 
@@ -17418,7 +17920,9 @@ export default function HomePage() {
       setEditingCommitteePostMaster("");
       setCommitteePostMasterEditDraft("");
     }
-    setCommitteePostMasterFeedback(`Committee post "${normalizedPost}" deleted.`);
+    setCommitteePostMasterFeedback(
+      `Committee post "${normalizedPost}" deleted.`,
+    );
   };
 
   const addMembershipTypeMaster = () => {
@@ -17483,7 +17987,9 @@ export default function HomePage() {
     );
 
     if (!editingMembershipTypeMaster) {
-      setMembershipTypeMasterFeedback("Select a membership type to edit first.");
+      setMembershipTypeMasterFeedback(
+        "Select a membership type to edit first.",
+      );
       return;
     }
 
@@ -17602,7 +18108,8 @@ export default function HomePage() {
               committeePost: normalizedCommitteePost,
               committeeTenureStart:
                 committeeMemberForm.committeeTenureStart || null,
-              committeeTenureEnd: committeeMemberForm.committeeTenureEnd || null,
+              committeeTenureEnd:
+                committeeMemberForm.committeeTenureEnd || null,
               memberBio: committeeMemberForm.memberBio.trim(),
               ...(committeeMemberForm.photoUrl
                 ? { photoUrl: committeeMemberForm.photoUrl }
@@ -18596,7 +19103,10 @@ export default function HomePage() {
                     topLevelSections.vendors,
                     topLevelSections.events,
                   ].includes(item.label) && isSidebarOpen ? (
-                    <span className="nav-accordion-indicator" aria-hidden="true">
+                    <span
+                      className="nav-accordion-indicator"
+                      aria-hidden="true"
+                    >
                       {item.label === activeSection ||
                       (item.label === topLevelSections.vendors &&
                         vendorSubSections.includes(activeSection))
@@ -18862,9 +19372,7 @@ export default function HomePage() {
                 suspendedVendorsCount={suspendedVendorsCount}
                 activeUsersCount={activeUsersCount}
                 activeUsersThisMonthCount={activeUsersThisMonthCount}
-                activeUsersLastSixMonthsCount={
-                  activeUsersLastSixMonthsCount
-                }
+                activeUsersLastSixMonthsCount={activeUsersLastSixMonthsCount}
                 totalMembersCount={allMembers.length}
                 onOpenPrimaryMembers={() => {
                   setActiveSection(topLevelSections.members);
@@ -19114,7 +19622,10 @@ export default function HomePage() {
                   />
                 </div>
 
-                <nav className="association-tabbar" aria-label="Member sections">
+                <nav
+                  className="association-tabbar"
+                  aria-label="Member sections"
+                >
                   {memberArenaTabs.map((tab) => (
                     <button
                       key={tab}
@@ -19191,8 +19702,8 @@ export default function HomePage() {
                   <span className="eyebrow">Members</span>
                   <h1>Association Member Directory</h1>
                   <p>
-                    Member cards, bulk actions, and communication controls in one
-                    workspace.
+                    Member cards, bulk actions, and communication controls in
+                    one workspace.
                   </p>
                 </div>
 
@@ -19280,7 +19791,9 @@ export default function HomePage() {
                 <article className="admin-access-panel">
                   <div className="panel-topline">
                     <h2>Vendor Status Filter</h2>
-                    <span className="mini-label">Backend Registration Status</span>
+                    <span className="mini-label">
+                      Backend Registration Status
+                    </span>
                   </div>
 
                   <div className="admin-member-toolbar">
@@ -19608,8 +20121,11 @@ export default function HomePage() {
                 onSaveEvent={saveEventDraft}
                 onCancelEventEdit={cancelEventEdit}
                 onEditEvent={editEventRecord}
+                onDeleteEvent={removeEventRecord}
                 eventTypes={eventTypes}
                 eventTypeDraft={eventTypeDraft}
+                isSavingEventType={isSavingEventType}
+                eventTypeFeedback={eventTypeFeedback}
                 onEventTypeDraftChange={updateEventTypeDraft}
                 onAddEventType={addEventType}
                 onUpdateEventType={updateEventType}
@@ -19818,7 +20334,9 @@ export default function HomePage() {
                   onToggleSelectAll={toggleSelectAllAdminMembers}
                   onApplyBulkMemberAccessStatus={applyBulkMemberAccessStatus}
                   onUpdateMemberAccessStatus={updateMemberAccessStatus}
-                  onApplySingleMemberAccessStatus={applySingleMemberAccessStatus}
+                  onApplySingleMemberAccessStatus={
+                    applySingleMemberAccessStatus
+                  }
                   onSaveMemberAccessChanges={saveMemberAccessChanges}
                 />
               ) : activeAdminAccessSection === "Member Access" ? (

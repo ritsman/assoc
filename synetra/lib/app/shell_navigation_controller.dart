@@ -16,7 +16,7 @@ class AppShellNavigationState {
     : isDrawerOpen = false,
       selectedArena = AppArena.dashboard,
       memberArenaSection = MemberArenaSection.media,
-      vendorArenaSection = VendorArenaSection.category,
+      vendorArenaSection = VendorArenaSection.vendor,
       adminArenaSection = AdminArenaSection.appAccess,
       associationArenaSection = AssociationArenaSection.profile,
       eventsArenaSection = EventsArenaSection.master;
@@ -88,7 +88,7 @@ class ShellNavigationController extends ChangeNotifier {
       _history.isEmpty &&
       _state.selectedArena == AppArena.dashboard &&
       _state.memberArenaSection == MemberArenaSection.media &&
-      _state.vendorArenaSection == VendorArenaSection.category &&
+      _state.vendorArenaSection == VendorArenaSection.vendor &&
       _state.adminArenaSection == AdminArenaSection.appAccess &&
       _state.associationArenaSection == AssociationArenaSection.profile &&
       _state.eventsArenaSection == EventsArenaSection.master;

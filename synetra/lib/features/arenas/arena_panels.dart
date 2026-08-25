@@ -30,8 +30,11 @@ class _MemberArenaPanelState extends ConsumerState<MemberArenaPanel> {
       return;
     }
     if (widget.section == MemberArenaSection.master) {
-      ref.invalidate(memberDirectoryProvider(widget.viewerRole));
-      await ref.read(memberDirectoryProvider(widget.viewerRole).future);
+      if (mounted) {
+        setState(() {
+          _directoryRefreshToken++;
+        });
+      }
       return;
     }
     if (mounted) {
@@ -168,10 +171,6 @@ class _MemberArenaPanelState extends ConsumerState<MemberArenaPanel> {
         isMediaSection
             ? ref.watch(memberPostsProvider(widget.viewerRole))
             : null;
-    final membersAsync =
-        isMediaSection || !isMasterSection
-            ? null
-            : ref.watch(memberDirectoryProvider(widget.viewerRole));
     if (isMediaSection) {
       return postsAsync!.when(
         loading: () => const _LoadingState(),
@@ -213,46 +212,27 @@ class _MemberArenaPanelState extends ConsumerState<MemberArenaPanel> {
     }
 
     if (isMasterSection) {
-      return membersAsync!.when(
-        loading: () => const _LoadingState(),
-        error:
-            (error, _) => _ErrorState(
-              title: 'Could not load members',
-              message: error.toString(),
-              onRetry: _refresh,
+      return Column(
+        children: [
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: _refresh,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Refresh'),
             ),
-        data:
-            (members) => Column(
-              children: [
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    onPressed: _refresh,
-                    icon: const Icon(Icons.refresh_rounded),
-                    label: const Text('Refresh'),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                _MemberMasterView(
-                  tenant: ref.watch(tenantProvider).valueOrNull,
-                  onNavigateToMemberArena:
-                      () => widget.onSectionSelected(
-                        MemberArenaNavigation.defaultSection(widget.viewerRole),
-                      ),
-                  child: _AssociationMasterSection(
-                    canManage: widget.viewerRole.isAdmin,
-                    members: [...members]..sort(
-                      (a, b) =>
-                          a.name.toLowerCase().compareTo(b.name.toLowerCase()),
-                    ),
-                    editingMemberId: _editingMemberMasterId,
-                    isSaving: _isSavingMemberMaster,
-                    onOpenEditor: _openMemberMasterEditor,
-                    onDelete: _deleteMemberMaster,
-                  ),
-                ),
-              ],
-            ),
+          ),
+          const SizedBox(height: 8),
+          _PagedMemberMasterSection(
+            viewerRole: widget.viewerRole,
+            refreshToken: _directoryRefreshToken,
+            canManage: widget.viewerRole.isAdmin,
+            editingMemberId: _editingMemberMasterId,
+            isSaving: _isSavingMemberMaster,
+            onOpenEditor: _openMemberMasterEditor,
+            onDelete: _deleteMemberMaster,
+          ),
+        ],
       );
     }
 
@@ -465,8 +445,6 @@ class _VendorArenaPanelState extends ConsumerState<VendorArenaPanel> {
 
   final TextEditingController _searchController = TextEditingController();
   String _query = '';
-  String? _selectedCategory;
-  String? _selectedSubCategory;
   String? _selectedTaxonomyCategoryId;
   String? _updatingVendorId;
   String? _updatingBannerId;
@@ -1451,7 +1429,7 @@ class _VendorArenaPanelState extends ConsumerState<VendorArenaPanel> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Add category and sub-category first before adding a vendor.',
+            'Add at least one vendor category before adding a vendor.',
           ),
         ),
       );
@@ -1692,18 +1670,21 @@ class _VendorArenaPanelState extends ConsumerState<VendorArenaPanel> {
                                     ),
                                   )
                                   .toList(),
-                          onChanged: (value) {
-                            if (value == null) return;
-                            final subCategory = subCategories.firstWhere(
-                              (item) => item.id == value,
-                            );
-                            updateDraft(
-                              draft.copyWith(
-                                subCategoryId: subCategory.id,
-                                subCategoryName: subCategory.name,
-                              ),
-                            );
-                          },
+                          onChanged:
+                              subCategories.isEmpty
+                                  ? null
+                                  : (value) {
+                                    if (value == null) return;
+                                    final subCategory = subCategories
+                                        .firstWhere((item) => item.id == value);
+                                    updateDraft(
+                                      draft.copyWith(
+                                        subCategoryId: subCategory.id,
+                                        subCategoryName: subCategory.name,
+                                      ),
+                                    );
+                                  },
+                          hint: const Text('Optional'),
                         ),
                         const SizedBox(height: 12),
                         DropdownButtonFormField<String>(
@@ -1961,9 +1942,18 @@ class _VendorArenaPanelState extends ConsumerState<VendorArenaPanel> {
     AdminVendorAccessItem vendor,
   ) {
     return AdminVendorApprovalDraft(
-      planName: _readVendorNoteValue(vendor.notes, 'Plan Name'),
-      openingTime: _readVendorNoteValue(vendor.notes, 'Opening Time'),
-      closingTime: _readVendorNoteValue(vendor.notes, 'Closing Time'),
+      planName:
+          vendor.planName.trim().isNotEmpty
+              ? vendor.planName
+              : _readVendorNoteValue(vendor.notes, 'Plan Name'),
+      openingTime:
+          vendor.openingTime.trim().isNotEmpty
+              ? vendor.openingTime
+              : _readVendorNoteValue(vendor.notes, 'Opening Time'),
+      closingTime:
+          vendor.closingTime.trim().isNotEmpty
+              ? vendor.closingTime
+              : _readVendorNoteValue(vendor.notes, 'Closing Time'),
       membershipPlan:
           vendor.membershipPlan.trim().isNotEmpty ? vendor.membershipPlan : '',
       paymentAmount:
@@ -1980,25 +1970,48 @@ class _VendorArenaPanelState extends ConsumerState<VendorArenaPanel> {
           vendor.paymentDueDate.length >= 10
               ? vendor.paymentDueDate.substring(0, 10)
               : vendor.paymentDueDate,
-      gstNumber: _readVendorNoteValue(vendor.notes, 'GST Number'),
+      gstNumber:
+          vendor.gstNumber.trim().isNotEmpty
+              ? vendor.gstNumber
+              : _readVendorNoteValue(vendor.notes, 'GST Number'),
       isRestaurant:
-          _readVendorNoteValue(vendor.notes, 'Is Restaurant') == 'Yes',
+          vendor.isRestaurant ??
+          (_readVendorNoteValue(vendor.notes, 'Is Restaurant') == 'Yes'),
       paymentMode:
-          _readVendorNoteValue(vendor.notes, 'Payment Mode').trim().isEmpty
+          vendor.paymentMode.trim().isNotEmpty
+              ? vendor.paymentMode
+              : _readVendorNoteValue(
+                vendor.notes,
+                'Payment Mode',
+              ).trim().isEmpty
               ? 'Online/NEFT/IMPS'
               : _readVendorNoteValue(vendor.notes, 'Payment Mode'),
-      bankName: _readVendorNoteValue(vendor.notes, 'Bank Name'),
-      transactionId: _readVendorNoteValue(vendor.notes, 'Transaction ID'),
-      paymentDescription: _readVendorNoteValue(
-        vendor.notes,
-        'Payment Description',
-      ),
-      googleLocation: _readVendorNoteValue(vendor.notes, 'Google Location'),
+      bankName:
+          vendor.bankName.trim().isNotEmpty
+              ? vendor.bankName
+              : _readVendorNoteValue(vendor.notes, 'Bank Name'),
+      transactionId:
+          vendor.transactionId.trim().isNotEmpty
+              ? vendor.transactionId
+              : _readVendorNoteValue(vendor.notes, 'Transaction ID'),
+      paymentDescription:
+          vendor.paymentDescription.trim().isNotEmpty
+              ? vendor.paymentDescription
+              : _readVendorNoteValue(vendor.notes, 'Payment Description'),
+      googleLocation:
+          vendor.googleLocation.trim().isNotEmpty
+              ? vendor.googleLocation
+              : _readVendorNoteValue(vendor.notes, 'Google Location'),
       idProof: null,
       locationProof: null,
       companyBrochure: null,
       profilePhoto: null,
       visitingCard: null,
+      idProofAsset: vendor.idProofAsset,
+      locationProofAsset: vendor.locationProofAsset,
+      companyBrochureAsset: vendor.companyBrochureAsset,
+      profilePhotoAsset: vendor.profilePhotoAsset,
+      visitingCardAsset: vendor.visitingCardAsset,
     );
   }
 
@@ -2009,7 +2022,7 @@ class _VendorArenaPanelState extends ConsumerState<VendorArenaPanel> {
       allowMultiple: false,
       type: allowedExtensions == null ? FileType.any : FileType.custom,
       allowedExtensions: allowedExtensions,
-      withData: false,
+      withData: true,
     );
     return result?.files.single;
   }
@@ -2333,16 +2346,21 @@ class _VendorArenaPanelState extends ConsumerState<VendorArenaPanel> {
                         _filePickerRow(
                           label: 'ID Proof',
                           fileName: draft.idProof?.name ?? '',
+                          existingFileName: draft.idProofAsset.displayName,
                           onPick: () => assignFile('idProof'),
                         ),
                         _filePickerRow(
                           label: 'Location Proof',
                           fileName: draft.locationProof?.name ?? '',
+                          existingFileName:
+                              draft.locationProofAsset.displayName,
                           onPick: () => assignFile('locationProof'),
                         ),
                         _filePickerRow(
                           label: 'Company Profile / Brochure',
                           fileName: draft.companyBrochure?.name ?? '',
+                          existingFileName:
+                              draft.companyBrochureAsset.displayName,
                           onPick:
                               () => assignFile(
                                 'companyBrochure',
@@ -2352,6 +2370,7 @@ class _VendorArenaPanelState extends ConsumerState<VendorArenaPanel> {
                         _filePickerRow(
                           label: 'Profile Photo',
                           fileName: draft.profilePhoto?.name ?? '',
+                          existingFileName: draft.profilePhotoAsset.displayName,
                           onPick:
                               () => assignFile(
                                 'profilePhoto',
@@ -2361,6 +2380,7 @@ class _VendorArenaPanelState extends ConsumerState<VendorArenaPanel> {
                         _filePickerRow(
                           label: 'Visiting Card',
                           fileName: draft.visitingCard?.name ?? '',
+                          existingFileName: draft.visitingCardAsset.displayName,
                           onPick:
                               () => assignFile(
                                 'visitingCard',
@@ -2478,6 +2498,7 @@ class _VendorArenaPanelState extends ConsumerState<VendorArenaPanel> {
   Widget _filePickerRow({
     required String label,
     required String fileName,
+    String existingFileName = '',
     required VoidCallback onPick,
   }) {
     return Padding(
@@ -2486,14 +2507,18 @@ class _VendorArenaPanelState extends ConsumerState<VendorArenaPanel> {
         children: [
           Expanded(
             child: Text(
-              fileName.isEmpty ? label : '$label: $fileName',
+              fileName.isNotEmpty
+                  ? '$label: $fileName'
+                  : existingFileName.isNotEmpty
+                  ? '$label: $existingFileName'
+                  : label,
               style: const TextStyle(fontSize: 13, color: Color(0xFF374151)),
             ),
           ),
           TextButton.icon(
             onPressed: onPick,
             icon: const Icon(Icons.attach_file_rounded),
-            label: const Text('Choose'),
+            label: Text(existingFileName.isNotEmpty ? 'Replace' : 'Choose'),
           ),
         ],
       ),
@@ -2524,6 +2549,7 @@ class _VendorArenaPanelState extends ConsumerState<VendorArenaPanel> {
       data: (vendors) {
         final query = _query.trim().toLowerCase();
         final categoryMap = <String, Set<String>>{};
+        final vendorCountByCategory = <String, int>{};
         for (final vendor in vendors) {
           final category = vendor.category.trim();
           final subCategory = vendor.vendorType.trim();
@@ -2532,6 +2558,11 @@ class _VendorArenaPanelState extends ConsumerState<VendorArenaPanel> {
           }
           final key = category.isEmpty ? 'Uncategorized' : category;
           categoryMap.putIfAbsent(key, () => <String>{});
+          vendorCountByCategory.update(
+            key,
+            (count) => count + 1,
+            ifAbsent: () => 1,
+          );
           if (subCategory.isNotEmpty) {
             categoryMap[key]!.add(subCategory);
           }
@@ -2541,40 +2572,14 @@ class _VendorArenaPanelState extends ConsumerState<VendorArenaPanel> {
               (left, right) =>
                   left.key.toLowerCase().compareTo(right.key.toLowerCase()),
             );
-        final filteredVendors =
-            vendors.where((vendor) {
-                final category = vendor.category.trim();
-                final subCategory = vendor.vendorType.trim();
-                final categoryKey =
-                    category.isEmpty ? 'Uncategorized' : category;
-
-                if (_selectedCategory != null &&
-                    categoryKey.toLowerCase() !=
-                        _selectedCategory!.trim().toLowerCase()) {
-                  return false;
-                }
-
-                if (_selectedSubCategory != null &&
-                    subCategory.toLowerCase() !=
-                        _selectedSubCategory!.trim().toLowerCase()) {
-                  return false;
-                }
-
-                if (query.isEmpty) {
-                  return true;
-                }
-                return [
-                  vendor.displayName,
-                  vendor.city,
-                  vendor.category,
-                  vendor.vendorType,
-                ].any((value) => value.trim().toLowerCase().contains(query));
-              }).toList()
-              ..sort(
-                (left, right) => left.displayName.toLowerCase().compareTo(
-                  right.displayName.toLowerCase(),
-                ),
-              );
+        final screenWidth = MediaQuery.of(context).size.width;
+        final categoryColumns = screenWidth >= 900 ? 3 : 2;
+        final categoryAspectRatio =
+            screenWidth >= 900
+                ? 1.45
+                : screenWidth >= 420
+                ? 1.02
+                : 0.8;
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -2612,6 +2617,21 @@ class _VendorArenaPanelState extends ConsumerState<VendorArenaPanel> {
               child: TextField(
                 controller: _searchController,
                 onChanged: (value) => setState(() => _query = value),
+                onSubmitted: (value) {
+                  final normalizedQuery = value.trim();
+                  if (normalizedQuery.isEmpty) {
+                    return;
+                  }
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder:
+                          (_) => _VendorSearchResultsScreen(
+                            query: normalizedQuery,
+                            vendors: vendors,
+                          ),
+                    ),
+                  );
+                },
                 textInputAction: TextInputAction.search,
                 decoration: const InputDecoration(
                   border: InputBorder.none,
@@ -2620,47 +2640,15 @@ class _VendorArenaPanelState extends ConsumerState<VendorArenaPanel> {
                 ),
               ),
             ),
-            if (_selectedCategory != null || _selectedSubCategory != null) ...[
-              const SizedBox(height: 14),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  if (_selectedCategory != null)
-                    _DirectoryFilterChip(
-                      label: _selectedCategory!,
-                      icon: Icons.category_rounded,
-                      selected: true,
-                      onTap: () {
-                        setState(() {
-                          _selectedCategory = null;
-                          _selectedSubCategory = null;
-                        });
-                      },
-                    ),
-                  if (_selectedSubCategory != null)
-                    _DirectoryFilterChip(
-                      label: _selectedSubCategory!,
-                      icon: Icons.subdirectory_arrow_right,
-                      selected: true,
-                      onTap: () {
-                        setState(() {
-                          _selectedSubCategory = null;
-                        });
-                      },
-                    ),
-                  _DirectoryFilterChip(
-                    label: 'Clear filters',
-                    icon: Icons.filter_alt_off_rounded,
-                    selected: false,
-                    onTap: () {
-                      setState(() {
-                        _selectedCategory = null;
-                        _selectedSubCategory = null;
-                      });
-                    },
-                  ),
-                ],
+            if (query.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Text(
+                'Press search on the keyboard to open vendor results on a new page.',
+                style: const TextStyle(
+                  color: Color(0xFF6B7280),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
             if (sortedCategories.isNotEmpty) ...[
@@ -2701,173 +2689,48 @@ class _VendorArenaPanelState extends ConsumerState<VendorArenaPanel> {
                       ),
                     ),
                     const SizedBox(height: 14),
-                    for (final entry in sortedCategories)
-                      Container(
-                        width: double.infinity,
-                        margin: const EdgeInsets.only(bottom: 10),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF8FAFC),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: const Color(0xFFE2E8F0)),
-                        ),
-                        child: ExpansionTile(
-                          tilePadding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 2,
-                          ),
-                          childrenPadding: const EdgeInsets.fromLTRB(
-                            14,
-                            0,
-                            14,
-                            14,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          collapsedShape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          initiallyExpanded: _selectedCategory == entry.key,
-                          title: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  entry.key,
-                                  style: const TextStyle(
-                                    color: Color(0xFF171717),
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(999),
-                                  border: Border.all(
-                                    color: const Color(0xFFE2E8F0),
-                                  ),
-                                ),
-                                child: Text(
-                                  '${vendors.where((vendor) {
-                                    final category = vendor.category.trim();
-                                    final categoryKey = category.isEmpty ? 'Uncategorized' : category;
-                                    return categoryKey.toLowerCase() == entry.key.toLowerCase();
-                                  }).length}',
-                                  style: const TextStyle(
-                                    color: Color(0xFF475569),
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          subtitle: Text(
-                            entry.value.isEmpty
-                                ? 'No sub categories'
-                                : '${entry.value.length} sub categories',
-                            style: const TextStyle(
-                              color: Color(0xFF6B7280),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          children: [
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                children: [
-                                  _DirectoryFilterChip(
-                                    label: 'All in ${entry.key}',
-                                    icon: Icons.category_rounded,
-                                    selected:
-                                        _selectedCategory == entry.key &&
-                                        _selectedSubCategory == null,
-                                    onTap: () {
-                                      setState(() {
-                                        if (_selectedCategory == entry.key &&
-                                            _selectedSubCategory == null) {
-                                          _selectedCategory = null;
-                                        } else {
-                                          _selectedCategory = entry.key;
-                                          _selectedSubCategory = null;
-                                        }
-                                      });
-                                    },
-                                  ),
-                                  ...(entry.value.toList()..sort(
-                                        (left, right) => left
-                                            .toLowerCase()
-                                            .compareTo(right.toLowerCase()),
-                                      ))
-                                      .map(
-                                        (subCategory) => _DirectoryFilterChip(
-                                          label: subCategory,
-                                          icon: Icons.subdirectory_arrow_right,
-                                          selected:
-                                              _selectedCategory == entry.key &&
-                                              _selectedSubCategory ==
-                                                  subCategory,
-                                          onTap: () {
-                                            setState(() {
-                                              if (_selectedCategory ==
-                                                      entry.key &&
-                                                  _selectedSubCategory ==
-                                                      subCategory) {
-                                                _selectedSubCategory = null;
-                                              } else {
-                                                _selectedCategory = entry.key;
-                                                _selectedSubCategory =
-                                                    subCategory;
-                                              }
-                                            });
-                                          },
-                                        ),
-                                      ),
-                                ],
-                              ),
-                            ),
-                            if (entry.value.isEmpty) ...[
-                              const SizedBox(height: 10),
-                              const Text(
-                                'No sub category added yet.',
-                                style: TextStyle(
-                                  color: Color(0xFF6B7280),
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: sortedCategories.length,
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: categoryColumns,
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 12,
+                        childAspectRatio: categoryAspectRatio,
                       ),
+                      itemBuilder: (context, index) {
+                        final entry = sortedCategories[index];
+                        final sortedSubCategories =
+                            entry.value.toList()..sort(
+                              (left, right) => left.toLowerCase().compareTo(
+                                right.toLowerCase(),
+                              ),
+                            );
+                        final count = vendorCountByCategory[entry.key] ?? 0;
+                        return _VendorCategoryGridCard(
+                          categoryName: entry.key,
+                          vendorCount: count,
+                          subCategories: sortedSubCategories,
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder:
+                                    (_) => _VendorCategoryDirectoryScreen(
+                                      categoryName: entry.key,
+                                      vendors: vendors,
+                                      subCategories: sortedSubCategories,
+                                    ),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
                   ],
                 ),
               ),
             ],
-            const SizedBox(height: 18),
-            if (filteredVendors.isEmpty)
-              _EmptyStateCard(
-                title: 'No vendors found',
-                subtitle:
-                    _selectedCategory != null || _selectedSubCategory != null
-                        ? 'No suppliers match the selected category filter right now.'
-                        : 'Try another name, city, or category to find matching vendors.',
-              )
-            else
-              ...filteredVendors.map(
-                (vendor) => Padding(
-                  padding: const EdgeInsets.only(bottom: 14),
-                  child: _VendorDirectoryCard(vendor: vendor),
-                ),
-              ),
           ],
         );
       },
@@ -7086,44 +6949,6 @@ class _MemberFilteredDirectoryView extends StatelessWidget {
   }
 }
 
-class _MemberMasterView extends StatelessWidget {
-  const _MemberMasterView({
-    required this.tenant,
-    required this.onNavigateToMemberArena,
-    required this.child,
-  });
-
-  final TenantContext? tenant;
-  final VoidCallback onNavigateToMemberArena;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final associationName =
-        tenant?.associationName.trim().isNotEmpty == true
-            ? tenant!.associationName
-            : 'NIMA';
-    final locationLabel = tenant?.locationLabel ?? '';
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _MemberMasterHero(
-          associationName: associationName,
-          locationLabel: locationLabel,
-        ),
-        const SizedBox(height: 14),
-        _MemberBreadcrumb(
-          currentLabel: 'Master',
-          onRootTap: onNavigateToMemberArena,
-        ),
-        const SizedBox(height: 18),
-        child,
-      ],
-    );
-  }
-}
-
 class _MemberSectionHero extends StatelessWidget {
   const _MemberSectionHero({
     required this.associationName,
@@ -7162,39 +6987,6 @@ class _MemberSectionHero extends StatelessWidget {
           height: 1.45,
         ),
       ),
-    );
-  }
-}
-
-class _MemberMasterHero extends StatelessWidget {
-  const _MemberMasterHero({
-    required this.associationName,
-    required this.locationLabel,
-  });
-
-  final String associationName;
-  final String locationLabel;
-
-  @override
-  Widget build(BuildContext context) {
-    return _AssociationSectionHero(
-      arenaLabel: 'Members',
-      titleSpans: [
-        const TextSpan(text: 'Manage '),
-        TextSpan(
-          text: associationName,
-          style: const TextStyle(fontWeight: FontWeight.w800),
-        ),
-        const TextSpan(text: ' master'),
-        if (locationLabel.isNotEmpty) ...[
-          const TextSpan(text: ' in '),
-          TextSpan(
-            text: locationLabel,
-            style: const TextStyle(fontWeight: FontWeight.w800),
-          ),
-        ],
-        const TextSpan(text: '.'),
-      ],
     );
   }
 }
@@ -7931,27 +7723,491 @@ class _VendorDirectoryCard extends StatelessWidget {
         ),
     ];
 
-    return InkWell(
-      onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => _VendorProfileScreen(vendor: vendor),
+    return _EntityCardFrame(
+      child: _ReusableMemberCard(
+        name: vendor.displayName,
+        photoUrl: vendor.avatarUrl,
+        primaryLabel: vendor.category,
+        onHeaderTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => _VendorProfileScreen(vendor: vendor),
+            ),
+          );
+        },
+        factPills: factPills,
+        detailLines: detailLines,
+        trailing: const Icon(
+          Icons.chevron_right_rounded,
+          color: Color(0xFF9CA3AF),
+          size: 28,
+        ),
+        footer: Align(
+          alignment: Alignment.centerRight,
+          child: TextButton.icon(
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => _VendorProfileScreen(vendor: vendor),
+                ),
+              );
+            },
+            icon: const Icon(Icons.visibility_outlined),
+            label: const Text('View profile'),
           ),
-        );
-      },
-      borderRadius: BorderRadius.circular(28),
-      child: _EntityCardFrame(
-        child: _ReusableMemberCard(
-          name: vendor.displayName,
-          photoUrl: vendor.avatarUrl,
-          primaryLabel: vendor.category,
-          factPills: factPills,
-          detailLines: detailLines,
-          trailing: const Icon(
-            Icons.chevron_right_rounded,
-            color: Color(0xFF9CA3AF),
-            size: 28,
+        ),
+      ),
+    );
+  }
+}
+
+class _VendorCategoryGridCard extends StatelessWidget {
+  const _VendorCategoryGridCard({
+    required this.categoryName,
+    required this.vendorCount,
+    required this.subCategories,
+    required this.onTap,
+  });
+
+  final String categoryName;
+  final int vendorCount;
+  final List<String> subCategories;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final primarySubCategory =
+        subCategories.isNotEmpty ? subCategories.first : null;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(22),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
           ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      categoryName,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF171717),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        height: 1.2,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: Text(
+                      '$vendorCount',
+                      style: const TextStyle(
+                        color: Color(0xFF475569),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text(
+                subCategories.isEmpty
+                    ? 'No sub categories'
+                    : '${subCategories.length} sub categories',
+                style: const TextStyle(
+                  color: Color(0xFF6B7280),
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              if (subCategories.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    primarySubCategory ?? '',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFF475569),
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                if (subCategories.length > 1) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    '+${subCategories.length - 1} more',
+                    style: const TextStyle(
+                      color: Color(0xFF7C3AED),
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _VendorCategoryDirectoryScreen extends StatefulWidget {
+  const _VendorCategoryDirectoryScreen({
+    required this.categoryName,
+    required this.vendors,
+    required this.subCategories,
+  });
+
+  final String categoryName;
+  final List<DashboardVendorItem> vendors;
+  final List<String> subCategories;
+
+  @override
+  State<_VendorCategoryDirectoryScreen> createState() =>
+      _VendorCategoryDirectoryScreenState();
+}
+
+class _VendorCategoryDirectoryScreenState
+    extends State<_VendorCategoryDirectoryScreen> {
+  final TextEditingController _searchController = TextEditingController();
+  String _query = '';
+  String? _selectedSubCategory;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final normalizedCategory = widget.categoryName.trim().toLowerCase();
+    final filteredVendors =
+        widget.vendors.where((vendor) {
+            final category =
+                (vendor.category.trim().isEmpty
+                        ? 'Uncategorized'
+                        : vendor.category.trim())
+                    .toLowerCase();
+            if (category != normalizedCategory) {
+              return false;
+            }
+
+            final subCategory = vendor.vendorType.trim();
+            if (_selectedSubCategory != null &&
+                subCategory.toLowerCase() !=
+                    _selectedSubCategory!.trim().toLowerCase()) {
+              return false;
+            }
+
+            final query = _query.trim().toLowerCase();
+            if (query.isEmpty) {
+              return true;
+            }
+
+            return [
+              vendor.displayName,
+              vendor.contactPerson,
+              vendor.city,
+              vendor.vendorType,
+            ].any((value) => value.trim().toLowerCase().contains(query));
+          }).toList()
+          ..sort(
+            (left, right) => left.displayName.toLowerCase().compareTo(
+              right.displayName.toLowerCase(),
+            ),
+          );
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+        foregroundColor: const Color(0xFF171717),
+        title: Text(
+          widget.categoryName,
+          style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
+      ),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+          children: [
+            _EntityCardFrame(
+              padding: const EdgeInsets.all(18),
+              radius: 28,
+              shadowColor: const Color(0x0A0F172A),
+              shadowBlur: 18,
+              shadowOffset: const Offset(0, 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${filteredVendors.length} vendor${filteredVendors.length == 1 ? '' : 's'}',
+                    style: const TextStyle(
+                      color: Color(0xFF171717),
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Browse vendors in this category, or narrow the list with sub categories and search.',
+                    style: TextStyle(
+                      color: Color(0xFF6B7280),
+                      fontSize: 13,
+                      height: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: const Color(0xFFE5E7EB)),
+                    ),
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: (value) => setState(() => _query = value),
+                      textInputAction: TextInputAction.search,
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        icon: Icon(Icons.search_rounded),
+                        hintText: 'Search vendors in this category',
+                      ),
+                    ),
+                  ),
+                  if (widget.subCategories.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _DirectoryFilterChip(
+                          label: 'All',
+                          icon: Icons.category_rounded,
+                          selected: _selectedSubCategory == null,
+                          onTap: () {
+                            setState(() {
+                              _selectedSubCategory = null;
+                            });
+                          },
+                        ),
+                        ...widget.subCategories.map(
+                          (subCategory) => _DirectoryFilterChip(
+                            label: subCategory,
+                            icon: Icons.subdirectory_arrow_right,
+                            selected: _selectedSubCategory == subCategory,
+                            onTap: () {
+                              setState(() {
+                                _selectedSubCategory =
+                                    _selectedSubCategory == subCategory
+                                        ? null
+                                        : subCategory;
+                              });
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 18),
+            if (filteredVendors.isEmpty)
+              const _EmptyStateCard(
+                title: 'No vendors found',
+                subtitle:
+                    'Try another search or sub category to find matching vendors.',
+              )
+            else
+              ...filteredVendors.map(
+                (vendor) => Padding(
+                  padding: const EdgeInsets.only(bottom: 14),
+                  child: _VendorDirectoryCard(vendor: vendor),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _VendorSearchResultsScreen extends StatefulWidget {
+  const _VendorSearchResultsScreen({
+    required this.query,
+    required this.vendors,
+  });
+
+  final String query;
+  final List<DashboardVendorItem> vendors;
+
+  @override
+  State<_VendorSearchResultsScreen> createState() =>
+      _VendorSearchResultsScreenState();
+}
+
+class _VendorSearchResultsScreenState
+    extends State<_VendorSearchResultsScreen> {
+  late final TextEditingController _searchController;
+  late String _query;
+
+  @override
+  void initState() {
+    super.initState();
+    _query = widget.query;
+    _searchController = TextEditingController(text: widget.query);
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final query = _query.trim().toLowerCase();
+    final filteredVendors =
+        widget.vendors.where((vendor) {
+            if (query.isEmpty) {
+              return true;
+            }
+            return [
+              vendor.displayName,
+              vendor.contactPerson,
+              vendor.city,
+              vendor.category,
+              vendor.vendorType,
+            ].any((value) => value.trim().toLowerCase().contains(query));
+          }).toList()
+          ..sort(
+            (left, right) => left.displayName.toLowerCase().compareTo(
+              right.displayName.toLowerCase(),
+            ),
+          );
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+        foregroundColor: const Color(0xFF171717),
+        title: const Text(
+          'Vendor Search',
+          style: TextStyle(fontWeight: FontWeight.w800),
+        ),
+      ),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+          children: [
+            _EntityCardFrame(
+              padding: const EdgeInsets.all(18),
+              radius: 28,
+              shadowColor: const Color(0x0A0F172A),
+              shadowBlur: 18,
+              shadowOffset: const Offset(0, 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Search Vendors',
+                    style: TextStyle(
+                      color: Color(0xFF171717),
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: const Color(0xFFE5E7EB)),
+                    ),
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: (value) => setState(() => _query = value),
+                      textInputAction: TextInputAction.search,
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        icon: Icon(Icons.search_rounded),
+                        hintText: 'Search by vendor, city, or category',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    '${filteredVendors.length} vendor${filteredVendors.length == 1 ? '' : 's'} found',
+                    style: const TextStyle(
+                      color: Color(0xFF6B7280),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 18),
+            if (filteredVendors.isEmpty)
+              const _EmptyStateCard(
+                title: 'No vendors found',
+                subtitle: 'Try another vendor name, city, or category keyword.',
+              )
+            else
+              ...filteredVendors.map(
+                (vendor) => Padding(
+                  padding: const EdgeInsets.only(bottom: 14),
+                  child: _VendorDirectoryCard(vendor: vendor),
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -7975,8 +8231,133 @@ class _VendorProfileScreen extends StatelessWidget {
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
+  Widget _detailRow(String label, String value) {
+    if (value.trim().isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 108,
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Color(0xFF6B7280),
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                color: Color(0xFF171717),
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _assetCard(
+    BuildContext context,
+    String label,
+    VendorProfileAsset asset,
+  ) {
+    if (!asset.hasValue) {
+      return const SizedBox.shrink();
+    }
+    return _EntityCardFrame(
+      padding: const EdgeInsets.all(16),
+      radius: 22,
+      shadowColor: const Color(0x0A0F172A),
+      shadowBlur: 12,
+      shadowOffset: const Offset(0, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: Color(0xFF171717),
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          if (asset.isImage) ...[
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: SizedBox(
+                height: 160,
+                width: double.infinity,
+                child: _BackendImage(
+                  imageUrl: asset.url,
+                  fit: BoxFit.cover,
+                  fallback: Container(
+                    color: const Color(0xFFF3F4F6),
+                    alignment: Alignment.center,
+                    child: const Icon(Icons.image_not_supported_outlined),
+                  ),
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          Text(
+            asset.displayName,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Color(0xFF374151),
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextButton.icon(
+            onPressed: () => _openExternalLink(asset.url),
+            icon: const Icon(Icons.open_in_new_rounded),
+            label: const Text('Open file'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final profileLinks =
+        [
+          ('Website', vendor.website),
+          ('Facebook', vendor.facebookUrl),
+          ('Instagram', vendor.instagramUrl),
+          ('YouTube', vendor.youtubeUrl),
+          ('LinkedIn', vendor.linkedinUrl),
+          ('X / Twitter', vendor.xUrl),
+        ].where((entry) => entry.$2.trim().isNotEmpty).toList();
+    final assetCards = <Widget>[
+      if (vendor.companyLogoAsset.hasValue)
+        _assetCard(context, 'Company Logo', vendor.companyLogoAsset),
+      if (vendor.profilePhotoAsset.hasValue)
+        _assetCard(context, 'Profile Photo', vendor.profilePhotoAsset),
+      if (vendor.idProofAsset.hasValue)
+        _assetCard(context, 'ID Proof', vendor.idProofAsset),
+      if (vendor.locationProofAsset.hasValue)
+        _assetCard(context, 'Location Proof', vendor.locationProofAsset),
+      if (vendor.companyBrochureAsset.hasValue)
+        _assetCard(context, 'Company Brochure', vendor.companyBrochureAsset),
+      if (vendor.visitingCardAsset.hasValue)
+        _assetCard(context, 'Visiting Card', vendor.visitingCardAsset),
+    ];
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
@@ -8078,6 +8459,12 @@ class _VendorProfileScreen extends StatelessWidget {
                           onTap:
                               () => _openExternalLink('mailto:${vendor.email}'),
                         ),
+                      if (vendor.website.trim().isNotEmpty)
+                        _TimelineLinkChip(
+                          label: 'Website',
+                          icon: Icons.language_rounded,
+                          onTap: () => _openExternalLink(vendor.website),
+                        ),
                       if (vendor.youtubeUrl.trim().isNotEmpty)
                         _TimelineLinkChip(
                           label: 'YouTube',
@@ -8110,7 +8497,9 @@ class _VendorProfileScreen extends StatelessWidget {
             const SizedBox(height: 18),
             if (vendor.category.trim().isNotEmpty ||
                 vendor.vendorType.trim().isNotEmpty ||
-                vendor.city.trim().isNotEmpty)
+                vendor.city.trim().isNotEmpty ||
+                vendor.country.trim().isNotEmpty ||
+                vendor.state.trim().isNotEmpty)
               _EntityCardFrame(
                 padding: const EdgeInsets.all(18),
                 radius: 24,
@@ -8129,60 +8518,158 @@ class _VendorProfileScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 14),
-                    if (vendor.category.trim().isNotEmpty)
-                      _VendorDetailRow(
-                        label: 'Category',
-                        value: vendor.category,
-                      ),
-                    if (vendor.vendorType.trim().isNotEmpty)
-                      _VendorDetailRow(label: 'Type', value: vendor.vendorType),
-                    if (vendor.city.trim().isNotEmpty)
-                      _VendorDetailRow(label: 'City', value: vendor.city),
+                    _detailRow('Category', vendor.category),
+                    _detailRow('Sub-category', vendor.vendorType),
+                    _detailRow('City', vendor.city),
+                    _detailRow('State', vendor.state),
+                    _detailRow('Country', vendor.country),
+                    _detailRow('Zipcode', vendor.zipcode),
+                    _detailRow('Address', vendor.address),
+                    _detailRow('Google Map', vendor.googleLocation),
                   ],
                 ),
               ),
+            if (vendor.workDescription.trim().isNotEmpty ||
+                vendor.paymentDescription.trim().isNotEmpty ||
+                vendor.notes.trim().isNotEmpty) ...[
+              const SizedBox(height: 18),
+              _EntityCardFrame(
+                padding: const EdgeInsets.all(18),
+                radius: 24,
+                shadowColor: const Color(0x0D0F172A),
+                shadowBlur: 14,
+                shadowOffset: const Offset(0, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'More Details',
+                      style: TextStyle(
+                        color: Color(0xFF171717),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    _detailRow('Work', vendor.workDescription),
+                    _detailRow('Plan', vendor.planName),
+                    _detailRow('Membership', vendor.membershipPlan),
+                    _detailRow('Payment Amt', vendor.paymentAmount),
+                    _detailRow('Payment Due', vendor.paymentDueDate),
+                    _detailRow('Payment Mode', vendor.paymentMode),
+                    _detailRow('Bank Name', vendor.bankName),
+                    _detailRow('Transaction', vendor.transactionId),
+                    _detailRow('Payment Note', vendor.paymentDescription),
+                    _detailRow('GST', vendor.gstNumber),
+                    _detailRow('Opening Time', vendor.openingTime),
+                    _detailRow('Closing Time', vendor.closingTime),
+                    _detailRow(
+                      'Restaurant',
+                      vendor.isRestaurant == null
+                          ? ''
+                          : (vendor.isRestaurant! ? 'Yes' : 'No'),
+                    ),
+                    _detailRow('Start Date', vendor.onboardingStartDate),
+                    _detailRow('End Date', vendor.onboardingEndDate),
+                    _detailRow('Status', vendor.registrationStatus),
+                  ],
+                ),
+              ),
+            ],
+            if (profileLinks.isNotEmpty) ...[
+              const SizedBox(height: 18),
+              _EntityCardFrame(
+                padding: const EdgeInsets.all(18),
+                radius: 24,
+                shadowColor: const Color(0x0D0F172A),
+                shadowBlur: 14,
+                shadowOffset: const Offset(0, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Saved Links',
+                      style: TextStyle(
+                        color: Color(0xFF171717),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    ...profileLinks.map(
+                      (entry) => Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: InkWell(
+                          onTap: () => _openExternalLink(entry.$2),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.link_rounded,
+                                color: Color(0xFF7C3AED),
+                                size: 18,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  entry.$1,
+                                  style: const TextStyle(
+                                    color: Color(0xFF171717),
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              const Icon(
+                                Icons.open_in_new_rounded,
+                                color: Color(0xFF9CA3AF),
+                                size: 18,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            if (assetCards.isNotEmpty) ...[
+              const SizedBox(height: 18),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  if (constraints.maxWidth > 820) {
+                    return GridView.builder(
+                      itemCount: assetCards.length,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            crossAxisSpacing: 14,
+                            mainAxisSpacing: 14,
+                            mainAxisExtent: 330,
+                          ),
+                      itemBuilder: (context, index) => assetCards[index],
+                    );
+                  }
+                  return Column(
+                    children: [
+                      for (
+                        var index = 0;
+                        index < assetCards.length;
+                        index++
+                      ) ...[
+                        assetCards[index],
+                        if (index != assetCards.length - 1)
+                          const SizedBox(height: 14),
+                      ],
+                    ],
+                  );
+                },
+              ),
+            ],
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _VendorDetailRow extends StatelessWidget {
-  const _VendorDetailRow({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 82,
-            child: Text(
-              label,
-              style: const TextStyle(
-                color: Color(0xFF6B7280),
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(
-                color: Color(0xFF171717),
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -8284,7 +8771,7 @@ class _BannerFallbackCard extends StatelessWidget {
   }
 }
 
-class _TimelineStackFeed extends StatelessWidget {
+class _TimelineStackFeed extends ConsumerWidget {
   const _TimelineStackFeed({required this.posts});
 
   final List<DashboardTimelineItem> posts;
@@ -8301,8 +8788,37 @@ class _TimelineStackFeed extends StatelessWidget {
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
+  DashboardVendorItem? _resolveLinkedVendor(
+    List<DashboardVendorItem> vendors,
+    DashboardTimelineItem post,
+  ) {
+    final sourceId = post.sourceId.trim();
+    if (sourceId.isNotEmpty) {
+      final idMatch =
+          vendors.where((vendor) => vendor.id.trim() == sourceId).firstOrNull;
+      if (idMatch != null) {
+        return idMatch;
+      }
+    }
+
+    final normalizedSourceName = post.sourceName.trim().toLowerCase();
+    if (normalizedSourceName.isEmpty) {
+      return null;
+    }
+
+    return vendors.where((vendor) {
+      final displayName = vendor.displayName.trim().toLowerCase();
+      final companyName = vendor.companyName.trim().toLowerCase();
+      final contactPerson = vendor.contactPerson.trim().toLowerCase();
+      return displayName == normalizedSourceName ||
+          companyName == normalizedSourceName ||
+          contactPerson == normalizedSourceName;
+    }).firstOrNull;
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final vendors = ref.watch(vendorDirectoryProvider).valueOrNull ?? const [];
     if (posts.isEmpty) {
       return const _EmptyStateCard(
         title: 'No timeline posts yet',
@@ -8319,6 +8835,10 @@ class _TimelineStackFeed extends StatelessWidget {
             padding: const EdgeInsets.only(bottom: 14),
             child: _TimelineStackCard(
               post: post,
+              linkedVendor:
+                  post.sourceType.trim().toUpperCase() == 'VENDOR'
+                      ? _resolveLinkedVendor(vendors, post)
+                      : null,
               onOpenExternalLink: _openExternalLink,
             ),
           ),
@@ -8331,10 +8851,12 @@ class _TimelineStackFeed extends StatelessWidget {
 class _TimelineStackCard extends StatelessWidget {
   const _TimelineStackCard({
     required this.post,
+    required this.linkedVendor,
     required this.onOpenExternalLink,
   });
 
   final DashboardTimelineItem post;
+  final DashboardVendorItem? linkedVendor;
   final Future<void> Function(String) onOpenExternalLink;
 
   Color get _headerStartColor => switch (post.sourceType.toUpperCase()) {
@@ -8351,6 +8873,18 @@ class _TimelineStackCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    void openVendorProfileIfAvailable() {
+      final vendor = linkedVendor;
+      if (vendor == null) {
+        return;
+      }
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => _VendorProfileScreen(vendor: vendor),
+        ),
+      );
+    }
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -8366,58 +8900,66 @@ class _TimelineStackCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-            decoration: BoxDecoration(
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(24),
-              ),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [_headerStartColor, _headerEndColor],
-              ),
-            ),
-            child: Row(
-              children: [
-                _TimelinePosterAvatar(
-                  name: post.sourceName,
-                  color: _headerStartColor,
+          InkWell(
+            onTap:
+                post.sourceType.trim().toUpperCase() == 'VENDOR' &&
+                        linkedVendor != null
+                    ? openVendorProfileIfAvailable
+                    : null,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+              decoration: BoxDecoration(
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(24),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        post.displayTitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 17,
-                          fontWeight: FontWeight.w800,
-                          height: 1.1,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        post.postedBy.trim().isEmpty
-                            ? post.postedOn
-                            : '${post.postedBy} • ${post.postedOn}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.84),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [_headerStartColor, _headerEndColor],
+                ),
+              ),
+              child: Row(
+                children: [
+                  _TimelinePosterAvatar(
+                    name: post.sourceName,
+                    color: _headerStartColor,
                   ),
-                ),
-              ],
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          post.displayTitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                            height: 1.1,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          post.postedBy.trim().isEmpty
+                              ? post.postedOn
+                              : '${post.postedBy} • ${post.postedOn}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.84),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           Padding(
@@ -11638,6 +12180,342 @@ class _AssociationMasterSectionState extends State<_AssociationMasterSection> {
             ),
           ),
       ],
+    );
+  }
+}
+
+class _PagedMemberMasterSection extends ConsumerStatefulWidget {
+  const _PagedMemberMasterSection({
+    required this.viewerRole,
+    required this.refreshToken,
+    required this.canManage,
+    required this.editingMemberId,
+    required this.isSaving,
+    required this.onOpenEditor,
+    required this.onDelete,
+  });
+
+  final AppViewerRole viewerRole;
+  final int refreshToken;
+  final bool canManage;
+  final String? editingMemberId;
+  final bool isSaving;
+  final Future<void> Function([MemberDirectoryItem? member]) onOpenEditor;
+  final Future<void> Function(String memberId) onDelete;
+
+  @override
+  ConsumerState<_PagedMemberMasterSection> createState() =>
+      _PagedMemberMasterSectionState();
+}
+
+class _PagedMemberMasterSectionState
+    extends ConsumerState<_PagedMemberMasterSection> {
+  static const int _pageSize = 20;
+  static const double _scrollPrefetchThreshold = 200;
+
+  final TextEditingController _searchController = TextEditingController();
+  final ScrollController _listController = ScrollController();
+  Timer? _searchDebounce;
+
+  String _query = '';
+  List<MemberDirectoryItem> _members = const [];
+  int _currentPage = 0;
+  int _totalCount = 0;
+  int _requestGeneration = 0;
+  bool _isInitialLoading = true;
+  bool _isLoadingMore = false;
+  bool _hasMore = true;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _listController.addListener(_handleScroll);
+    unawaited(_loadFirstPage());
+  }
+
+  @override
+  void didUpdateWidget(covariant _PagedMemberMasterSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.refreshToken != widget.refreshToken ||
+        oldWidget.viewerRole != widget.viewerRole) {
+      unawaited(_loadFirstPage());
+    }
+  }
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    _searchController.dispose();
+    _listController
+      ..removeListener(_handleScroll)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _handleScroll() {
+    if (!_listController.hasClients) {
+      return;
+    }
+    if (_listController.position.extentAfter <= _scrollPrefetchThreshold) {
+      unawaited(_loadNextPage());
+    }
+  }
+
+  Future<void> _loadFirstPage() async {
+    final generation = ++_requestGeneration;
+    setState(() {
+      _isInitialLoading = true;
+      _isLoadingMore = false;
+      _hasMore = true;
+      _currentPage = 0;
+      _totalCount = 0;
+      _errorMessage = null;
+    });
+
+    try {
+      final page = await ref
+          .read(apiClientProvider)
+          .fetchMemberDirectoryPage(
+            viewerRole: widget.viewerRole,
+            page: 1,
+            pageSize: _pageSize,
+            search: _query,
+          );
+      if (!mounted || generation != _requestGeneration) {
+        return;
+      }
+      setState(() {
+        _members = page.members;
+        _currentPage = page.page;
+        _totalCount = page.totalCount;
+        _hasMore = page.hasMore;
+        _isInitialLoading = false;
+      });
+      if (_listController.hasClients) {
+        _listController.jumpTo(0);
+      }
+    } catch (error) {
+      if (!mounted || generation != _requestGeneration) {
+        return;
+      }
+      setState(() {
+        _members = const [];
+        _errorMessage = error.toString();
+        _isInitialLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadNextPage() async {
+    if (_isInitialLoading || _isLoadingMore || !_hasMore) {
+      return;
+    }
+
+    final generation = _requestGeneration;
+    setState(() {
+      _isLoadingMore = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final page = await ref
+          .read(apiClientProvider)
+          .fetchMemberDirectoryPage(
+            viewerRole: widget.viewerRole,
+            page: _currentPage + 1,
+            pageSize: _pageSize,
+            search: _query,
+          );
+      if (!mounted || generation != _requestGeneration) {
+        return;
+      }
+
+      final seenIds = _members.map((member) => member.id).toSet();
+      final appendedMembers = [
+        ..._members,
+        ...page.members.where((member) => !seenIds.contains(member.id)),
+      ];
+      setState(() {
+        _members = appendedMembers;
+        _currentPage = page.page;
+        _totalCount = page.totalCount;
+        _hasMore = page.hasMore;
+        _isLoadingMore = false;
+      });
+    } catch (error) {
+      if (!mounted || generation != _requestGeneration) {
+        return;
+      }
+      setState(() {
+        _isLoadingMore = false;
+        _errorMessage = error.toString();
+      });
+    }
+  }
+
+  void _scheduleSearch(String value) {
+    _searchDebounce?.cancel();
+    _query = value.trim();
+    _searchDebounce = Timer(const Duration(milliseconds: 350), () {
+      if (!mounted) {
+        return;
+      }
+      unawaited(_loadFirstPage());
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasLoadedMembers = _members.isNotEmpty;
+    final listItemCount =
+        hasLoadedMembers ? _members.length + 1 + (_isLoadingMore ? 1 : 0) : 0;
+
+    return SizedBox(
+      height: MediaQuery.sizeOf(context).height * 0.8,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: _SectionHeader(
+                  title: 'Membership Master',
+                  subtitle: 'Search, edit, and manage member records in pages.',
+                ),
+              ),
+              const SizedBox(width: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Text(
+                  _totalCount <= 0 ? 'Live directory' : '$_totalCount total',
+                  style: const TextStyle(
+                    color: Color(0xFF475569),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              if (widget.canManage) ...[
+                const SizedBox(width: 12),
+                FilledButton(
+                  onPressed:
+                      widget.isSaving ? null : () => widget.onOpenEditor(null),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF171717),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                  ),
+                  child: const Text('Add Member'),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 16),
+          _AdminToolbarSearch(
+            controller: _searchController,
+            hintText: 'Search name, company, membership, GST, contact...',
+            onChanged: _scheduleSearch,
+          ),
+          const SizedBox(height: 16),
+          if (_isInitialLoading) ...[
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          ] else if (!hasLoadedMembers) ...[
+            if (_errorMessage != null)
+              _ErrorState(
+                title: 'Could not load members',
+                message: _errorMessage!,
+                onRetry: _loadFirstPage,
+              )
+            else
+              const _EmptyStateCard(
+                title: 'No members found',
+                subtitle:
+                    'Try a different search term or create the first member record.',
+              ),
+          ] else ...[
+            Expanded(
+              child: ListView.builder(
+                controller: _listController,
+                physics: const BouncingScrollPhysics(),
+                itemCount: listItemCount,
+                itemBuilder: (context, index) {
+                  if (index < _members.length) {
+                    final member = _members[index];
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: _MemberMasterCard(
+                        member: member,
+                        isEditing: widget.editingMemberId == member.id,
+                        onEdit:
+                            widget.canManage
+                                ? () => widget.onOpenEditor(member)
+                                : null,
+                        onDelete:
+                            widget.canManage
+                                ? () => widget.onDelete(member.id)
+                                : null,
+                      ),
+                    );
+                  }
+
+                  if (index == _members.length) {
+                    if (_errorMessage != null) {
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 6, bottom: 12),
+                        child: _ErrorState(
+                          title: 'Could not load more members',
+                          message: _errorMessage!,
+                          onRetry: _loadNextPage,
+                        ),
+                      );
+                    }
+
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 6, bottom: 12),
+                      child: Center(
+                        child: Text(
+                          _hasMore
+                              ? 'Scroll to load more members'
+                              : 'Showing all $_totalCount members',
+                          style: const TextStyle(
+                            color: Color(0xFF6B7280),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+
+                  return const Padding(
+                    padding: EdgeInsets.only(bottom: 12),
+                    child: Center(
+                      child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2.4),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -16581,7 +17459,8 @@ class _MemberDirectorySectionState
     final hasLoadedMembers = _members.isNotEmpty;
     final listItemCount =
         hasLoadedMembers ? _members.length + 1 + (_isLoadingMore ? 1 : 0) : 0;
-    final countLabel = _totalCount <= 0 ? 'Live directory' : '$_totalCount total';
+    final countLabel =
+        _totalCount <= 0 ? 'Live directory' : '$_totalCount total';
 
     return SizedBox(
       height: MediaQuery.sizeOf(context).height * 0.8,
@@ -16611,7 +17490,10 @@ class _MemberDirectorySectionState
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFFF7ED),
                   borderRadius: BorderRadius.circular(999),
@@ -16887,6 +17769,7 @@ class _ReusableMemberCard extends StatelessWidget {
     this.detailsTopSpacing = 14,
     this.detailsDividerSpacing = 12,
     this.detailLineSpacing = 9,
+    this.onHeaderTap,
   });
 
   final String name;
@@ -16908,6 +17791,7 @@ class _ReusableMemberCard extends StatelessWidget {
   final double detailsTopSpacing;
   final double detailsDividerSpacing;
   final double detailLineSpacing;
+  final VoidCallback? onHeaderTap;
 
   @override
   Widget build(BuildContext context) {
@@ -16939,53 +17823,57 @@ class _ReusableMemberCard extends StatelessWidget {
             ),
             SizedBox(height: heroBottomSpacing),
           ],
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (leadingControl != null) ...[
-                leadingControl!,
-                const SizedBox(width: 8),
-              ],
-              if (!showHeroImage) ...[
-                _MemberAvatar(name: name, photoUrl: photoUrl, size: 50),
-                const SizedBox(width: 12),
-              ],
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      name,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF171717),
-                        height: 1.15,
-                      ),
-                    ),
-                    if (primaryLabel.trim().isNotEmpty) ...[
-                      const SizedBox(height: 4),
+          InkWell(
+            onTap: onHeaderTap,
+            borderRadius: BorderRadius.circular(18),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (leadingControl != null) ...[
+                  leadingControl!,
+                  const SizedBox(width: 8),
+                ],
+                if (!showHeroImage) ...[
+                  _MemberAvatar(name: name, photoUrl: photoUrl, size: 50),
+                  const SizedBox(width: 12),
+                ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Text(
-                        primaryLabel,
-                        maxLines: 1,
+                        name,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          fontSize: 14,
-                          color: Color(0xFF7C3AED),
+                          fontSize: 17,
                           fontWeight: FontWeight.w700,
+                          color: Color(0xFF171717),
+                          height: 1.15,
                         ),
                       ),
+                      if (primaryLabel.trim().isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          primaryLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Color(0xFF7C3AED),
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
-              ),
-              if (trailing != null) ...[
-                const SizedBox(width: 10),
-                Flexible(child: trailing!),
+                if (trailing != null) ...[
+                  const SizedBox(width: 10),
+                  Flexible(child: trailing!),
+                ],
               ],
-            ],
+            ),
           ),
           if (factPills.isNotEmpty) ...[
             SizedBox(height: sectionSpacing),

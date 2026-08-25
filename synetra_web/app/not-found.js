@@ -1,15 +1,17 @@
 import Link from "next/link";
 
 export const metadata = {
-  title: "Add New Association | Synetra",
+  title: "Page Not Found | Synetra",
 };
 
-export default function NewAssociationPage() {
+export default function NotFound() {
   return (
     <main
       style={{
         minHeight: "100vh",
-        padding: "48px 20px",
+        display: "grid",
+        placeItems: "center",
+        padding: "32px 20px",
         background:
           "linear-gradient(180deg, rgba(248,250,252,1) 0%, rgba(255,255,255,1) 100%)",
       }}
@@ -17,8 +19,7 @@ export default function NewAssociationPage() {
       <section
         style={{
           width: "100%",
-          maxWidth: "760px",
-          margin: "0 auto",
+          maxWidth: "540px",
           padding: "32px",
           borderRadius: "28px",
           background: "#ffffff",
@@ -31,61 +32,39 @@ export default function NewAssociationPage() {
             display: "inline-flex",
             padding: "6px 12px",
             borderRadius: "999px",
-            background: "#EFF6FF",
-            color: "#1D4ED8",
+            background: "#FFF7ED",
+            color: "#C2410C",
             fontSize: "12px",
             fontWeight: 700,
             letterSpacing: "0.04em",
             textTransform: "uppercase",
           }}
         >
-          Parent Portal
+          404
         </span>
         <h1
           style={{
             marginTop: "18px",
             marginBottom: "10px",
             color: "#111827",
-            fontSize: "34px",
+            fontSize: "32px",
             lineHeight: 1.1,
           }}
         >
-          Add New Association
+          This page isn&apos;t available.
         </h1>
         <p
           style={{
             margin: 0,
             color: "#6B7280",
             fontSize: "16px",
-            lineHeight: 1.7,
-          }}
-        >
-          This route is now available so navigation and production builds do not
-          break. The full parent-association onboarding flow can be added here
-          next.
-        </p>
-        <div
-          style={{
-            marginTop: "24px",
-            padding: "18px 20px",
-            borderRadius: "20px",
-            background: "#F8FAFC",
-            border: "1px solid #E5E7EB",
-            color: "#475569",
             lineHeight: 1.6,
           }}
         >
-          Suggested next step: add the association creation form, tenant setup
-          fields, and first-admin invitation flow on this page.
-        </div>
-        <div
-          style={{
-            display: "flex",
-            gap: "12px",
-            flexWrap: "wrap",
-            marginTop: "24px",
-          }}
-        >
+          The page may have moved, or the link may not be active in this admin
+          build yet.
+        </p>
+        <div style={{ marginTop: "24px" }}>
           <Link
             href="/"
             style={{
@@ -101,7 +80,7 @@ export default function NewAssociationPage() {
               fontWeight: 700,
             }}
           >
-            Back to Dashboard
+            Return Home
           </Link>
         </div>
       </section>

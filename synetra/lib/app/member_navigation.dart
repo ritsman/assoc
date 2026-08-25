@@ -4,11 +4,12 @@ class MemberArenaNavigation {
   const MemberArenaNavigation._();
 
   static MemberArenaSection defaultSection(AppViewerRole role) =>
-      role.isVendor ? MemberArenaSection.allMembers : MemberArenaSection.media;
+      role.isVendor
+          ? MemberArenaSection.primaryMembers
+          : MemberArenaSection.media;
 
   static List<MemberArenaSection> visibleSections(AppViewerRole role) => [
     if (role.isAdmin || role.isMember) MemberArenaSection.media,
-    MemberArenaSection.allMembers,
     MemberArenaSection.primaryMembers,
     MemberArenaSection.associateMembers,
     MemberArenaSection.temporaryVisitors,
@@ -19,11 +20,14 @@ class MemberArenaNavigation {
     AppViewerRole role,
     MemberArenaSection section,
   ) {
-    if (role.isVendor && section == MemberArenaSection.media) {
-      return MemberArenaSection.allMembers;
+    if (section == MemberArenaSection.allMembers ||
+        section == MemberArenaSection.directory ||
+        section == MemberArenaSection.committeeMembers ||
+        (role.isVendor && section == MemberArenaSection.media)) {
+      return MemberArenaSection.primaryMembers;
     }
     if (!role.isAdmin && section == MemberArenaSection.master) {
-      return MemberArenaSection.allMembers;
+      return MemberArenaSection.primaryMembers;
     }
     return section;
   }

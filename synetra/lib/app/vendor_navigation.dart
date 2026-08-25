@@ -4,7 +4,7 @@ class VendorArenaNavigation {
   const VendorArenaNavigation._();
 
   static VendorArenaSection defaultSection(AppViewerRole role) =>
-      role.isAdmin ? VendorArenaSection.category : VendorArenaSection.vendor;
+      VendorArenaSection.vendor;
 
   static List<VendorArenaSection> visibleSections(AppViewerRole role) =>
       role.isAdmin

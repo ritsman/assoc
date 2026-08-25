@@ -790,59 +790,63 @@ class SynetraApiClient {
     required AdminVendorApprovalDraft draft,
     required MemberAccessStatus status,
   }) async {
-    final notes = [
-      if (draft.planName.trim().isNotEmpty)
-        'Plan Name: ${draft.planName.trim()}',
-      if (draft.openingTime.trim().isNotEmpty)
-        'Opening Time: ${draft.openingTime.trim()}',
-      if (draft.closingTime.trim().isNotEmpty)
-        'Closing Time: ${draft.closingTime.trim()}',
-      if (draft.gstNumber.trim().isNotEmpty)
-        'GST Number: ${draft.gstNumber.trim()}',
-      'Is Restaurant: ${draft.isRestaurant ? 'Yes' : 'No'}',
-      if (draft.paymentMode.trim().isNotEmpty)
-        'Payment Mode: ${draft.paymentMode.trim()}',
-      if (draft.bankName.trim().isNotEmpty)
-        'Bank Name: ${draft.bankName.trim()}',
-      if (draft.transactionId.trim().isNotEmpty)
-        'Transaction ID: ${draft.transactionId.trim()}',
-      if (draft.paymentDescription.trim().isNotEmpty)
-        'Payment Description: ${draft.paymentDescription.trim()}',
-      if (draft.googleLocation.trim().isNotEmpty)
-        'Google Location: ${draft.googleLocation.trim()}',
-      if (draft.idProof?.name.trim().isNotEmpty == true)
-        'ID Proof: ${draft.idProof!.name.trim()}',
-      if (draft.locationProof?.name.trim().isNotEmpty == true)
-        'Location Proof: ${draft.locationProof!.name.trim()}',
-      if (draft.companyBrochure?.name.trim().isNotEmpty == true)
-        'Company Profile/Brochure: ${draft.companyBrochure!.name.trim()}',
-      if (draft.profilePhoto?.name.trim().isNotEmpty == true)
-        'Profile Photo: ${draft.profilePhoto!.name.trim()}',
-      if (draft.visitingCard?.name.trim().isNotEmpty == true)
-        'Visiting Card: ${draft.visitingCard!.name.trim()}',
-    ].join('\n');
+    final patchResponse = await _authorizedMultipartRequest((
+      overrideAuthToken,
+    ) {
+      final request =
+          http.MultipartRequest(
+              'PATCH',
+              Uri.parse('$_baseUrl/vendors/$vendorId'),
+            )
+            ..headers.addAll(
+              _buildHeaders(overrideAuthToken: overrideAuthToken),
+            )
+            ..fields['membershipPlan'] = draft.membershipPlan.trim()
+            ..fields['paymentAmount'] = draft.paymentAmount.trim()
+            ..fields['planName'] = draft.planName.trim()
+            ..fields['openingTime'] = draft.openingTime.trim()
+            ..fields['closingTime'] = draft.closingTime.trim()
+            ..fields['gstNumber'] = draft.gstNumber.trim()
+            ..fields['isRestaurant'] = draft.isRestaurant.toString()
+            ..fields['paymentMode'] = draft.paymentMode.trim()
+            ..fields['bankName'] = draft.bankName.trim()
+            ..fields['transactionId'] = draft.transactionId.trim()
+            ..fields['paymentDescription'] = draft.paymentDescription.trim()
+            ..fields['googleLocation'] = draft.googleLocation.trim();
 
-    final patchResponse = await _authorizedPatch(
-      Uri.parse('$_baseUrl/vendors/$vendorId'),
-      includeJsonContentType: true,
-      body: jsonEncode({
-        'membershipPlan': draft.membershipPlan.trim(),
-        'paymentAmount': draft.paymentAmount.trim(),
-        'onboardingStartAt':
-            draft.onboardingStartAt.trim().isEmpty
-                ? null
-                : draft.onboardingStartAt.trim(),
-        'onboardingEndAt':
-            draft.onboardingEndAt.trim().isEmpty
-                ? null
-                : draft.onboardingEndAt.trim(),
-        'paymentDueDate':
-            draft.paymentDueDate.trim().isEmpty
-                ? null
-                : draft.paymentDueDate.trim(),
-        'notes': notes,
-      }),
-    );
+      if (draft.onboardingStartAt.trim().isNotEmpty) {
+        request.fields['onboardingStartAt'] = draft.onboardingStartAt.trim();
+      }
+      if (draft.onboardingEndAt.trim().isNotEmpty) {
+        request.fields['onboardingEndAt'] = draft.onboardingEndAt.trim();
+      }
+      if (draft.paymentDueDate.trim().isNotEmpty) {
+        request.fields['paymentDueDate'] = draft.paymentDueDate.trim();
+      }
+
+      void attachFile(String field, PlatformFile? file) {
+        if (file == null || file.bytes == null) {
+          return;
+        }
+        final upload = AssociationUploadFile.fromPlatformFile(file);
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            field,
+            upload.bytes,
+            filename: upload.name,
+            contentType: MediaType.parse(upload.mimeType),
+          ),
+        );
+      }
+
+      attachFile('idProof', draft.idProof);
+      attachFile('locationProof', draft.locationProof);
+      attachFile('companyBrochure', draft.companyBrochure);
+      attachFile('profilePhoto', draft.profilePhoto);
+      attachFile('visitingCard', draft.visitingCard);
+
+      return request;
+    });
     if (patchResponse.statusCode < 200 || patchResponse.statusCode >= 300) {
       throw Exception(
         'Status ${patchResponse.statusCode}: ${patchResponse.body}',
@@ -946,7 +950,12 @@ class SynetraApiClient {
         'category': draft.categoryName.trim(),
         'vendorType': draft.subCategoryName.trim(),
         'address': draft.address.trim(),
+        'country': draft.country.trim(),
+        'state': draft.state.trim(),
         'city': draft.city.trim(),
+        'zipcode': draft.zipcode.trim(),
+        'website': draft.website.trim(),
+        'workDescription': '',
         'facebookUrl': draft.facebookUrl.trim(),
         'instagramUrl': draft.instagramUrl.trim(),
         'youtubeUrl': draft.youtubeUrl.trim(),
@@ -1218,7 +1227,7 @@ class SynetraApiClient {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('Status ${response.statusCode}: ${response.body}');
     }
-    _invalidateCacheKeys({'events'});
+    _invalidateCacheKeys({'events', 'dashboard-summary'});
   }
 
   Future<void> deleteEvent({required String eventId}) async {
@@ -1227,7 +1236,7 @@ class SynetraApiClient {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('Status ${response.statusCode}: ${response.body}');
     }
-    _invalidateCacheKeys({'events'});
+    _invalidateCacheKeys({'events', 'dashboard-summary'});
   }
 
   Future<void> createEventType({required EventTypeDraft draft}) async {

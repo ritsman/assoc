@@ -460,16 +460,46 @@ class DashboardVendorItem {
     required this.contactPerson,
     required this.email,
     required this.phone,
+    required this.whatsapp,
+    required this.address,
+    required this.country,
+    required this.state,
     required this.city,
+    required this.zipcode,
+    required this.website,
+    required this.workDescription,
     required this.category,
     required this.vendorType,
     required this.badge,
     required this.avatarUrl,
+    required this.companyLogoAsset,
+    required this.idProofAsset,
+    required this.locationProofAsset,
+    required this.companyBrochureAsset,
+    required this.profilePhotoAsset,
+    required this.visitingCardAsset,
     required this.facebookUrl,
     required this.instagramUrl,
     required this.youtubeUrl,
     required this.linkedinUrl,
     required this.xUrl,
+    required this.googleLocation,
+    required this.membershipPlan,
+    required this.paymentAmount,
+    required this.onboardingStartDate,
+    required this.onboardingEndDate,
+    required this.paymentDueDate,
+    required this.planName,
+    required this.openingTime,
+    required this.closingTime,
+    required this.gstNumber,
+    required this.isRestaurant,
+    required this.paymentMode,
+    required this.bankName,
+    required this.transactionId,
+    required this.paymentDescription,
+    required this.notes,
+    required this.registrationStatus,
     required this.primaryLoginEmail,
     required this.secondaryLoginEmail,
   });
@@ -480,16 +510,46 @@ class DashboardVendorItem {
   final String contactPerson;
   final String email;
   final String phone;
+  final String whatsapp;
+  final String address;
+  final String country;
+  final String state;
   final String city;
+  final String zipcode;
+  final String website;
+  final String workDescription;
   final String category;
   final String vendorType;
   final String badge;
   final String avatarUrl;
+  final VendorProfileAsset companyLogoAsset;
+  final VendorProfileAsset idProofAsset;
+  final VendorProfileAsset locationProofAsset;
+  final VendorProfileAsset companyBrochureAsset;
+  final VendorProfileAsset profilePhotoAsset;
+  final VendorProfileAsset visitingCardAsset;
   final String facebookUrl;
   final String instagramUrl;
   final String youtubeUrl;
   final String linkedinUrl;
   final String xUrl;
+  final String googleLocation;
+  final String membershipPlan;
+  final String paymentAmount;
+  final String onboardingStartDate;
+  final String onboardingEndDate;
+  final String paymentDueDate;
+  final String planName;
+  final String openingTime;
+  final String closingTime;
+  final String gstNumber;
+  final bool? isRestaurant;
+  final String paymentMode;
+  final String bankName;
+  final String transactionId;
+  final String paymentDescription;
+  final String notes;
+  final String registrationStatus;
   final String primaryLoginEmail;
   final String secondaryLoginEmail;
 
@@ -504,20 +564,59 @@ class DashboardVendorItem {
       contactPerson: json['contactPerson']?.toString() ?? '',
       email: json['email']?.toString() ?? '',
       phone: json['phone']?.toString() ?? '',
+      whatsapp: json['whatsapp']?.toString() ?? '',
+      address: json['address']?.toString() ?? '',
+      country: json['country']?.toString() ?? '',
+      state: json['state']?.toString() ?? '',
       city: json['city']?.toString() ?? '',
+      zipcode: json['zipcode']?.toString() ?? '',
+      website: json['website']?.toString() ?? '',
+      workDescription: json['workDescription']?.toString() ?? '',
       category: json['category']?.toString() ?? '',
       vendorType: json['vendorType']?.toString() ?? '',
       badge: json['badge']?.toString() ?? '',
       avatarUrl:
+          json['profilePhotoAsset']?['url']?.toString() ??
+          json['companyLogoAsset']?['url']?.toString() ??
           json['logoUrl']?.toString() ??
           json['photoUrl']?.toString() ??
           json['imageUrl']?.toString() ??
           '',
+      companyLogoAsset: VendorProfileAsset.fromJson(json['companyLogoAsset']),
+      idProofAsset: VendorProfileAsset.fromJson(json['idProofAsset']),
+      locationProofAsset: VendorProfileAsset.fromJson(
+        json['locationProofAsset'],
+      ),
+      companyBrochureAsset: VendorProfileAsset.fromJson(
+        json['companyBrochureAsset'],
+      ),
+      profilePhotoAsset: VendorProfileAsset.fromJson(json['profilePhotoAsset']),
+      visitingCardAsset: VendorProfileAsset.fromJson(json['visitingCardAsset']),
       facebookUrl: json['facebookUrl']?.toString() ?? '',
       instagramUrl: json['instagramUrl']?.toString() ?? '',
       youtubeUrl: json['youtubeUrl']?.toString() ?? '',
       linkedinUrl: json['linkedinUrl']?.toString() ?? '',
       xUrl: json['xUrl']?.toString() ?? '',
+      googleLocation: json['googleLocation']?.toString() ?? '',
+      membershipPlan: json['membershipPlan']?.toString() ?? '',
+      paymentAmount: json['paymentAmount']?.toString() ?? '',
+      onboardingStartDate: json['onboardingStartAt']?.toString() ?? '',
+      onboardingEndDate: json['onboardingEndAt']?.toString() ?? '',
+      paymentDueDate: json['paymentDueDate']?.toString() ?? '',
+      planName: json['planName']?.toString() ?? '',
+      openingTime: json['openingTime']?.toString() ?? '',
+      closingTime: json['closingTime']?.toString() ?? '',
+      gstNumber: json['gstNumber']?.toString() ?? '',
+      isRestaurant:
+          json.containsKey('isRestaurant')
+              ? json['isRestaurant'] == true
+              : null,
+      paymentMode: json['paymentMode']?.toString() ?? '',
+      bankName: json['bankName']?.toString() ?? '',
+      transactionId: json['transactionId']?.toString() ?? '',
+      paymentDescription: json['paymentDescription']?.toString() ?? '',
+      notes: json['notes']?.toString() ?? '',
+      registrationStatus: json['status']?.toString() ?? 'PENDING',
       primaryLoginEmail: json['primaryLoginEmail']?.toString() ?? '',
       secondaryLoginEmail: json['secondaryLoginEmail']?.toString() ?? '',
     );
@@ -876,10 +975,18 @@ class AdminVendorAccessItem {
   const AdminVendorAccessItem({
     required this.id,
     required this.displayName,
+    required this.companyName,
     required this.contactPerson,
     required this.email,
     required this.phone,
+    required this.whatsapp,
+    required this.address,
+    required this.country,
+    required this.state,
     required this.city,
+    required this.zipcode,
+    required this.website,
+    required this.workDescription,
     required this.category,
     required this.vendorType,
     required this.badge,
@@ -892,15 +999,39 @@ class AdminVendorAccessItem {
     required this.onboardingStartDate,
     required this.onboardingEndDate,
     required this.paymentDueDate,
+    required this.planName,
+    required this.openingTime,
+    required this.closingTime,
+    required this.gstNumber,
+    required this.isRestaurant,
+    required this.paymentMode,
+    required this.bankName,
+    required this.transactionId,
+    required this.paymentDescription,
+    required this.googleLocation,
+    required this.companyLogoAsset,
+    required this.idProofAsset,
+    required this.locationProofAsset,
+    required this.companyBrochureAsset,
+    required this.profilePhotoAsset,
+    required this.visitingCardAsset,
     required this.notes,
   });
 
   final String id;
   final String displayName;
+  final String companyName;
   final String contactPerson;
   final String email;
   final String phone;
+  final String whatsapp;
+  final String address;
+  final String country;
+  final String state;
   final String city;
+  final String zipcode;
+  final String website;
+  final String workDescription;
   final String category;
   final String vendorType;
   final String badge;
@@ -913,6 +1044,22 @@ class AdminVendorAccessItem {
   final String onboardingStartDate;
   final String onboardingEndDate;
   final String paymentDueDate;
+  final String planName;
+  final String openingTime;
+  final String closingTime;
+  final String gstNumber;
+  final bool? isRestaurant;
+  final String paymentMode;
+  final String bankName;
+  final String transactionId;
+  final String paymentDescription;
+  final String googleLocation;
+  final VendorProfileAsset companyLogoAsset;
+  final VendorProfileAsset idProofAsset;
+  final VendorProfileAsset locationProofAsset;
+  final VendorProfileAsset companyBrochureAsset;
+  final VendorProfileAsset profilePhotoAsset;
+  final VendorProfileAsset visitingCardAsset;
   final String notes;
 
   static MemberAccessStatus _accessStatusFromVendorJson(
@@ -953,14 +1100,24 @@ class AdminVendorAccessItem {
     return AdminVendorAccessItem(
       id: json['id']?.toString() ?? '',
       displayName: displayName,
+      companyName: json['companyName']?.toString() ?? '',
       contactPerson: json['contactPerson']?.toString() ?? '',
       email: json['email']?.toString() ?? '',
       phone: json['phone']?.toString() ?? '',
+      whatsapp: json['whatsapp']?.toString() ?? '',
+      address: json['address']?.toString() ?? '',
+      country: json['country']?.toString() ?? '',
+      state: json['state']?.toString() ?? '',
       city: json['city']?.toString() ?? '',
+      zipcode: json['zipcode']?.toString() ?? '',
+      website: json['website']?.toString() ?? '',
+      workDescription: json['workDescription']?.toString() ?? '',
       category: json['category']?.toString() ?? '',
       vendorType: json['vendorType']?.toString() ?? '',
       badge: json['badge']?.toString() ?? '',
       avatarUrl:
+          json['companyLogoAsset']?['url']?.toString() ??
+          json['profilePhotoAsset']?['url']?.toString() ??
           json['logoUrl']?.toString() ??
           json['photoUrl']?.toString() ??
           json['imageUrl']?.toString() ??
@@ -973,6 +1130,29 @@ class AdminVendorAccessItem {
       onboardingStartDate: json['onboardingStartAt']?.toString() ?? '',
       onboardingEndDate: json['onboardingEndAt']?.toString() ?? '',
       paymentDueDate: json['paymentDueDate']?.toString() ?? '',
+      planName: json['planName']?.toString() ?? '',
+      openingTime: json['openingTime']?.toString() ?? '',
+      closingTime: json['closingTime']?.toString() ?? '',
+      gstNumber: json['gstNumber']?.toString() ?? '',
+      isRestaurant:
+          json.containsKey('isRestaurant')
+              ? json['isRestaurant'] == true
+              : null,
+      paymentMode: json['paymentMode']?.toString() ?? '',
+      bankName: json['bankName']?.toString() ?? '',
+      transactionId: json['transactionId']?.toString() ?? '',
+      paymentDescription: json['paymentDescription']?.toString() ?? '',
+      googleLocation: json['googleLocation']?.toString() ?? '',
+      companyLogoAsset: VendorProfileAsset.fromJson(json['companyLogoAsset']),
+      idProofAsset: VendorProfileAsset.fromJson(json['idProofAsset']),
+      locationProofAsset: VendorProfileAsset.fromJson(
+        json['locationProofAsset'],
+      ),
+      companyBrochureAsset: VendorProfileAsset.fromJson(
+        json['companyBrochureAsset'],
+      ),
+      profilePhotoAsset: VendorProfileAsset.fromJson(json['profilePhotoAsset']),
+      visitingCardAsset: VendorProfileAsset.fromJson(json['visitingCardAsset']),
       notes: json['notes']?.toString() ?? '',
     );
   }
@@ -1000,6 +1180,11 @@ class AdminVendorApprovalDraft {
     required this.companyBrochure,
     required this.profilePhoto,
     required this.visitingCard,
+    required this.idProofAsset,
+    required this.locationProofAsset,
+    required this.companyBrochureAsset,
+    required this.profilePhotoAsset,
+    required this.visitingCardAsset,
   });
 
   const AdminVendorApprovalDraft.empty()
@@ -1022,7 +1207,12 @@ class AdminVendorApprovalDraft {
       locationProof = null,
       companyBrochure = null,
       profilePhoto = null,
-      visitingCard = null;
+      visitingCard = null,
+      idProofAsset = const VendorProfileAsset.empty(),
+      locationProofAsset = const VendorProfileAsset.empty(),
+      companyBrochureAsset = const VendorProfileAsset.empty(),
+      profilePhotoAsset = const VendorProfileAsset.empty(),
+      visitingCardAsset = const VendorProfileAsset.empty();
 
   final String planName;
   final String openingTime;
@@ -1044,6 +1234,11 @@ class AdminVendorApprovalDraft {
   final PlatformFile? companyBrochure;
   final PlatformFile? profilePhoto;
   final PlatformFile? visitingCard;
+  final VendorProfileAsset idProofAsset;
+  final VendorProfileAsset locationProofAsset;
+  final VendorProfileAsset companyBrochureAsset;
+  final VendorProfileAsset profilePhotoAsset;
+  final VendorProfileAsset visitingCardAsset;
 
   AdminVendorApprovalDraft copyWith({
     String? planName,
@@ -1066,6 +1261,11 @@ class AdminVendorApprovalDraft {
     PlatformFile? companyBrochure,
     PlatformFile? profilePhoto,
     PlatformFile? visitingCard,
+    VendorProfileAsset? idProofAsset,
+    VendorProfileAsset? locationProofAsset,
+    VendorProfileAsset? companyBrochureAsset,
+    VendorProfileAsset? profilePhotoAsset,
+    VendorProfileAsset? visitingCardAsset,
     bool clearIdProof = false,
     bool clearLocationProof = false,
     bool clearCompanyBrochure = false,
@@ -1099,6 +1299,11 @@ class AdminVendorApprovalDraft {
           clearProfilePhoto ? null : (profilePhoto ?? this.profilePhoto),
       visitingCard:
           clearVisitingCard ? null : (visitingCard ?? this.visitingCard),
+      idProofAsset: idProofAsset ?? this.idProofAsset,
+      locationProofAsset: locationProofAsset ?? this.locationProofAsset,
+      companyBrochureAsset: companyBrochureAsset ?? this.companyBrochureAsset,
+      profilePhotoAsset: profilePhotoAsset ?? this.profilePhotoAsset,
+      visitingCardAsset: visitingCardAsset ?? this.visitingCardAsset,
     );
   }
 
@@ -1358,9 +1563,6 @@ class AdminVendorRegistrationDraft {
     }
     if (categoryId.trim().isEmpty || categoryName.trim().isEmpty) {
       return 'Select a vendor category.';
-    }
-    if (subCategoryId.trim().isEmpty || subCategoryName.trim().isEmpty) {
-      return 'Select a vendor sub-category.';
     }
     if (country.trim() == 'India' && state.trim().isEmpty) {
       return 'Select a state.';
@@ -1828,6 +2030,7 @@ class DashboardTimelineItem {
   const DashboardTimelineItem({
     required this.id,
     required this.sourceType,
+    required this.sourceId,
     required this.sourceName,
     required this.postedBy,
     required this.caption,
@@ -1843,6 +2046,7 @@ class DashboardTimelineItem {
 
   final String id;
   final String sourceType;
+  final String sourceId;
   final String sourceName;
   final String postedBy;
   final String caption;
@@ -1862,6 +2066,7 @@ class DashboardTimelineItem {
     return DashboardTimelineItem(
       id: json['id']?.toString() ?? '',
       sourceType: json['sourceType']?.toString() ?? 'ASSOCIATION',
+      sourceId: json['sourceId']?.toString() ?? '',
       sourceName: json['sourceName']?.toString() ?? '',
       postedBy: json['postedBy']?.toString() ?? '',
       caption: json['caption']?.toString() ?? '',
