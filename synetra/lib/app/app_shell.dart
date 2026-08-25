@@ -8,8 +8,7 @@ const _nimaSoftSurface = Color(0xFFFFF7F7);
 const _nimaLogoAsset = 'assets/branding/nima_logo_official_color.png';
 const _nimaNavIconAsset = 'assets/branding/nima_app_icon_vendor.png';
 const _mahagenLogoAsset = 'assets/branding/mahagen_logo.svg';
-const _centralBankLogoAsset =
-    'assets/branding/central_bank_of_india_logo.jpeg';
+const _centralBankLogoAsset = 'assets/branding/central_bank_of_india_logo.jpeg';
 
 enum AppViewerRole { admin, member, vendor, viewOnly }
 
@@ -206,7 +205,6 @@ class _SynetraLaunchScreenState extends ConsumerState<SynetraLaunchScreen>
     with WidgetsBindingObserver {
   bool _showLogin = false;
   Timer? _timer;
-  DateTime? _backgroundedAt;
 
   @override
   void initState() {
@@ -238,36 +236,22 @@ class _SynetraLaunchScreenState extends ConsumerState<SynetraLaunchScreen>
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.inactive ||
-        state == AppLifecycleState.hidden) {
-      _backgroundedAt = DateTime.now();
-      return;
-    }
-
-    if (state == AppLifecycleState.resumed && _backgroundedAt != null) {
-      final elapsed = DateTime.now().difference(_backgroundedAt!);
-      _backgroundedAt = null;
-      if (elapsed >= const Duration(seconds: 2) && mounted) {
-        setState(_startLaunchSequence);
-      }
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
     final session = ref.watch(sessionProvider);
     final isAuthenticated = session.isAuthenticated;
     final sessionRestoreAsync = ref.watch(sessionRestoreProvider);
     final startupWarmup = ref.watch(startupWarmupProvider);
     final appLock = ref.watch(appLockProvider);
+    final shouldShowSplash =
+        !_showLogin ||
+        (!isAuthenticated && sessionRestoreAsync.isLoading) ||
+        (!isAuthenticated && startupWarmup);
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 420),
       switchInCurve: Curves.easeOutCubic,
       switchOutCurve: Curves.easeInCubic,
       child:
-          !_showLogin || sessionRestoreAsync.isLoading || startupWarmup
+          shouldShowSplash
               ? const _SynetraSplashExperience()
               : isAuthenticated && appLock.requiresUnlock && !appLock.isUnlocked
               ? const _SynetraLoginScreen(forceUnlock: true)
@@ -409,6 +393,31 @@ class _SynetraLoginScreenState extends ConsumerState<_SynetraLoginScreen> {
         });
       }
     }
+  }
+
+  Future<void> _openGuestRegistrationForm() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final result = await showDialog<bool>(
+      context: context,
+      builder:
+          (dialogContext) => _GuestRegistrationDialog(
+            onSubmit:
+                (draft) => ref
+                    .read(apiClientProvider)
+                    .submitPublicMemberRegistration(draft: draft),
+          ),
+    );
+    if (!mounted || result != true) {
+      return;
+    }
+
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Guest registration request sent. It will appear as pending for backend approval.',
+        ),
+      ),
+    );
   }
 
   String _friendlyAuthError(Object error) {
@@ -704,6 +713,17 @@ class _SynetraLoginScreenState extends ConsumerState<_SynetraLoginScreen> {
             ),
           ),
         ),
+        const SizedBox(height: 12),
+        Center(
+          child: TextButton(
+            onPressed: _isSubmitting ? null : _openGuestRegistrationForm,
+            style: TextButton.styleFrom(
+              foregroundColor: _nimaBrandRedDark,
+              textStyle: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+            child: const Text('New here? Send a guest registration request'),
+          ),
+        ),
         const SizedBox(height: 24),
         Center(
           child: Column(
@@ -777,6 +797,198 @@ class _LocalProfileDraft {
       aboutMe: aboutMe ?? this.aboutMe,
       avatarBytes: clearAvatar ? null : avatarBytes ?? this.avatarBytes,
       avatarFileName: clearAvatar ? '' : avatarFileName ?? this.avatarFileName,
+    );
+  }
+}
+
+class _GuestRegistrationDialog extends StatefulWidget {
+  const _GuestRegistrationDialog({required this.onSubmit});
+
+  final Future<void> Function(MemberMasterDraft draft) onSubmit;
+
+  @override
+  State<_GuestRegistrationDialog> createState() =>
+      _GuestRegistrationDialogState();
+}
+
+class _GuestRegistrationDialogState extends State<_GuestRegistrationDialog> {
+  MemberMasterDraft _draft = const MemberMasterDraft.empty().copyWith(
+    membershipType: 'Guest',
+    paymentStatus: 'Pending',
+  );
+  bool _isSubmitting = false;
+  String? _errorText;
+
+  Future<void> _submit() async {
+    if (!_draft.canSubmit) {
+      setState(() {
+        _errorText =
+            'Enter full name, company name, and email to send your request.';
+      });
+      return;
+    }
+
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _isSubmitting = true;
+      _errorText = null;
+    });
+
+    try {
+      await widget.onSubmit(
+        _draft.copyWith(membershipType: 'Guest', paymentStatus: 'Pending'),
+      );
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context).pop(true);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _errorText = _friendlyRegistrationError(error);
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
+  }
+
+  String _friendlyRegistrationError(Object error) {
+    final message = error.toString();
+    if (message.contains('409')) {
+      return 'A member request with these details already exists.';
+    }
+    if (message.contains('400')) {
+      return 'Some registration details are invalid. Please review the form.';
+    }
+    return 'Could not send the registration request right now.';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 560),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Guest registration request',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: _nimaInk,
+                ),
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                'Share the basic details needed for backend review. This request will be submitted as a guest membership and stay pending until approved.',
+                style: TextStyle(color: _nimaMuted, fontSize: 14, height: 1.5),
+              ),
+              const SizedBox(height: 18),
+              _AssociationTextField(
+                label: 'Full Name',
+                value: _draft.name,
+                onChanged:
+                    (value) => setState(() {
+                      _draft = _draft.copyWith(name: value);
+                    }),
+              ),
+              _AssociationTextField(
+                label: 'Company Name',
+                value: _draft.companyName,
+                onChanged:
+                    (value) => setState(() {
+                      _draft = _draft.copyWith(companyName: value);
+                    }),
+              ),
+              _AssociationTextField(
+                label: 'Email',
+                value: _draft.email,
+                onChanged:
+                    (value) => setState(() {
+                      _draft = _draft.copyWith(email: value);
+                    }),
+              ),
+              _AssociationTextField(
+                label: 'Phone',
+                value: _draft.phone,
+                onChanged:
+                    (value) => setState(() {
+                      _draft = _draft.copyWith(phone: value);
+                    }),
+              ),
+              _AssociationTextField(
+                label: 'Company Address',
+                value: _draft.address,
+                maxLines: 3,
+                onChanged:
+                    (value) => setState(() {
+                      _draft = _draft.copyWith(address: value);
+                    }),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 14),
+                child: InputDecorator(
+                  decoration: const InputDecoration(
+                    labelText: 'Membership Type',
+                    border: OutlineInputBorder(),
+                  ),
+                  child: Text(
+                    _draft.membershipType,
+                    style: const TextStyle(fontSize: 16, color: _nimaInk),
+                  ),
+                ),
+              ),
+              if (_errorText != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  _errorText!,
+                  style: const TextStyle(
+                    color: Color(0xFFDC2626),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed:
+                          _isSubmitting
+                              ? null
+                              : () => Navigator.of(context).pop(false),
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: _isSubmitting ? null : _submit,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: _nimaBrandRedDark,
+                      ),
+                      child: Text(
+                        _isSubmitting ? 'Sending...' : 'Send request',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -1066,7 +1278,7 @@ class _SynetraAdminShellState extends ConsumerState<SynetraAdminShell> {
   }
 }
 
-class _AdminDashboardView extends StatefulWidget {
+class _AdminDashboardView extends ConsumerStatefulWidget {
   const _AdminDashboardView({
     required this.selectedArena,
     required this.memberArenaSection,
@@ -1108,10 +1320,11 @@ class _AdminDashboardView extends StatefulWidget {
   final ValueChanged<_LocalProfileDraft> onProfileSaved;
 
   @override
-  State<_AdminDashboardView> createState() => _AdminDashboardViewState();
+  ConsumerState<_AdminDashboardView> createState() =>
+      _AdminDashboardViewState();
 }
 
-class _AdminDashboardViewState extends State<_AdminDashboardView> {
+class _AdminDashboardViewState extends ConsumerState<_AdminDashboardView> {
   bool _isBottomBarVisible = true;
 
   bool get _shouldAutoHideBottomBar =>
@@ -1178,8 +1391,101 @@ class _AdminDashboardViewState extends State<_AdminDashboardView> {
     }
   }
 
+  Future<void> _handleNotificationPressed() async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final summary = await ref.read(
+        associationNotificationSummaryProvider.future,
+      );
+      if (!mounted) {
+        return;
+      }
+      if (summary.items.isEmpty) {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text(
+              'No new circular or gallery notifications right now.',
+            ),
+          ),
+        );
+        return;
+      }
+
+      final associationId = await ref.read(
+        associationProfileProvider.selectAsync((profile) => profile.id),
+      );
+      final controller = ref.read(associationNotificationControllerProvider);
+      final latestCircular = summary.items
+          .where((item) => item.kind == AssociationNotificationKind.circular)
+          .map((item) => item.createdAt)
+          .fold<DateTime?>(null, (latest, current) {
+            if (latest == null || current.isAfter(latest)) {
+              return current;
+            }
+            return latest;
+          });
+      final latestGallery = summary.items
+          .where((item) => item.kind == AssociationNotificationKind.gallery)
+          .map((item) => item.createdAt)
+          .fold<DateTime?>(null, (latest, current) {
+            if (latest == null || current.isAfter(latest)) {
+              return current;
+            }
+            return latest;
+          });
+
+      if (latestCircular != null) {
+        await controller.markSeen(
+          associationId: associationId,
+          kind: AssociationNotificationKind.circular,
+          seenAt: latestCircular,
+        );
+      }
+      if (latestGallery != null) {
+        await controller.markSeen(
+          associationId: associationId,
+          kind: AssociationNotificationKind.gallery,
+          seenAt: latestGallery,
+        );
+      }
+      if (!mounted) {
+        return;
+      }
+
+      await showModalBottomSheet<void>(
+        context: context,
+        backgroundColor: Colors.white,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        builder: (context) {
+          return _NotificationSheet(
+            items: summary.items,
+            onOpenAssociationSection: (section) {
+              Navigator.of(context).pop();
+              widget.onArenaSelected(AppArena.association);
+              widget.onAssociationSectionSelected(section);
+            },
+          );
+        },
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Notifications are unavailable right now.'),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final notificationSummary =
+        ref.watch(associationNotificationSummaryProvider).valueOrNull ??
+        const AssociationNotificationSummary.empty();
     final theme = Theme.of(context);
     final isAssociationImmersiveSection =
         widget.selectedArena == AppArena.association &&
@@ -1242,7 +1548,7 @@ class _AdminDashboardViewState extends State<_AdminDashboardView> {
                                     fontWeight: FontWeight.w600,
                                   ),
                                   children: [
-                                    const TextSpan(text: 'Association Arena'),
+                                    const TextSpan(text: 'Association'),
                                     TextSpan(
                                       text: ' / ',
                                       style: theme.textTheme.bodyMedium
@@ -1326,8 +1632,8 @@ class _AdminDashboardViewState extends State<_AdminDashboardView> {
                                           AppArena.timeline
                                       ? 'Timeline opens as a dedicated social-style feed backed by approved live posts.'
                                       : widget.viewerRole.isAdmin
-                                      ? '${widget.selectedArena.label} arena is currently active for the admin view.'
-                                      : '${widget.selectedArena.label} arena is currently active.',
+                                      ? '${widget.selectedArena.label} is currently active for the admin view.'
+                                      : '${widget.selectedArena.label} is currently active.',
                                   style: theme.textTheme.bodyMedium,
                                 ),
                               ),
@@ -1453,7 +1759,7 @@ class _AdminDashboardViewState extends State<_AdminDashboardView> {
                                 ),
                             onOpenMemberArena:
                                 () => widget.onMemberSectionSelected(
-                                  MemberArenaSection.allMembers,
+                                  MemberArenaSection.primaryMembers,
                                 ),
                             onOpenVendorArena:
                                 () => widget.onArenaSelected(AppArena.vendor),
@@ -1500,6 +1806,8 @@ class _AdminDashboardViewState extends State<_AdminDashboardView> {
                 isOnLightSurface: topBarOnLightSurface,
                 isDrawerOpen: widget.isDrawerOpen,
                 onMenuPressed: widget.onMenuPressed,
+                notificationCount: notificationSummary.unseenCount,
+                onNotificationsPressed: _handleNotificationPressed,
               ),
             ),
           ],
@@ -1523,11 +1831,15 @@ class _DashboardTopBar extends StatelessWidget {
     required this.isOnLightSurface,
     required this.isDrawerOpen,
     required this.onMenuPressed,
+    required this.notificationCount,
+    required this.onNotificationsPressed,
   });
 
   final bool isOnLightSurface;
   final bool isDrawerOpen;
   final VoidCallback onMenuPressed;
+  final int notificationCount;
+  final VoidCallback onNotificationsPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -1550,15 +1862,10 @@ class _DashboardTopBar extends StatelessWidget {
         ),
         const Spacer(),
         _TopBarIconButton(
-          icon: Icons.search_rounded,
-          onTap: () {},
-          isOnLightSurface: isOnLightSurface,
-        ),
-        const SizedBox(width: 10),
-        _TopBarIconButton(
           icon: Icons.notifications_none_rounded,
-          onTap: () {},
+          onTap: onNotificationsPressed,
           isOnLightSurface: isOnLightSurface,
+          badgeCount: notificationCount,
         ),
       ],
     );
@@ -2236,6 +2543,10 @@ class _ProfileArenaViewState extends ConsumerState<_ProfileArenaView> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.viewerRole == AppViewerRole.vendor) {
+      return const _VendorManagedProfileView();
+    }
+
     final appLock = ref.watch(appLockProvider);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2557,6 +2868,743 @@ class _ProfileArenaViewState extends ConsumerState<_ProfileArenaView> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _VendorManagedProfileView extends ConsumerStatefulWidget {
+  const _VendorManagedProfileView();
+
+  @override
+  ConsumerState<_VendorManagedProfileView> createState() =>
+      _VendorManagedProfileViewState();
+}
+
+class _VendorManagedProfileViewState
+    extends ConsumerState<_VendorManagedProfileView> {
+  VendorSelfProfileDraft? _draft;
+  String _loadedVendorId = '';
+  bool _isSaving = false;
+
+  void _syncDraft(VendorSelfProfile profile) {
+    if (_loadedVendorId == profile.id && _draft != null) {
+      return;
+    }
+    _loadedVendorId = profile.id;
+    _draft = VendorSelfProfileDraft.fromProfile(profile);
+  }
+
+  Future<void> _pickAsset(
+    VendorSelfProfileDraft Function(
+      VendorSelfProfileDraft draft,
+      AssociationUploadFile file,
+    )
+    updater,
+  ) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['png', 'jpg', 'jpeg', 'webp', 'pdf'],
+      withData: true,
+    );
+    final file = result?.files.single;
+    if (file == null || file.bytes == null || _draft == null) {
+      return;
+    }
+
+    final upload = AssociationUploadFile.fromPlatformFile(file);
+    setState(() {
+      _draft = updater(_draft!, upload);
+    });
+  }
+
+  Future<void> _saveProfile() async {
+    final draft = _draft;
+    if (draft == null) {
+      return;
+    }
+
+    final validationMessage = draft.validationMessage;
+    if (validationMessage != null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(validationMessage)));
+      return;
+    }
+
+    setState(() {
+      _isSaving = true;
+    });
+
+    try {
+      final updatedProfile = await ref
+          .read(apiClientProvider)
+          .updateMyVendorProfile(draft: draft);
+      ref.invalidate(currentVendorProfileProvider);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _loadedVendorId = updatedProfile.id;
+        _draft = VendorSelfProfileDraft.fromProfile(updatedProfile);
+        _isSaving = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vendor profile saved successfully.')),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isSaving = false;
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not save profile: $error')));
+    }
+  }
+
+  Future<void> _openAsset(String rawUrl) async {
+    final uri = Uri.tryParse(rawUrl.trim());
+    if (uri == null) {
+      return;
+    }
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  Widget _buildTextField({
+    required String label,
+    required String value,
+    required ValueChanged<String> onChanged,
+    IconData? icon,
+    int maxLines = 1,
+    TextInputType? keyboardType,
+  }) {
+    return TextFormField(
+      key: ValueKey('$label:$value'),
+      initialValue: value,
+      onChanged: onChanged,
+      keyboardType: keyboardType,
+      maxLines: maxLines,
+      decoration: InputDecoration(
+        labelText: label,
+        alignLabelWithHint: maxLines > 1,
+        prefixIcon: icon == null ? null : Icon(icon),
+      ),
+    );
+  }
+
+  Widget _buildAssetField({
+    required String label,
+    required VendorProfileAsset asset,
+    required AssociationUploadFile? selectedFile,
+    required VoidCallback onPick,
+  }) {
+    final previewFile = selectedFile;
+    return _EntityCardFrame(
+      padding: const EdgeInsets.all(16),
+      radius: 22,
+      shadowColor: const Color(0x080F172A),
+      shadowBlur: 14,
+      shadowOffset: const Offset(0, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: Color(0xFF171717),
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (previewFile != null && previewFile.mimeType.startsWith('image/'))
+            ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: Image.memory(
+                previewFile.bytes,
+                height: 150,
+                width: double.infinity,
+                fit: BoxFit.cover,
+              ),
+            )
+          else if (asset.hasValue && asset.isImage)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: SizedBox(
+                height: 150,
+                width: double.infinity,
+                child: _BackendImage(
+                  imageUrl: asset.url,
+                  fit: BoxFit.cover,
+                  fallback: Container(
+                    color: const Color(0xFFF3F4F6),
+                    alignment: Alignment.center,
+                    child: const Icon(Icons.image_not_supported_outlined),
+                  ),
+                ),
+              ),
+            ),
+          if (previewFile != null || asset.hasValue) ...[
+            const SizedBox(height: 12),
+            Text(
+              previewFile?.name ?? asset.displayName,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Color(0xFF374151),
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            if (asset.hasValue && previewFile == null) ...[
+              const SizedBox(height: 8),
+              InkWell(
+                onTap: () => _openAsset(asset.url),
+                child: const Text(
+                  'Open saved file',
+                  style: TextStyle(
+                    color: Color(0xFF2563EB),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ] else ...[
+            const Text(
+              'No file saved yet. Add one for this vendor profile.',
+              style: TextStyle(
+                color: Color(0xFF6B7280),
+                fontSize: 13,
+                height: 1.5,
+              ),
+            ),
+          ],
+          const SizedBox(height: 14),
+          OutlinedButton.icon(
+            onPressed: onPick,
+            icon: const Icon(Icons.upload_file_rounded),
+            label: Text(
+              asset.hasValue || previewFile != null ? 'Replace' : 'Add',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final profileAsync = ref.watch(currentVendorProfileProvider);
+    return profileAsync.when(
+      loading:
+          () => const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _SectionHeader(
+                title: 'Profile',
+                subtitle: 'Loading your vendor profile...',
+              ),
+              SizedBox(height: 16),
+              _LoadingState(),
+            ],
+          ),
+      error:
+          (error, _) => Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const _SectionHeader(
+                title: 'Profile',
+                subtitle:
+                    'This area only loads the signed-in vendor account details.',
+              ),
+              const SizedBox(height: 16),
+              _ErrorState(
+                title: 'Could not load vendor profile',
+                message: error.toString(),
+                onRetry: () async {
+                  ref.invalidate(currentVendorProfileProvider);
+                },
+              ),
+            ],
+          ),
+      data: (profile) {
+        _syncDraft(profile);
+        final draft = _draft ?? VendorSelfProfileDraft.fromProfile(profile);
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const _SectionHeader(
+              title: 'Profile',
+              subtitle:
+                  'Only the logged-in vendor can view and update this profile. Saved details appear here automatically.',
+            ),
+            const SizedBox(height: 16),
+            _EntityCardFrame(
+              padding: const EdgeInsets.all(20),
+              radius: 28,
+              shadowColor: const Color(0x0D0F172A),
+              shadowBlur: 24,
+              shadowOffset: const Offset(0, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      SizedBox(
+                        width: 74,
+                        height: 74,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(37),
+                          child:
+                              draft.profilePhotoFile != null
+                                  ? Image.memory(
+                                    draft.profilePhotoFile!.bytes,
+                                    fit: BoxFit.cover,
+                                  )
+                                  : draft.companyLogoFile != null
+                                  ? Image.memory(
+                                    draft.companyLogoFile!.bytes,
+                                    fit: BoxFit.cover,
+                                  )
+                                  : draft.profilePhotoAsset.hasValue
+                                  ? _BackendImage(
+                                    imageUrl: draft.profilePhotoAsset.url,
+                                    fit: BoxFit.cover,
+                                    fallback: _ProfileAvatar(
+                                      displayName: draft.companyName,
+                                      avatarBytes: null,
+                                      size: 74,
+                                    ),
+                                  )
+                                  : draft.companyLogoAsset.hasValue
+                                  ? _BackendImage(
+                                    imageUrl: draft.companyLogoAsset.url,
+                                    fit: BoxFit.cover,
+                                    fallback: _ProfileAvatar(
+                                      displayName: draft.companyName,
+                                      avatarBytes: null,
+                                      size: 74,
+                                    ),
+                                  )
+                                  : _ProfileAvatar(
+                                    displayName: draft.companyName,
+                                    avatarBytes: null,
+                                    size: 74,
+                                  ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              draft.companyName.trim().isEmpty
+                                  ? 'Vendor profile'
+                                  : draft.companyName.trim(),
+                              style: const TextStyle(
+                                color: Color(0xFF171717),
+                                fontSize: 20,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              draft.category.trim().isEmpty
+                                  ? 'Vendor account'
+                                  : draft.category.trim(),
+                              style: const TextStyle(
+                                color: Color(0xFF7C3AED),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            if (draft.vendorType.trim().isNotEmpty) ...[
+                              const SizedBox(height: 6),
+                              Text(
+                                draft.vendorType.trim(),
+                                style: const TextStyle(
+                                  color: Color(0xFF6B7280),
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  _buildTextField(
+                    label: 'Company Name',
+                    value: draft.companyName,
+                    icon: Icons.business_outlined,
+                    onChanged:
+                        (value) => setState(
+                          () => _draft = draft.copyWith(companyName: value),
+                        ),
+                  ),
+                  const SizedBox(height: 14),
+                  _buildTextField(
+                    label: 'Contact Person',
+                    value: draft.contactPerson,
+                    icon: Icons.badge_outlined,
+                    onChanged:
+                        (value) => setState(
+                          () => _draft = draft.copyWith(contactPerson: value),
+                        ),
+                  ),
+                  const SizedBox(height: 14),
+                  _buildTextField(
+                    label: 'Contact Email',
+                    value: draft.email,
+                    icon: Icons.mail_outline_rounded,
+                    keyboardType: TextInputType.emailAddress,
+                    onChanged:
+                        (value) => setState(
+                          () => _draft = draft.copyWith(email: value),
+                        ),
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildTextField(
+                          label: 'Phone',
+                          value: draft.phone,
+                          icon: Icons.call_outlined,
+                          keyboardType: TextInputType.phone,
+                          onChanged:
+                              (value) => setState(
+                                () => _draft = draft.copyWith(phone: value),
+                              ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildTextField(
+                          label: 'WhatsApp',
+                          value: draft.whatsapp,
+                          icon: Icons.chat_outlined,
+                          keyboardType: TextInputType.phone,
+                          onChanged:
+                              (value) => setState(
+                                () => _draft = draft.copyWith(whatsapp: value),
+                              ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            _EntityCardFrame(
+              padding: const EdgeInsets.all(20),
+              radius: 28,
+              shadowColor: const Color(0x0D0F172A),
+              shadowBlur: 24,
+              shadowOffset: const Offset(0, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Business Details',
+                    style: TextStyle(
+                      color: Color(0xFF171717),
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _buildTextField(
+                    label: 'Category',
+                    value: draft.category,
+                    icon: Icons.category_outlined,
+                    onChanged:
+                        (value) => setState(
+                          () => _draft = draft.copyWith(category: value),
+                        ),
+                  ),
+                  const SizedBox(height: 14),
+                  _buildTextField(
+                    label: 'Sub-category',
+                    value: draft.vendorType,
+                    icon: Icons.sell_outlined,
+                    onChanged:
+                        (value) => setState(
+                          () => _draft = draft.copyWith(vendorType: value),
+                        ),
+                  ),
+                  const SizedBox(height: 14),
+                  _buildTextField(
+                    label: 'Website',
+                    value: draft.website,
+                    icon: Icons.language_rounded,
+                    keyboardType: TextInputType.url,
+                    onChanged:
+                        (value) => setState(
+                          () => _draft = draft.copyWith(website: value),
+                        ),
+                  ),
+                  const SizedBox(height: 14),
+                  _buildTextField(
+                    label: 'Work Description',
+                    value: draft.workDescription,
+                    icon: Icons.description_outlined,
+                    maxLines: 4,
+                    onChanged:
+                        (value) => setState(
+                          () => _draft = draft.copyWith(workDescription: value),
+                        ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            _EntityCardFrame(
+              padding: const EdgeInsets.all(20),
+              radius: 28,
+              shadowColor: const Color(0x0D0F172A),
+              shadowBlur: 24,
+              shadowOffset: const Offset(0, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Address And Social Links',
+                    style: TextStyle(
+                      color: Color(0xFF171717),
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _buildTextField(
+                    label: 'Address',
+                    value: draft.address,
+                    icon: Icons.place_outlined,
+                    maxLines: 3,
+                    onChanged:
+                        (value) => setState(
+                          () => _draft = draft.copyWith(address: value),
+                        ),
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildTextField(
+                          label: 'Country',
+                          value: draft.country,
+                          icon: Icons.flag_outlined,
+                          onChanged:
+                              (value) => setState(
+                                () => _draft = draft.copyWith(country: value),
+                              ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildTextField(
+                          label: 'State',
+                          value: draft.state,
+                          icon: Icons.map_outlined,
+                          onChanged:
+                              (value) => setState(
+                                () => _draft = draft.copyWith(state: value),
+                              ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildTextField(
+                          label: 'City',
+                          value: draft.city,
+                          icon: Icons.location_city_outlined,
+                          onChanged:
+                              (value) => setState(
+                                () => _draft = draft.copyWith(city: value),
+                              ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildTextField(
+                          label: 'Zipcode',
+                          value: draft.zipcode,
+                          icon: Icons.pin_drop_outlined,
+                          keyboardType: TextInputType.number,
+                          onChanged:
+                              (value) => setState(
+                                () => _draft = draft.copyWith(zipcode: value),
+                              ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  _buildTextField(
+                    label: 'Google Location',
+                    value: draft.googleLocation,
+                    icon: Icons.public_rounded,
+                    keyboardType: TextInputType.url,
+                    onChanged:
+                        (value) => setState(
+                          () => _draft = draft.copyWith(googleLocation: value),
+                        ),
+                  ),
+                  const SizedBox(height: 14),
+                  _buildTextField(
+                    label: 'Facebook',
+                    value: draft.facebookUrl,
+                    icon: Icons.thumb_up_alt_outlined,
+                    keyboardType: TextInputType.url,
+                    onChanged:
+                        (value) => setState(
+                          () => _draft = draft.copyWith(facebookUrl: value),
+                        ),
+                  ),
+                  const SizedBox(height: 14),
+                  _buildTextField(
+                    label: 'Instagram',
+                    value: draft.instagramUrl,
+                    icon: Icons.camera_alt_outlined,
+                    keyboardType: TextInputType.url,
+                    onChanged:
+                        (value) => setState(
+                          () => _draft = draft.copyWith(instagramUrl: value),
+                        ),
+                  ),
+                  const SizedBox(height: 14),
+                  _buildTextField(
+                    label: 'YouTube',
+                    value: draft.youtubeUrl,
+                    icon: Icons.play_circle_outline_rounded,
+                    keyboardType: TextInputType.url,
+                    onChanged:
+                        (value) => setState(
+                          () => _draft = draft.copyWith(youtubeUrl: value),
+                        ),
+                  ),
+                  const SizedBox(height: 14),
+                  _buildTextField(
+                    label: 'LinkedIn',
+                    value: draft.linkedinUrl,
+                    icon: Icons.work_outline_rounded,
+                    keyboardType: TextInputType.url,
+                    onChanged:
+                        (value) => setState(
+                          () => _draft = draft.copyWith(linkedinUrl: value),
+                        ),
+                  ),
+                  const SizedBox(height: 14),
+                  _buildTextField(
+                    label: 'X / Twitter',
+                    value: draft.xUrl,
+                    icon: Icons.alternate_email_rounded,
+                    keyboardType: TextInputType.url,
+                    onChanged:
+                        (value) => setState(
+                          () => _draft = draft.copyWith(xUrl: value),
+                        ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            GridView.count(
+              crossAxisCount: MediaQuery.of(context).size.width > 1100 ? 2 : 1,
+              crossAxisSpacing: 16,
+              mainAxisSpacing: 16,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              childAspectRatio: 1.3,
+              children: [
+                _buildAssetField(
+                  label: 'Company Logo',
+                  asset: draft.companyLogoAsset,
+                  selectedFile: draft.companyLogoFile,
+                  onPick:
+                      () => _pickAsset(
+                        (value, file) => value.copyWith(companyLogoFile: file),
+                      ),
+                ),
+                _buildAssetField(
+                  label: 'Profile Photo',
+                  asset: draft.profilePhotoAsset,
+                  selectedFile: draft.profilePhotoFile,
+                  onPick:
+                      () => _pickAsset(
+                        (value, file) => value.copyWith(profilePhotoFile: file),
+                      ),
+                ),
+                _buildAssetField(
+                  label: 'ID Proof',
+                  asset: draft.idProofAsset,
+                  selectedFile: draft.idProofFile,
+                  onPick:
+                      () => _pickAsset(
+                        (value, file) => value.copyWith(idProofFile: file),
+                      ),
+                ),
+                _buildAssetField(
+                  label: 'Location Proof',
+                  asset: draft.locationProofAsset,
+                  selectedFile: draft.locationProofFile,
+                  onPick:
+                      () => _pickAsset(
+                        (value, file) =>
+                            value.copyWith(locationProofFile: file),
+                      ),
+                ),
+                _buildAssetField(
+                  label: 'Company Profile / Brochure',
+                  asset: draft.companyBrochureAsset,
+                  selectedFile: draft.companyBrochureFile,
+                  onPick:
+                      () => _pickAsset(
+                        (value, file) =>
+                            value.copyWith(companyBrochureFile: file),
+                      ),
+                ),
+                _buildAssetField(
+                  label: 'Visiting Card',
+                  asset: draft.visitingCardAsset,
+                  selectedFile: draft.visitingCardFile,
+                  onPick:
+                      () => _pickAsset(
+                        (value, file) => value.copyWith(visitingCardFile: file),
+                      ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: _isSaving ? null : _saveProfile,
+                icon: Icon(
+                  _isSaving ? Icons.hourglass_top_rounded : Icons.save_rounded,
+                ),
+                label: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  child: Text(_isSaving ? 'Saving...' : 'Save vendor profile'),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -3140,11 +4188,13 @@ class _TopBarIconButton extends StatelessWidget {
     required this.icon,
     required this.onTap,
     required this.isOnLightSurface,
+    this.badgeCount = 0,
   });
 
   final IconData icon;
   final VoidCallback onTap;
   final bool isOnLightSurface;
+  final int badgeCount;
 
   @override
   Widget build(BuildContext context) {
@@ -3158,30 +4208,204 @@ class _TopBarIconButton extends StatelessWidget {
             : Colors.white.withValues(alpha: 0.42);
     final iconColor = const Color(0xFF111827);
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(999),
-        child: Ink(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: backgroundColor,
-            shape: BoxShape.circle,
-            border: Border.all(color: borderColor),
-            boxShadow: [
-              BoxShadow(
-                color:
-                    isOnLightSurface
-                        ? const Color(0x120F172A)
-                        : const Color(0x240F172A),
-                blurRadius: isOnLightSurface ? 16 : 20,
-                offset: const Offset(0, 8),
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(999),
+            child: Ink(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: backgroundColor,
+                shape: BoxShape.circle,
+                border: Border.all(color: borderColor),
+                boxShadow: [
+                  BoxShadow(
+                    color:
+                        isOnLightSurface
+                            ? const Color(0x120F172A)
+                            : const Color(0x240F172A),
+                    blurRadius: isOnLightSurface ? 16 : 20,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
               ),
-            ],
+              child: Icon(icon, color: iconColor),
+            ),
           ),
-          child: Icon(icon, color: iconColor),
+        ),
+        if (badgeCount > 0)
+          Positioned(
+            right: -2,
+            top: -2,
+            child: Container(
+              constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+              decoration: BoxDecoration(
+                color: _nimaBrandRed,
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: Colors.white, width: 2),
+              ),
+              child: Text(
+                badgeCount > 9 ? '9+' : '$badgeCount',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _NotificationSheet extends StatelessWidget {
+  const _NotificationSheet({
+    required this.items,
+    required this.onOpenAssociationSection,
+  });
+
+  final List<AssociationNotificationItem> items;
+  final ValueChanged<AssociationArenaSection> onOpenAssociationSection;
+
+  String _timeLabel(DateTime createdAt) {
+    final localTime = createdAt.toLocal();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final itemDay = DateTime(localTime.year, localTime.month, localTime.day);
+
+    String twoDigits(int value) => value.toString().padLeft(2, '0');
+
+    if (itemDay == today) {
+      return '${twoDigits(localTime.hour)}:${twoDigits(localTime.minute)}';
+    }
+
+    return '${localTime.year}-${twoDigits(localTime.month)}-${twoDigits(localTime.day)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Notifications',
+              style: TextStyle(
+                color: Color(0xFF171717),
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '${items.length} unseen update${items.length == 1 ? '' : 's'} from circulars and gallery.',
+              style: const TextStyle(
+                color: _nimaMuted,
+                fontSize: 14,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 18),
+            Flexible(
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: items.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 10),
+                itemBuilder: (context, index) {
+                  final item = items[index];
+                  final isCircular =
+                      item.kind == AssociationNotificationKind.circular;
+                  return Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap:
+                          () => onOpenAssociationSection(
+                            isCircular
+                                ? AssociationArenaSection.circulars
+                                : AssociationArenaSection.gallery,
+                          ),
+                      borderRadius: BorderRadius.circular(20),
+                      child: Ink(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFFBFB),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: const Color(0xFFEBC7C9)),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              width: 42,
+                              height: 42,
+                              decoration: BoxDecoration(
+                                color:
+                                    isCircular
+                                        ? const Color(0xFFFFE5E7)
+                                        : const Color(0xFFFCE7F3),
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: Icon(
+                                isCircular
+                                    ? Icons.description_outlined
+                                    : Icons.photo_library_outlined,
+                                color: _nimaBrandRedDark,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    item.title,
+                                    style: const TextStyle(
+                                      color: _nimaInk,
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    item.subtitle,
+                                    style: const TextStyle(
+                                      color: _nimaMuted,
+                                      fontSize: 13,
+                                      height: 1.4,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    _timeLabel(item.createdAt),
+                                    style: const TextStyle(
+                                      color: Color(0xFF9CA3AF),
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
         ),
       ),
     );

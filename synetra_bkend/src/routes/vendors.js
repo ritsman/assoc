@@ -9,6 +9,7 @@ import { ensureAssociationAppAccess } from "../lib/app-access.js";
 import { deleteLocalAssetIfPresent } from "../lib/inline-image-assets.js";
 import { prisma } from "../lib/prisma.js";
 import { buildPublicAssetUrl, resolvePublicAssetUrl } from "../lib/public-url.js";
+import { requireAuthenticatedSession } from "../lib/session-auth.js";
 import { getUploadSubdirPath } from "../lib/uploads-dir.js";
 import { syncVendorTaxonomyFromVendorInput } from "../lib/vendor-taxonomy.js";
 
@@ -101,6 +102,31 @@ const vendorSchema = z.object({
 });
 
 const vendorUpdateSchema = vendorSchema.partial();
+const vendorSelfUpdateSchema = z
+  .object({
+    name: z.string().min(1).optional(),
+    companyName: z.string().min(1).optional(),
+    contactPerson: z.string().optional(),
+    email: z.string().email().optional(),
+    phone: z.string().optional(),
+    whatsapp: z.string().optional(),
+    address: z.string().optional(),
+    country: z.string().optional(),
+    state: z.string().optional(),
+    city: z.string().optional(),
+    zipcode: z.string().optional(),
+    website: z.string().optional(),
+    workDescription: z.string().optional(),
+    vendorType: z.string().optional(),
+    category: z.string().optional(),
+    facebookUrl: z.string().optional(),
+    instagramUrl: z.string().optional(),
+    youtubeUrl: z.string().optional(),
+    linkedinUrl: z.string().optional(),
+    xUrl: z.string().optional(),
+    googleLocation: z.string().optional(),
+  })
+  .partial();
 const vendorFileFieldNames = [
   "companyLogo",
   "idProof",
@@ -518,6 +544,14 @@ function serializeVendor(req, vendor) {
   };
 }
 
+function resolveAuthenticatedVendorId(req) {
+  if (!req.auth?.user?.isVendor || !req.auth.user.vendorId) {
+    return "";
+  }
+
+  return String(req.auth.user.vendorId);
+}
+
 router.get("/", async (req, res) => {
   const { associationId } = req.query;
 
@@ -530,6 +564,26 @@ router.get("/", async (req, res) => {
   });
 
   return res.json({ vendors: vendors.map((vendor) => serializeVendor(req, vendor)) });
+});
+
+router.get("/me", requireAuthenticatedSession, async (req, res) => {
+  const vendorId = resolveAuthenticatedVendorId(req);
+  if (!vendorId) {
+    return res.status(403).json({
+      error: "Vendor access is required for this action.",
+    });
+  }
+
+  const vendor = await prisma.vendor.findUnique({
+    where: { id: vendorId },
+    include: vendorInclude,
+  });
+
+  if (!vendor) {
+    return res.status(404).json({ error: "Vendor not found" });
+  }
+
+  return res.json({ vendor: serializeVendor(req, vendor) });
 });
 
 router.post("/", vendorFileUpload, async (req, res) => {
@@ -594,6 +648,56 @@ router.post("/", vendorFileUpload, async (req, res) => {
     ) {
       return res.status(409).json({
         error: error.message,
+      });
+    }
+
+    throw error;
+  }
+});
+
+router.patch("/me", requireAuthenticatedSession, vendorFileUpload, async (req, res) => {
+  const vendorId = resolveAuthenticatedVendorId(req);
+  if (!vendorId) {
+    return res.status(403).json({
+      error: "Vendor access is required for this action.",
+    });
+  }
+
+  const parsed = vendorSelfUpdateSchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    return res.status(400).json({
+      error: "Invalid vendor payload",
+      details: parsed.error.flatten(),
+    });
+  }
+
+  const existingVendor = await prisma.vendor.findUnique({
+    where: { id: vendorId },
+    include: vendorInclude,
+  });
+
+  if (!existingVendor) {
+    return res.status(404).json({ error: "Vendor not found" });
+  }
+
+  try {
+    const assetUpdates = collectVendorAssetUpdates(req, req.files, existingVendor);
+    const updatedVendor = await prisma.vendor.update({
+      where: { id: vendorId },
+      data: {
+        ...extractVendorData(parsed.data),
+        ...assetUpdates,
+      },
+      include: vendorInclude,
+    });
+
+    cleanupPreviousVendorAssets(existingVendor, assetUpdates);
+    return res.json({ vendor: serializeVendor(req, updatedVendor) });
+  } catch (error) {
+    if (isDuplicateVendorEmailError(error)) {
+      return res.status(409).json({
+        error: "A vendor with this email already exists in the association",
       });
     }
 

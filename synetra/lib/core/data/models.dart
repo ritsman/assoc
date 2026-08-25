@@ -524,6 +524,354 @@ class DashboardVendorItem {
   }
 }
 
+class VendorProfileAsset {
+  const VendorProfileAsset({
+    required this.url,
+    required this.originalName,
+    required this.mimeType,
+  });
+
+  const VendorProfileAsset.empty() : url = '', originalName = '', mimeType = '';
+
+  final String url;
+  final String originalName;
+  final String mimeType;
+
+  bool get hasValue => url.trim().isNotEmpty;
+  bool get isImage => mimeType.toLowerCase().startsWith('image/');
+  String get displayName =>
+      originalName.trim().isNotEmpty ? originalName.trim() : 'Saved file';
+
+  factory VendorProfileAsset.fromJson(Object? value) {
+    if (value is! Map<String, dynamic>) {
+      return const VendorProfileAsset.empty();
+    }
+
+    return VendorProfileAsset(
+      url: value['url']?.toString() ?? '',
+      originalName: value['originalName']?.toString() ?? '',
+      mimeType: value['mimeType']?.toString() ?? '',
+    );
+  }
+}
+
+class VendorSelfProfile {
+  const VendorSelfProfile({
+    required this.id,
+    required this.companyName,
+    required this.contactPerson,
+    required this.email,
+    required this.phone,
+    required this.whatsapp,
+    required this.address,
+    required this.country,
+    required this.state,
+    required this.city,
+    required this.zipcode,
+    required this.website,
+    required this.workDescription,
+    required this.category,
+    required this.vendorType,
+    required this.facebookUrl,
+    required this.instagramUrl,
+    required this.youtubeUrl,
+    required this.linkedinUrl,
+    required this.xUrl,
+    required this.googleLocation,
+    required this.companyLogoAsset,
+    required this.idProofAsset,
+    required this.locationProofAsset,
+    required this.companyBrochureAsset,
+    required this.profilePhotoAsset,
+    required this.visitingCardAsset,
+  });
+
+  final String id;
+  final String companyName;
+  final String contactPerson;
+  final String email;
+  final String phone;
+  final String whatsapp;
+  final String address;
+  final String country;
+  final String state;
+  final String city;
+  final String zipcode;
+  final String website;
+  final String workDescription;
+  final String category;
+  final String vendorType;
+  final String facebookUrl;
+  final String instagramUrl;
+  final String youtubeUrl;
+  final String linkedinUrl;
+  final String xUrl;
+  final String googleLocation;
+  final VendorProfileAsset companyLogoAsset;
+  final VendorProfileAsset idProofAsset;
+  final VendorProfileAsset locationProofAsset;
+  final VendorProfileAsset companyBrochureAsset;
+  final VendorProfileAsset profilePhotoAsset;
+  final VendorProfileAsset visitingCardAsset;
+
+  factory VendorSelfProfile.fromJson(Map<String, dynamic> json) {
+    return VendorSelfProfile(
+      id: json['id']?.toString() ?? '',
+      companyName: json['companyName']?.toString() ?? '',
+      contactPerson: json['contactPerson']?.toString() ?? '',
+      email: json['email']?.toString() ?? '',
+      phone: json['phone']?.toString() ?? '',
+      whatsapp: json['whatsapp']?.toString() ?? '',
+      address: json['address']?.toString() ?? '',
+      country: json['country']?.toString() ?? '',
+      state: json['state']?.toString() ?? '',
+      city: json['city']?.toString() ?? '',
+      zipcode: json['zipcode']?.toString() ?? '',
+      website: json['website']?.toString() ?? '',
+      workDescription: json['workDescription']?.toString() ?? '',
+      category: json['category']?.toString() ?? '',
+      vendorType: json['vendorType']?.toString() ?? '',
+      facebookUrl: json['facebookUrl']?.toString() ?? '',
+      instagramUrl: json['instagramUrl']?.toString() ?? '',
+      youtubeUrl: json['youtubeUrl']?.toString() ?? '',
+      linkedinUrl: json['linkedinUrl']?.toString() ?? '',
+      xUrl: json['xUrl']?.toString() ?? '',
+      googleLocation: json['googleLocation']?.toString() ?? '',
+      companyLogoAsset: VendorProfileAsset.fromJson(json['companyLogoAsset']),
+      idProofAsset: VendorProfileAsset.fromJson(json['idProofAsset']),
+      locationProofAsset: VendorProfileAsset.fromJson(
+        json['locationProofAsset'],
+      ),
+      companyBrochureAsset: VendorProfileAsset.fromJson(
+        json['companyBrochureAsset'],
+      ),
+      profilePhotoAsset: VendorProfileAsset.fromJson(json['profilePhotoAsset']),
+      visitingCardAsset: VendorProfileAsset.fromJson(json['visitingCardAsset']),
+    );
+  }
+}
+
+class VendorSelfProfileDraft {
+  const VendorSelfProfileDraft({
+    required this.companyName,
+    required this.contactPerson,
+    required this.email,
+    required this.phone,
+    required this.whatsapp,
+    required this.address,
+    required this.country,
+    required this.state,
+    required this.city,
+    required this.zipcode,
+    required this.website,
+    required this.workDescription,
+    required this.category,
+    required this.vendorType,
+    required this.facebookUrl,
+    required this.instagramUrl,
+    required this.youtubeUrl,
+    required this.linkedinUrl,
+    required this.xUrl,
+    required this.googleLocation,
+    required this.companyLogoAsset,
+    required this.idProofAsset,
+    required this.locationProofAsset,
+    required this.companyBrochureAsset,
+    required this.profilePhotoAsset,
+    required this.visitingCardAsset,
+    required this.companyLogoFile,
+    required this.idProofFile,
+    required this.locationProofFile,
+    required this.companyBrochureFile,
+    required this.profilePhotoFile,
+    required this.visitingCardFile,
+  });
+
+  const VendorSelfProfileDraft.empty()
+    : companyName = '',
+      contactPerson = '',
+      email = '',
+      phone = '',
+      whatsapp = '',
+      address = '',
+      country = '',
+      state = '',
+      city = '',
+      zipcode = '',
+      website = '',
+      workDescription = '',
+      category = '',
+      vendorType = '',
+      facebookUrl = '',
+      instagramUrl = '',
+      youtubeUrl = '',
+      linkedinUrl = '',
+      xUrl = '',
+      googleLocation = '',
+      companyLogoAsset = const VendorProfileAsset.empty(),
+      idProofAsset = const VendorProfileAsset.empty(),
+      locationProofAsset = const VendorProfileAsset.empty(),
+      companyBrochureAsset = const VendorProfileAsset.empty(),
+      profilePhotoAsset = const VendorProfileAsset.empty(),
+      visitingCardAsset = const VendorProfileAsset.empty(),
+      companyLogoFile = null,
+      idProofFile = null,
+      locationProofFile = null,
+      companyBrochureFile = null,
+      profilePhotoFile = null,
+      visitingCardFile = null;
+
+  final String companyName;
+  final String contactPerson;
+  final String email;
+  final String phone;
+  final String whatsapp;
+  final String address;
+  final String country;
+  final String state;
+  final String city;
+  final String zipcode;
+  final String website;
+  final String workDescription;
+  final String category;
+  final String vendorType;
+  final String facebookUrl;
+  final String instagramUrl;
+  final String youtubeUrl;
+  final String linkedinUrl;
+  final String xUrl;
+  final String googleLocation;
+  final VendorProfileAsset companyLogoAsset;
+  final VendorProfileAsset idProofAsset;
+  final VendorProfileAsset locationProofAsset;
+  final VendorProfileAsset companyBrochureAsset;
+  final VendorProfileAsset profilePhotoAsset;
+  final VendorProfileAsset visitingCardAsset;
+  final AssociationUploadFile? companyLogoFile;
+  final AssociationUploadFile? idProofFile;
+  final AssociationUploadFile? locationProofFile;
+  final AssociationUploadFile? companyBrochureFile;
+  final AssociationUploadFile? profilePhotoFile;
+  final AssociationUploadFile? visitingCardFile;
+
+  factory VendorSelfProfileDraft.fromProfile(VendorSelfProfile profile) {
+    return VendorSelfProfileDraft(
+      companyName: profile.companyName,
+      contactPerson: profile.contactPerson,
+      email: profile.email,
+      phone: profile.phone,
+      whatsapp: profile.whatsapp,
+      address: profile.address,
+      country: profile.country,
+      state: profile.state,
+      city: profile.city,
+      zipcode: profile.zipcode,
+      website: profile.website,
+      workDescription: profile.workDescription,
+      category: profile.category,
+      vendorType: profile.vendorType,
+      facebookUrl: profile.facebookUrl,
+      instagramUrl: profile.instagramUrl,
+      youtubeUrl: profile.youtubeUrl,
+      linkedinUrl: profile.linkedinUrl,
+      xUrl: profile.xUrl,
+      googleLocation: profile.googleLocation,
+      companyLogoAsset: profile.companyLogoAsset,
+      idProofAsset: profile.idProofAsset,
+      locationProofAsset: profile.locationProofAsset,
+      companyBrochureAsset: profile.companyBrochureAsset,
+      profilePhotoAsset: profile.profilePhotoAsset,
+      visitingCardAsset: profile.visitingCardAsset,
+      companyLogoFile: null,
+      idProofFile: null,
+      locationProofFile: null,
+      companyBrochureFile: null,
+      profilePhotoFile: null,
+      visitingCardFile: null,
+    );
+  }
+
+  VendorSelfProfileDraft copyWith({
+    String? companyName,
+    String? contactPerson,
+    String? email,
+    String? phone,
+    String? whatsapp,
+    String? address,
+    String? country,
+    String? state,
+    String? city,
+    String? zipcode,
+    String? website,
+    String? workDescription,
+    String? category,
+    String? vendorType,
+    String? facebookUrl,
+    String? instagramUrl,
+    String? youtubeUrl,
+    String? linkedinUrl,
+    String? xUrl,
+    String? googleLocation,
+    VendorProfileAsset? companyLogoAsset,
+    VendorProfileAsset? idProofAsset,
+    VendorProfileAsset? locationProofAsset,
+    VendorProfileAsset? companyBrochureAsset,
+    VendorProfileAsset? profilePhotoAsset,
+    VendorProfileAsset? visitingCardAsset,
+    AssociationUploadFile? companyLogoFile,
+    AssociationUploadFile? idProofFile,
+    AssociationUploadFile? locationProofFile,
+    AssociationUploadFile? companyBrochureFile,
+    AssociationUploadFile? profilePhotoFile,
+    AssociationUploadFile? visitingCardFile,
+  }) {
+    return VendorSelfProfileDraft(
+      companyName: companyName ?? this.companyName,
+      contactPerson: contactPerson ?? this.contactPerson,
+      email: email ?? this.email,
+      phone: phone ?? this.phone,
+      whatsapp: whatsapp ?? this.whatsapp,
+      address: address ?? this.address,
+      country: country ?? this.country,
+      state: state ?? this.state,
+      city: city ?? this.city,
+      zipcode: zipcode ?? this.zipcode,
+      website: website ?? this.website,
+      workDescription: workDescription ?? this.workDescription,
+      category: category ?? this.category,
+      vendorType: vendorType ?? this.vendorType,
+      facebookUrl: facebookUrl ?? this.facebookUrl,
+      instagramUrl: instagramUrl ?? this.instagramUrl,
+      youtubeUrl: youtubeUrl ?? this.youtubeUrl,
+      linkedinUrl: linkedinUrl ?? this.linkedinUrl,
+      xUrl: xUrl ?? this.xUrl,
+      googleLocation: googleLocation ?? this.googleLocation,
+      companyLogoAsset: companyLogoAsset ?? this.companyLogoAsset,
+      idProofAsset: idProofAsset ?? this.idProofAsset,
+      locationProofAsset: locationProofAsset ?? this.locationProofAsset,
+      companyBrochureAsset: companyBrochureAsset ?? this.companyBrochureAsset,
+      profilePhotoAsset: profilePhotoAsset ?? this.profilePhotoAsset,
+      visitingCardAsset: visitingCardAsset ?? this.visitingCardAsset,
+      companyLogoFile: companyLogoFile ?? this.companyLogoFile,
+      idProofFile: idProofFile ?? this.idProofFile,
+      locationProofFile: locationProofFile ?? this.locationProofFile,
+      companyBrochureFile: companyBrochureFile ?? this.companyBrochureFile,
+      profilePhotoFile: profilePhotoFile ?? this.profilePhotoFile,
+      visitingCardFile: visitingCardFile ?? this.visitingCardFile,
+    );
+  }
+
+  String? get validationMessage {
+    if (companyName.trim().isEmpty) {
+      return 'Company name is required.';
+    }
+    if (email.trim().isEmpty || !email.contains('@')) {
+      return 'Enter a valid contact email.';
+    }
+    return null;
+  }
+}
+
 class AdminVendorAccessItem {
   const AdminVendorAccessItem({
     required this.id,
@@ -3089,9 +3437,9 @@ extension MemberArenaSectionDirectoryMeta on MemberArenaSection {
       ),
       MemberArenaSection.temporaryVisitors => const MemberArenaDirectoryConfig(
         filter: MemberDirectoryFilter.guest,
-        title: 'Temporary Visitors',
+        title: 'Guest Members',
         subtitle:
-            'Guest and temporary-visitor records from the backend using the same member card view.',
+            'Guest member records from the backend using the same searchable member card view.',
       ),
       MemberArenaSection.committeeMembers => const MemberArenaDirectoryConfig(
         filter: MemberDirectoryFilter.committee,

@@ -314,6 +314,90 @@ class SynetraApiClient {
         .toList();
   }
 
+  Future<VendorSelfProfile> fetchMyVendorProfile() async {
+    final json = await _getCachedJson(
+      Uri.parse('$_baseUrl/vendors/me'),
+      cacheKey: 'vendor-self-profile',
+      ttl: _shortCacheTtl,
+    );
+    return VendorSelfProfile.fromJson(
+      json['vendor'] as Map<String, dynamic>? ?? const {},
+    );
+  }
+
+  Future<VendorSelfProfile> updateMyVendorProfile({
+    required VendorSelfProfileDraft draft,
+  }) async {
+    final uri = Uri.parse('$_baseUrl/vendors/me');
+    final response = await _authorizedMultipartRequest((overrideAuthToken) {
+      final request =
+          http.MultipartRequest('PATCH', uri)
+            ..headers.addAll(
+              _buildHeaders(overrideAuthToken: overrideAuthToken),
+            )
+            ..fields['companyName'] = draft.companyName.trim()
+            ..fields['name'] = draft.companyName.trim()
+            ..fields['contactPerson'] = draft.contactPerson.trim()
+            ..fields['email'] = draft.email.trim()
+            ..fields['phone'] = draft.phone.trim()
+            ..fields['whatsapp'] = draft.whatsapp.trim()
+            ..fields['address'] = draft.address.trim()
+            ..fields['country'] = draft.country.trim()
+            ..fields['state'] = draft.state.trim()
+            ..fields['city'] = draft.city.trim()
+            ..fields['zipcode'] = draft.zipcode.trim()
+            ..fields['website'] = draft.website.trim()
+            ..fields['workDescription'] = draft.workDescription.trim()
+            ..fields['category'] = draft.category.trim()
+            ..fields['vendorType'] = draft.vendorType.trim()
+            ..fields['facebookUrl'] = draft.facebookUrl.trim()
+            ..fields['instagramUrl'] = draft.instagramUrl.trim()
+            ..fields['youtubeUrl'] = draft.youtubeUrl.trim()
+            ..fields['linkedinUrl'] = draft.linkedinUrl.trim()
+            ..fields['xUrl'] = draft.xUrl.trim()
+            ..fields['googleLocation'] = draft.googleLocation.trim();
+
+      void attachAsset(String fieldName, AssociationUploadFile? file) {
+        if (file == null) {
+          return;
+        }
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            fieldName,
+            file.bytes,
+            filename: file.name,
+            contentType: MediaType.parse(file.mimeType),
+          ),
+        );
+      }
+
+      attachAsset('companyLogo', draft.companyLogoFile);
+      attachAsset('idProof', draft.idProofFile);
+      attachAsset('locationProof', draft.locationProofFile);
+      attachAsset('companyBrochure', draft.companyBrochureFile);
+      attachAsset('profilePhoto', draft.profilePhotoFile);
+      attachAsset('visitingCard', draft.visitingCardFile);
+
+      return request;
+    });
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Status ${response.statusCode}: ${response.body}');
+    }
+
+    _invalidateCacheKeys({
+      'vendor-self-profile',
+      'dashboard-vendors',
+      'admin-vendors',
+      'dashboard-summary',
+    });
+
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    return VendorSelfProfile.fromJson(
+      json['vendor'] as Map<String, dynamic>? ?? const {},
+    );
+  }
+
   Future<List<AdminAppBannerItem>> fetchAdminAppBanners() async {
     final json = await _getCachedJson(
       Uri.parse('$_baseUrl/app-banners'),

@@ -507,6 +507,10 @@ final vendorDirectoryProvider = FutureProvider<List<DashboardVendorItem>>(
   (ref) => ref.watch(apiClientProvider).fetchVendors(),
 );
 
+final currentVendorProfileProvider = FutureProvider<VendorSelfProfile>(
+  (ref) => ref.watch(apiClientProvider).fetchMyVendorProfile(),
+);
+
 final vendorTaxonomyProvider = FutureProvider<List<VendorTaxonomyCategoryItem>>(
   (ref) => ref.watch(apiClientProvider).fetchVendorTaxonomy(),
 );
