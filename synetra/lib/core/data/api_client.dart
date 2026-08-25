@@ -1331,7 +1331,7 @@ class SynetraApiClient {
     });
   }
 
-  Future<AssociationCircularLibraryData>
+  Future<AssociationDocumentLibraryData>
   fetchAssociationCircularLibrary() async {
     final profile = await fetchAssociationProfile();
     final json = await _getCachedJson(
@@ -1340,13 +1340,59 @@ class SynetraApiClient {
       ttl: _mediumCacheTtl,
     );
     final items = (json['circularDocuments'] as List<dynamic>? ?? const []);
-    return AssociationCircularLibraryData(
+    return AssociationDocumentLibraryData(
       associationId: profile.id,
       associationName: profile.name,
       items:
           items
               .map(
-                (item) => AssociationCircularDocument.fromJson(
+                (item) => AssociationDocumentItem.fromJson(
+                  item as Map<String, dynamic>,
+                ),
+              )
+              .toList(),
+    );
+  }
+
+  Future<AssociationDocumentLibraryData>
+  fetchAssociationNewsBulletinLibrary() async {
+    final profile = await fetchAssociationProfile();
+    final json = await _getCachedJson(
+      Uri.parse('$_baseUrl/associations/${profile.id}/news-bulletins'),
+      cacheKey: 'association-news-bulletin-library',
+      ttl: _mediumCacheTtl,
+    );
+    final items = (json['newsBulletinDocuments'] as List<dynamic>? ?? const []);
+    return AssociationDocumentLibraryData(
+      associationId: profile.id,
+      associationName: profile.name,
+      items:
+          items
+              .map(
+                (item) => AssociationDocumentItem.fromJson(
+                  item as Map<String, dynamic>,
+                ),
+              )
+              .toList(),
+    );
+  }
+
+  Future<AssociationDocumentLibraryData>
+  fetchAssociationMagazineLibrary() async {
+    final profile = await fetchAssociationProfile();
+    final json = await _getCachedJson(
+      Uri.parse('$_baseUrl/associations/${profile.id}/magazines'),
+      cacheKey: 'association-magazine-library',
+      ttl: _mediumCacheTtl,
+    );
+    final items = (json['magazineDocuments'] as List<dynamic>? ?? const []);
+    return AssociationDocumentLibraryData(
+      associationId: profile.id,
+      associationName: profile.name,
+      items:
+          items
+              .map(
+                (item) => AssociationDocumentItem.fromJson(
                   item as Map<String, dynamic>,
                 ),
               )
@@ -1356,7 +1402,7 @@ class SynetraApiClient {
 
   Future<void> saveAssociationCircular({
     required String associationId,
-    required AssociationCircularDraft draft,
+    required AssociationDocumentDraft draft,
   }) async {
     final uri = Uri.parse(
       '$_baseUrl/associations/$associationId/circulars${draft.id.isEmpty ? '' : '/${draft.id}'}',
@@ -1407,6 +1453,120 @@ class SynetraApiClient {
     }
     _invalidateCacheKeys({
       'association-circular-library',
+      'association-current',
+    });
+  }
+
+  Future<void> saveAssociationNewsBulletin({
+    required String associationId,
+    required AssociationDocumentDraft draft,
+  }) async {
+    final uri = Uri.parse(
+      '$_baseUrl/associations/$associationId/news-bulletins${draft.id.isEmpty ? '' : '/${draft.id}'}',
+    );
+    final response = await _authorizedMultipartRequest((overrideAuthToken) {
+      final request =
+          http.MultipartRequest(draft.id.isEmpty ? 'POST' : 'PATCH', uri)
+            ..headers.addAll(
+              _buildHeaders(overrideAuthToken: overrideAuthToken),
+            )
+            ..fields['headline'] = draft.headline
+            ..fields['tagline'] = draft.tagline
+            ..fields['summary'] = draft.summary;
+
+      final selectedFile = draft.selectedFile;
+      if (selectedFile != null) {
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'file',
+            selectedFile.bytes,
+            filename: selectedFile.name,
+          ),
+        );
+      }
+
+      return request;
+    });
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Status ${response.statusCode}: ${response.body}');
+    }
+    _invalidateCacheKeys({
+      'association-news-bulletin-library',
+      'association-current',
+    });
+  }
+
+  Future<void> deleteAssociationNewsBulletin({
+    required String associationId,
+    required String documentId,
+  }) async {
+    final uri = Uri.parse(
+      '$_baseUrl/associations/$associationId/news-bulletins/$documentId',
+    );
+    final response = await _authorizedDelete(uri);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Status ${response.statusCode}: ${response.body}');
+    }
+    _invalidateCacheKeys({
+      'association-news-bulletin-library',
+      'association-current',
+    });
+  }
+
+  Future<void> saveAssociationMagazine({
+    required String associationId,
+    required AssociationDocumentDraft draft,
+  }) async {
+    final uri = Uri.parse(
+      '$_baseUrl/associations/$associationId/magazines${draft.id.isEmpty ? '' : '/${draft.id}'}',
+    );
+    final response = await _authorizedMultipartRequest((overrideAuthToken) {
+      final request =
+          http.MultipartRequest(draft.id.isEmpty ? 'POST' : 'PATCH', uri)
+            ..headers.addAll(
+              _buildHeaders(overrideAuthToken: overrideAuthToken),
+            )
+            ..fields['headline'] = draft.headline
+            ..fields['tagline'] = draft.tagline
+            ..fields['summary'] = draft.summary;
+
+      final selectedFile = draft.selectedFile;
+      if (selectedFile != null) {
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'file',
+            selectedFile.bytes,
+            filename: selectedFile.name,
+          ),
+        );
+      }
+
+      return request;
+    });
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Status ${response.statusCode}: ${response.body}');
+    }
+    _invalidateCacheKeys({
+      'association-magazine-library',
+      'association-current',
+    });
+  }
+
+  Future<void> deleteAssociationMagazine({
+    required String associationId,
+    required String documentId,
+  }) async {
+    final uri = Uri.parse(
+      '$_baseUrl/associations/$associationId/magazines/$documentId',
+    );
+    final response = await _authorizedDelete(uri);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Status ${response.statusCode}: ${response.body}');
+    }
+    _invalidateCacheKeys({
+      'association-magazine-library',
       'association-current',
     });
   }

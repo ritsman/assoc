@@ -182,15 +182,15 @@ function getManagedUserBucket(user) {
     return "superAdmin";
   }
 
-  if (user?.isAdmin) {
+  if (user?.isAdmin && !user?.isMember && !user?.isVendor) {
     return "backendAdmin";
   }
 
-  if (user?.isMember || user?.isVendor) {
+  if (user?.isAdmin && (user?.isMember === true || user?.isVendor === true)) {
     return "appAdmin";
   }
 
-  return "appAdmin";
+  return "hidden";
 }
 
 function getManagedUserSourceLabel(user) {
@@ -198,8 +198,12 @@ function getManagedUserSourceLabel(user) {
     return "Super Admin";
   }
 
-  if (user?.isAdmin) {
+  if (user?.isAdmin && !user?.isMember && !user?.isVendor) {
     return user?.isMember ? "Web Admin" : "Backend Admin";
+  }
+
+  if (user?.isAdmin && (user?.isMember === true || user?.isVendor === true)) {
+    return user?.isVendor ? "Flutter Vendor Admin" : "Flutter Member Admin";
   }
 
   if (user?.isVendor) {
@@ -11442,17 +11446,30 @@ function UsersManagementPanel({
         <span className="mini-label">Super, Backend, Flutter</span>
       </div>
 
-      <div className="admin-member-filterbar">
-        {usersManagementTabs.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            className={`admin-member-filter-button ${activeTab === tab.key ? "active" : ""}`}
-            onClick={() => onTabChange(tab.key)}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div
+        className="admin-member-filterbar"
+        style={{ justifyContent: "flex-start", gap: "0.55rem" }}
+      >
+        <div
+          className="admin-member-filter-tabs"
+          style={{
+            display: "inline-flex",
+            flexWrap: "wrap",
+            gap: "0.55rem",
+            alignItems: "center",
+          }}
+        >
+          {usersManagementTabs.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              className={`admin-member-filter-button ${activeTab === tab.key ? "active" : ""}`}
+              onClick={() => onTabChange(tab.key)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="admin-member-toolbar">
@@ -20584,7 +20601,7 @@ export default function HomePage() {
                 <span className="eyebrow">Users</span>
                 <h1>User Access Directory</h1>
                 <p>
-                  Review super admins, backend admins, and Flutter app users
+                  Review super admins, backend admins, and Flutter app admin
                   with account access from one place.
                 </p>
               </div>
@@ -20612,13 +20629,12 @@ export default function HomePage() {
                       {
                         managedUsers.filter(
                           (user) =>
-                            !user.isAdmin &&
-                            !user.isSuperAdmin &&
+                            user.isAdmin &&
                             (user.isMember || user.isVendor),
                         ).length
                       }
                     </strong>
-                    <span>Flutter App Users</span>
+                    <span>Flutter App Admins</span>
                   </article>
                 </div>
               </div>

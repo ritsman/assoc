@@ -97,6 +97,8 @@ enum AssociationArenaSection {
   finance,
   managementCommittee,
   circulars,
+  newsBulletin,
+  magazine,
   gallery,
   master,
 }
@@ -108,6 +110,8 @@ extension AssociationArenaSectionLabel on AssociationArenaSection {
     AssociationArenaSection.finance => 'Finance',
     AssociationArenaSection.managementCommittee => 'Committee',
     AssociationArenaSection.circulars => 'Circulars',
+    AssociationArenaSection.newsBulletin => 'News & Bulletin',
+    AssociationArenaSection.magazine => 'Magazine',
     AssociationArenaSection.gallery => 'Gallery',
     AssociationArenaSection.master => 'Master',
   };
@@ -1513,10 +1517,7 @@ class _AdminDashboardViewState extends ConsumerState<_AdminDashboardView> {
         isAssociationImmersiveSection || shouldHideArenaHeader;
     final topContentPadding =
         widget.selectedArena == AppArena.dashboard ? 44.0 : 78.0;
-    final associationBreadcrumbLabel =
-        widget.associationArenaSection == AssociationArenaSection.circulars
-            ? 'Circulars'
-            : 'Gallery';
+    final associationBreadcrumbLabel = widget.associationArenaSection.label;
 
     return Scaffold(
       backgroundColor: Colors.white,

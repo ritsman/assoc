@@ -5769,9 +5769,13 @@ class _AssociationArenaPanelState extends ConsumerState<AssociationArenaPanel> {
 
   AssociationProfileDraft? _draft;
   AssociationAboutDraft? _aboutDraft;
-  AssociationCircularDraft? _circularDraft;
+  AssociationDocumentDraft? _circularDraft;
+  AssociationDocumentDraft? _newsBulletinDraft;
+  AssociationDocumentDraft? _magazineDraft;
   String? _editingMemberMasterId;
   String? _editingCircularId;
+  String? _editingNewsBulletinId;
+  String? _editingMagazineId;
   String _activeGalleryFolderId = '';
   bool _isEditing = false;
   bool _isEditingAbout = false;
@@ -5796,6 +5800,8 @@ class _AssociationArenaPanelState extends ConsumerState<AssociationArenaPanel> {
       ref.refresh(associationAboutProvider.future),
       ref.refresh(memberDirectoryProvider(widget.viewerRole).future),
       ref.refresh(associationCircularLibraryProvider.future),
+      ref.refresh(associationNewsBulletinLibraryProvider.future),
+      ref.refresh(associationMagazineLibraryProvider.future),
     ]);
   }
 
@@ -6104,6 +6110,17 @@ class _AssociationArenaPanelState extends ConsumerState<AssociationArenaPanel> {
   }
 
   Future<void> _pickCircularFile() async {
+    final file = await _pickAssociationDocumentFile();
+    if (file == null || _circularDraft == null) {
+      return;
+    }
+
+    setState(() {
+      _circularDraft = _circularDraft!.copyWith(selectedFile: file);
+    });
+  }
+
+  Future<AssociationUploadFile?> _pickAssociationDocumentFile() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: const [
@@ -6121,20 +6138,13 @@ class _AssociationArenaPanelState extends ConsumerState<AssociationArenaPanel> {
     );
 
     final file = result?.files.single;
-    if (file == null || file.bytes == null || _circularDraft == null) {
-      return;
+    if (file == null || file.bytes == null) {
+      return null;
     }
-
-    setState(() {
-      _circularDraft = _circularDraft!.copyWith(
-        selectedFile: AssociationUploadFile.fromPlatformFile(file),
-      );
-    });
+    return AssociationUploadFile.fromPlatformFile(file);
   }
 
-  Future<void> _openCircularDocument(
-    AssociationCircularDocument document,
-  ) async {
+  Future<void> _openCircularDocument(AssociationDocumentItem document) async {
     final candidateUrls =
         [
           document.documentUrl.trim(),
@@ -6176,14 +6186,225 @@ class _AssociationArenaPanelState extends ConsumerState<AssociationArenaPanel> {
     }
   }
 
-  void _openCircularEditor([AssociationCircularDocument? item]) {
+  void _openCircularEditor([AssociationDocumentItem? item]) {
     setState(() {
       _editingCircularId = item?.id ?? '';
       _circularDraft =
           item == null
-              ? const AssociationCircularDraft.empty()
-              : AssociationCircularDraft.fromDocument(item);
+              ? const AssociationDocumentDraft.empty()
+              : AssociationDocumentDraft.fromDocument(item);
     });
+  }
+
+  Future<void> _pickNewsBulletinFile() async {
+    final file = await _pickAssociationDocumentFile();
+    if (file == null || _newsBulletinDraft == null) {
+      return;
+    }
+
+    setState(() {
+      _newsBulletinDraft = _newsBulletinDraft!.copyWith(selectedFile: file);
+    });
+  }
+
+  void _openNewsBulletinEditor([AssociationDocumentItem? item]) {
+    setState(() {
+      _editingNewsBulletinId = item?.id ?? '';
+      _newsBulletinDraft =
+          item == null
+              ? const AssociationDocumentDraft.empty()
+              : AssociationDocumentDraft.fromDocument(item);
+    });
+  }
+
+  void _closeNewsBulletinEditor() {
+    setState(() {
+      _editingNewsBulletinId = null;
+      _newsBulletinDraft = null;
+    });
+  }
+
+  Future<void> _saveNewsBulletin(String associationId) async {
+    if (_newsBulletinDraft == null || _isSaving) {
+      return;
+    }
+
+    setState(() {
+      _isSaving = true;
+    });
+
+    try {
+      await ref
+          .read(apiClientProvider)
+          .saveAssociationNewsBulletin(
+            associationId: associationId,
+            draft: _newsBulletinDraft!,
+          );
+      if (!mounted) return;
+      await _refresh();
+      if (!mounted) return;
+      _closeNewsBulletinEditor();
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('News & bulletin saved.')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to save news & bulletin: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _deleteNewsBulletin(
+    String associationId,
+    String documentId,
+  ) async {
+    if (_isSaving) {
+      return;
+    }
+
+    setState(() {
+      _isSaving = true;
+    });
+
+    try {
+      await ref
+          .read(apiClientProvider)
+          .deleteAssociationNewsBulletin(
+            associationId: associationId,
+            documentId: documentId,
+          );
+      if (!mounted) return;
+      await _refresh();
+      if (!mounted) return;
+      if (_editingNewsBulletinId == documentId) {
+        _closeNewsBulletinEditor();
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('News & bulletin deleted.')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to delete news & bulletin: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _pickMagazineFile() async {
+    final file = await _pickAssociationDocumentFile();
+    if (file == null || _magazineDraft == null) {
+      return;
+    }
+
+    setState(() {
+      _magazineDraft = _magazineDraft!.copyWith(selectedFile: file);
+    });
+  }
+
+  void _openMagazineEditor([AssociationDocumentItem? item]) {
+    setState(() {
+      _editingMagazineId = item?.id ?? '';
+      _magazineDraft =
+          item == null
+              ? const AssociationDocumentDraft.empty()
+              : AssociationDocumentDraft.fromDocument(item);
+    });
+  }
+
+  void _closeMagazineEditor() {
+    setState(() {
+      _editingMagazineId = null;
+      _magazineDraft = null;
+    });
+  }
+
+  Future<void> _saveMagazine(String associationId) async {
+    if (_magazineDraft == null || _isSaving) {
+      return;
+    }
+
+    setState(() {
+      _isSaving = true;
+    });
+
+    try {
+      await ref
+          .read(apiClientProvider)
+          .saveAssociationMagazine(
+            associationId: associationId,
+            draft: _magazineDraft!,
+          );
+      if (!mounted) return;
+      await _refresh();
+      if (!mounted) return;
+      _closeMagazineEditor();
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Magazine saved.')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to save magazine: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _deleteMagazine(String associationId, String documentId) async {
+    if (_isSaving) {
+      return;
+    }
+
+    setState(() {
+      _isSaving = true;
+    });
+
+    try {
+      await ref
+          .read(apiClientProvider)
+          .deleteAssociationMagazine(
+            associationId: associationId,
+            documentId: documentId,
+          );
+      if (!mounted) return;
+      await _refresh();
+      if (!mounted) return;
+      if (_editingMagazineId == documentId) {
+        _closeMagazineEditor();
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Magazine deleted.')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to delete magazine: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
   }
 
   void _closeCircularEditor() {
@@ -6701,11 +6922,19 @@ class _AssociationArenaPanelState extends ConsumerState<AssociationArenaPanel> {
               onRetry: _refresh,
             ),
         data: (library) {
-          return _AssociationCircularsSection(
+          return _AssociationDocumentLibrarySection(
+            moduleLabel: 'Circular',
+            emptyTitle: 'No circular documents yet',
+            emptySubtitle:
+                'Upload your first circular to start building the association document library.',
+            headerSubtitle:
+                'Upload PDFs, DOC files, or scanned circulars and make them available across admin surfaces.',
+            saveButtonLabel: 'Save Circular',
+            editorTitle: 'Circular CMS',
             canManage: canManage,
-            library: library,
+            items: library.items,
             draft: _circularDraft,
-            editingCircularId: _editingCircularId,
+            editingItemId: _editingCircularId,
             isSaving: _isSaving,
             onOpenEditor: _openCircularEditor,
             onCancelEdit: _closeCircularEditor,
@@ -6716,6 +6945,85 @@ class _AssociationArenaPanelState extends ConsumerState<AssociationArenaPanel> {
             onDelete:
                 (circularId) =>
                     _deleteCircular(library.associationId, circularId),
+          );
+        },
+      );
+    }
+
+    if (widget.section == AssociationArenaSection.newsBulletin) {
+      final libraryAsync = ref.watch(associationNewsBulletinLibraryProvider);
+      return libraryAsync.when(
+        loading: () => const _LoadingState(),
+        error:
+            (error, _) => _ErrorState(
+              title: 'Could not load news & bulletin',
+              message: error.toString(),
+              onRetry: _refresh,
+            ),
+        data: (library) {
+          return _AssociationDocumentLibrarySection(
+            moduleLabel: 'News & Bulletin',
+            emptyTitle: 'No news or bulletins yet',
+            emptySubtitle:
+                'Upload your first news or bulletin document to make it available across the app.',
+            headerSubtitle:
+                'Upload PDFs, DOC files, or image documents and make them available across admin, member, and vendor views.',
+            saveButtonLabel: 'Save News & Bulletin',
+            editorTitle: 'News & Bulletin CMS',
+            canManage: canManage,
+            items: library.items,
+            draft: _newsBulletinDraft,
+            editingItemId: _editingNewsBulletinId,
+            isSaving: _isSaving,
+            onOpenEditor: _openNewsBulletinEditor,
+            onCancelEdit: _closeNewsBulletinEditor,
+            onDraftChanged:
+                (draft) => setState(() => _newsBulletinDraft = draft),
+            onPickFile: _pickNewsBulletinFile,
+            onOpenDocument: _openCircularDocument,
+            onSave: () => _saveNewsBulletin(library.associationId),
+            onDelete:
+                (documentId) =>
+                    _deleteNewsBulletin(library.associationId, documentId),
+          );
+        },
+      );
+    }
+
+    if (widget.section == AssociationArenaSection.magazine) {
+      final libraryAsync = ref.watch(associationMagazineLibraryProvider);
+      return libraryAsync.when(
+        loading: () => const _LoadingState(),
+        error:
+            (error, _) => _ErrorState(
+              title: 'Could not load magazines',
+              message: error.toString(),
+              onRetry: _refresh,
+            ),
+        data: (library) {
+          return _AssociationDocumentLibrarySection(
+            moduleLabel: 'Magazine',
+            emptyTitle: 'No magazines yet',
+            emptySubtitle:
+                'Upload your first magazine issue to make it available across the app.',
+            headerSubtitle:
+                'Upload PDFs, DOC files, or image documents and make them available across admin, member, and vendor views.',
+            saveButtonLabel: 'Save Magazine',
+            editorTitle: 'Magazine CMS',
+            canManage: canManage,
+            items: library.items,
+            draft: _magazineDraft,
+            editingItemId: _editingMagazineId,
+            isSaving: _isSaving,
+            onOpenEditor: _openMagazineEditor,
+            onCancelEdit: _closeMagazineEditor,
+            onDraftChanged: (draft) => setState(() => _magazineDraft = draft),
+            onPickFile: _pickMagazineFile,
+            onOpenDocument: _openCircularDocument,
+            onSave: () => _saveMagazine(library.associationId),
+            onDelete:
+                (documentId) =>
+                    _deleteMagazine(library.associationId, documentId),
           );
         },
       );
@@ -11491,12 +11799,18 @@ class _CommitteeThumbnailFallback extends StatelessWidget {
   }
 }
 
-class _AssociationCircularsSection extends StatefulWidget {
-  const _AssociationCircularsSection({
+class _AssociationDocumentLibrarySection extends StatefulWidget {
+  const _AssociationDocumentLibrarySection({
+    required this.moduleLabel,
+    required this.headerSubtitle,
+    required this.emptyTitle,
+    required this.emptySubtitle,
+    required this.editorTitle,
+    required this.saveButtonLabel,
     required this.canManage,
-    required this.library,
+    required this.items,
     required this.draft,
-    required this.editingCircularId,
+    required this.editingItemId,
     required this.isSaving,
     required this.onOpenEditor,
     required this.onCancelEdit,
@@ -11507,42 +11821,47 @@ class _AssociationCircularsSection extends StatefulWidget {
     required this.onDelete,
   });
 
+  final String moduleLabel;
+  final String headerSubtitle;
+  final String emptyTitle;
+  final String emptySubtitle;
+  final String editorTitle;
+  final String saveButtonLabel;
   final bool canManage;
-  final AssociationCircularLibraryData library;
-  final AssociationCircularDraft? draft;
-  final String? editingCircularId;
+  final List<AssociationDocumentItem> items;
+  final AssociationDocumentDraft? draft;
+  final String? editingItemId;
   final bool isSaving;
-  final ValueChanged<AssociationCircularDocument?> onOpenEditor;
+  final ValueChanged<AssociationDocumentItem?> onOpenEditor;
   final VoidCallback onCancelEdit;
-  final ValueChanged<AssociationCircularDraft> onDraftChanged;
+  final ValueChanged<AssociationDocumentDraft> onDraftChanged;
   final Future<void> Function() onPickFile;
-  final Future<void> Function(AssociationCircularDocument document)
-  onOpenDocument;
+  final Future<void> Function(AssociationDocumentItem document) onOpenDocument;
   final Future<void> Function() onSave;
-  final Future<void> Function(String circularId) onDelete;
+  final Future<void> Function(String documentId) onDelete;
 
   @override
-  State<_AssociationCircularsSection> createState() =>
-      _AssociationCircularsSectionState();
+  State<_AssociationDocumentLibrarySection> createState() =>
+      _AssociationDocumentLibrarySectionState();
 }
 
-class _AssociationCircularsSectionState
-    extends State<_AssociationCircularsSection> {
+class _AssociationDocumentLibrarySectionState
+    extends State<_AssociationDocumentLibrarySection> {
   static const int _pageSize = 20;
 
   int _visibleCircularCount = _pageSize;
 
   @override
-  void didUpdateWidget(covariant _AssociationCircularsSection oldWidget) {
+  void didUpdateWidget(covariant _AssociationDocumentLibrarySection oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.library.items != widget.library.items) {
+    if (oldWidget.items != widget.items) {
       _visibleCircularCount = _pageSize;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final items = [...widget.library.items]
+    final items = [...widget.items]
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     final visibleItems = items.take(_visibleCircularCount).toList();
     final hasMoreItems = visibleItems.length < items.length;
@@ -11552,11 +11871,10 @@ class _AssociationCircularsSectionState
       children: [
         Row(
           children: [
-            const Expanded(
+            Expanded(
               child: _SectionHeader(
                 title: 'Document Library',
-                subtitle:
-                    'Upload PDFs, DOC files, or scanned circulars and make them available across admin surfaces.',
+                subtitle: widget.headerSubtitle,
               ),
             ),
             if (widget.canManage) ...[
@@ -11577,6 +11895,8 @@ class _AssociationCircularsSectionState
         if (widget.canManage && widget.draft != null) ...[
           const SizedBox(height: 16),
           _AssociationCircularEditor(
+            editorTitle: widget.editorTitle,
+            saveButtonLabel: widget.saveButtonLabel,
             draft: widget.draft!,
             isSaving: widget.isSaving,
             onChanged: widget.onDraftChanged,
@@ -11587,18 +11907,18 @@ class _AssociationCircularsSectionState
         ],
         const SizedBox(height: 16),
         if (items.isEmpty)
-          const _EmptyStateCard(
-            title: 'No circular documents yet',
-            subtitle:
-                'Upload your first circular to start building the association document library.',
+          _EmptyStateCard(
+            title: widget.emptyTitle,
+            subtitle: widget.emptySubtitle,
           )
         else
           ...visibleItems.map(
             (item) => Padding(
               padding: const EdgeInsets.only(bottom: 14),
               child: _AssociationCircularCard(
+                moduleLabel: widget.moduleLabel,
                 item: item,
-                isEditing: widget.editingCircularId == item.id,
+                isEditing: widget.editingItemId == item.id,
                 onOpenDocument: () => widget.onOpenDocument(item),
                 onDelete:
                     widget.canManage ? () => widget.onDelete(item.id) : null,
@@ -11617,7 +11937,7 @@ class _AssociationCircularsSectionState
               },
               icon: const Icon(Icons.expand_more_rounded),
               label: Text(
-                'Load more circulars (${items.length - visibleItems.length} remaining)',
+                'Load more ${widget.moduleLabel.toLowerCase()} items (${items.length - visibleItems.length} remaining)',
               ),
             ),
           ),
@@ -11629,6 +11949,8 @@ class _AssociationCircularsSectionState
 
 class _AssociationCircularEditor extends StatelessWidget {
   const _AssociationCircularEditor({
+    required this.editorTitle,
+    required this.saveButtonLabel,
     required this.draft,
     required this.isSaving,
     required this.onChanged,
@@ -11637,9 +11959,11 @@ class _AssociationCircularEditor extends StatelessWidget {
     required this.onCancel,
   });
 
-  final AssociationCircularDraft draft;
+  final String editorTitle;
+  final String saveButtonLabel;
+  final AssociationDocumentDraft draft;
   final bool isSaving;
-  final ValueChanged<AssociationCircularDraft> onChanged;
+  final ValueChanged<AssociationDocumentDraft> onChanged;
   final Future<void> Function() onPickFile;
   final Future<void> Function() onSave;
   final VoidCallback onCancel;
@@ -11663,11 +11987,11 @@ class _AssociationCircularEditor extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
               Expanded(
                 child: Text(
-                  'Circular CMS',
+                  editorTitle,
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w800,
@@ -11730,7 +12054,7 @@ class _AssociationCircularEditor extends StatelessWidget {
                   style: FilledButton.styleFrom(
                     backgroundColor: const Color(0xFF171717),
                   ),
-                  child: Text(isSaving ? 'Saving...' : 'Save Circular'),
+                  child: Text(isSaving ? 'Saving...' : saveButtonLabel),
                 ),
               ),
             ],
@@ -11744,7 +12068,7 @@ class _AssociationCircularEditor extends StatelessWidget {
 class _AssociationCircularPreview extends StatelessWidget {
   const _AssociationCircularPreview({required this.draft});
 
-  final AssociationCircularDraft draft;
+  final AssociationDocumentDraft draft;
 
   @override
   Widget build(BuildContext context) {
@@ -11844,13 +12168,15 @@ class _AssociationCircularPreview extends StatelessWidget {
 
 class _AssociationCircularCard extends StatelessWidget {
   const _AssociationCircularCard({
+    required this.moduleLabel,
     required this.item,
     required this.isEditing,
     required this.onOpenDocument,
     this.onDelete,
   });
 
-  final AssociationCircularDocument item;
+  final String moduleLabel;
+  final AssociationDocumentItem item;
   final bool isEditing;
   final VoidCallback onOpenDocument;
   final VoidCallback? onDelete;
@@ -11898,14 +12224,14 @@ class _AssociationCircularCard extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               _CircularActionIcon(
-                tooltip: 'Open PDF',
+                tooltip: 'Open ${moduleLabel.toLowerCase()}',
                 icon: Icons.picture_as_pdf_outlined,
                 color: const Color(0xFF475569),
                 onTap: onOpenDocument,
               ),
               const SizedBox(width: 4),
               _CircularActionIcon(
-                tooltip: 'Open document',
+                tooltip: 'Open file',
                 icon: Icons.open_in_new_rounded,
                 color: const Color(0xFF475569),
                 onTap: onOpenDocument,
@@ -11965,7 +12291,7 @@ class _AssociationCircularThumbnail extends StatelessWidget {
     required this.onTap,
   });
 
-  final AssociationCircularDocument item;
+  final AssociationDocumentItem item;
   final VoidCallback onTap;
 
   @override

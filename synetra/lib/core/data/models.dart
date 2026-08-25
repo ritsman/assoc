@@ -1,24 +1,24 @@
 part of '../../main.dart';
 
-class AssociationCircularLibraryData {
-  const AssociationCircularLibraryData({
+class AssociationDocumentLibraryData {
+  const AssociationDocumentLibraryData({
     required this.associationId,
     required this.associationName,
     required this.items,
   });
 
-  const AssociationCircularLibraryData.empty()
+  const AssociationDocumentLibraryData.empty()
     : associationId = '',
       associationName = '',
       items = const [];
 
   final String associationId;
   final String associationName;
-  final List<AssociationCircularDocument> items;
+  final List<AssociationDocumentItem> items;
 }
 
-class AssociationCircularDocument {
-  const AssociationCircularDocument({
+class AssociationDocumentItem {
+  const AssociationDocumentItem({
     required this.id,
     required this.headline,
     required this.tagline,
@@ -49,8 +49,8 @@ class AssociationCircularDocument {
   String get createdDateLabel =>
       createdAt.length >= 10 ? createdAt.substring(0, 10) : createdAt;
 
-  factory AssociationCircularDocument.fromJson(Map<String, dynamic> json) {
-    return AssociationCircularDocument(
+  factory AssociationDocumentItem.fromJson(Map<String, dynamic> json) {
+    return AssociationDocumentItem(
       id: json['id']?.toString() ?? '',
       headline: json['headline']?.toString() ?? '',
       tagline: json['tagline']?.toString() ?? '',
@@ -67,8 +67,8 @@ class AssociationCircularDocument {
   }
 }
 
-class AssociationCircularDraft {
-  const AssociationCircularDraft({
+class AssociationDocumentDraft {
+  const AssociationDocumentDraft({
     required this.id,
     required this.headline,
     required this.tagline,
@@ -79,7 +79,7 @@ class AssociationCircularDraft {
     required this.existingPreviewUrl,
   });
 
-  const AssociationCircularDraft.empty()
+  const AssociationDocumentDraft.empty()
     : id = '',
       headline = '',
       tagline = '',
@@ -107,10 +107,10 @@ class AssociationCircularDraft {
   String get displayFileExtension =>
       selectedFile?.extensionLabel ?? existingFileExtension;
 
-  factory AssociationCircularDraft.fromDocument(
-    AssociationCircularDocument document,
+  factory AssociationDocumentDraft.fromDocument(
+    AssociationDocumentItem document,
   ) {
-    return AssociationCircularDraft(
+    return AssociationDocumentDraft(
       id: document.id,
       headline: document.headline,
       tagline: document.tagline,
@@ -122,7 +122,7 @@ class AssociationCircularDraft {
     );
   }
 
-  AssociationCircularDraft copyWith({
+  AssociationDocumentDraft copyWith({
     String? id,
     String? headline,
     String? tagline,
@@ -133,7 +133,7 @@ class AssociationCircularDraft {
     String? existingFileExtension,
     String? existingPreviewUrl,
   }) {
-    return AssociationCircularDraft(
+    return AssociationDocumentDraft(
       id: id ?? this.id,
       headline: headline ?? this.headline,
       tagline: tagline ?? this.tagline,

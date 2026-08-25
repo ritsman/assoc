@@ -455,8 +455,17 @@ final associationAboutProvider = FutureProvider<AssociationAboutData>(
 );
 
 final associationCircularLibraryProvider =
-    FutureProvider<AssociationCircularLibraryData>(
+    FutureProvider<AssociationDocumentLibraryData>(
       (ref) => ref.watch(apiClientProvider).fetchAssociationCircularLibrary(),
+    );
+
+final associationNewsBulletinLibraryProvider = FutureProvider<
+  AssociationDocumentLibraryData
+>((ref) => ref.watch(apiClientProvider).fetchAssociationNewsBulletinLibrary());
+
+final associationMagazineLibraryProvider =
+    FutureProvider<AssociationDocumentLibraryData>(
+      (ref) => ref.watch(apiClientProvider).fetchAssociationMagazineLibrary(),
     );
 
 final memberDirectoryProvider =

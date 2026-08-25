@@ -31,7 +31,9 @@ class AssociationArenaNavigation {
 
   static bool usesBreadcrumbInsteadOfHero(AssociationArenaSection section) {
     return section == AssociationArenaSection.gallery ||
-        section == AssociationArenaSection.circulars;
+        section == AssociationArenaSection.circulars ||
+        section == AssociationArenaSection.newsBulletin ||
+        section == AssociationArenaSection.magazine;
   }
 
   static bool shouldHideShellHeader(AssociationArenaSection section) {
