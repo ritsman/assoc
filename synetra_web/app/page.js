@@ -443,6 +443,8 @@ const associationMenuSections = [
   "Finance",
   "Committee",
   "Circulars",
+  "News & Bulletin",
+  "Magazine",
   "Gallery",
   "Master",
 ];
@@ -573,6 +575,8 @@ const associationTabs = [
   "Finance",
   "Committee",
   "Circulars",
+  "News & Bulletin",
+  "Magazine",
   "Gallery",
   "Master",
 ];
@@ -3327,6 +3331,8 @@ const initialAssociationTabData = {
     badge: member.role,
   })),
   Circulars: circularItems,
+  "News & Bulletin": [],
+  Magazine: [],
   Gallery: galleryItems,
   Master: masterRecords.map((item) => ({
     id: item.id,
@@ -3419,6 +3425,14 @@ const defaultCircularDocumentForm = {
   previewUrl: "",
   mimeType: "",
   fileExtension: "",
+};
+
+const defaultNewsBulletinDocumentForm = {
+  ...defaultCircularDocumentForm,
+};
+
+const defaultMagazineDocumentForm = {
+  ...defaultCircularDocumentForm,
 };
 
 const defaultTimelinePostForm = {
@@ -3600,7 +3614,7 @@ function mapAssociationGalleryFolders(items) {
   }));
 }
 
-function mapAssociationCircularDocuments(items) {
+function mapAssociationDocuments(items) {
   if (!Array.isArray(items)) {
     return [];
   }
@@ -4250,6 +4264,34 @@ function AssociationTabContent({
   onDeleteCircularDocument,
   isSavingCircularDocument,
   circularDocumentFeedback,
+  newsBulletinDocuments,
+  selectedNewsBulletinIds,
+  editingNewsBulletinDocumentId,
+  newsBulletinDocumentForm,
+  onOpenNewsBulletinDocumentEditor,
+  onToggleNewsBulletinSelect,
+  onDeleteSelectedNewsBulletins,
+  onNewsBulletinDocumentFieldChange,
+  onNewsBulletinDocumentFileChange,
+  onCancelNewsBulletinDocumentEdit,
+  onSaveNewsBulletinDocument,
+  onDeleteNewsBulletinDocument,
+  isSavingNewsBulletinDocument,
+  newsBulletinDocumentFeedback,
+  magazineDocuments,
+  selectedMagazineIds,
+  editingMagazineDocumentId,
+  magazineDocumentForm,
+  onOpenMagazineDocumentEditor,
+  onToggleMagazineSelect,
+  onDeleteSelectedMagazines,
+  onMagazineDocumentFieldChange,
+  onMagazineDocumentFileChange,
+  onCancelMagazineDocumentEdit,
+  onSaveMagazineDocument,
+  onDeleteMagazineDocument,
+  isSavingMagazineDocument,
+  magazineDocumentFeedback,
 }) {
   const toneMap = {
     Profile: "tone-circular",
@@ -4257,6 +4299,8 @@ function AssociationTabContent({
     Finance: "tone-advertisement",
     Committee: "tone-gallery",
     Circulars: "tone-circular",
+    "News & Bulletin": "tone-circular",
+    Magazine: "tone-circular",
     Gallery: "tone-gallery",
     Master: "tone-advertisement",
   };
@@ -4353,7 +4397,8 @@ function AssociationTabContent({
 
   if (activeTab === "Circulars") {
     return (
-      <AssociationCircularsPanel
+      <AssociationDocumentLibraryPanel
+        moduleLabel="Circular"
         items={circularDocuments}
         isAdmin={isAdmin}
         selectedIds={selectedCircularIds}
@@ -4369,6 +4414,52 @@ function AssociationTabContent({
         onCancelEdit={onCancelCircularDocumentEdit}
         onSave={onSaveCircularDocument}
         onDelete={onDeleteCircularDocument}
+      />
+    );
+  }
+
+  if (activeTab === "News & Bulletin") {
+    return (
+      <AssociationDocumentLibraryPanel
+        moduleLabel="News & Bulletin"
+        items={newsBulletinDocuments}
+        isAdmin={isAdmin}
+        selectedIds={selectedNewsBulletinIds}
+        editingItemId={editingNewsBulletinDocumentId}
+        formData={newsBulletinDocumentForm}
+        isSaving={isSavingNewsBulletinDocument}
+        feedbackMessage={newsBulletinDocumentFeedback}
+        onOpenEditor={onOpenNewsBulletinDocumentEditor}
+        onToggleSelect={onToggleNewsBulletinSelect}
+        onDeleteSelected={onDeleteSelectedNewsBulletins}
+        onFieldChange={onNewsBulletinDocumentFieldChange}
+        onFileChange={onNewsBulletinDocumentFileChange}
+        onCancelEdit={onCancelNewsBulletinDocumentEdit}
+        onSave={onSaveNewsBulletinDocument}
+        onDelete={onDeleteNewsBulletinDocument}
+      />
+    );
+  }
+
+  if (activeTab === "Magazine") {
+    return (
+      <AssociationDocumentLibraryPanel
+        moduleLabel="Magazine"
+        items={magazineDocuments}
+        isAdmin={isAdmin}
+        selectedIds={selectedMagazineIds}
+        editingItemId={editingMagazineDocumentId}
+        formData={magazineDocumentForm}
+        isSaving={isSavingMagazineDocument}
+        feedbackMessage={magazineDocumentFeedback}
+        onOpenEditor={onOpenMagazineDocumentEditor}
+        onToggleSelect={onToggleMagazineSelect}
+        onDeleteSelected={onDeleteSelectedMagazines}
+        onFieldChange={onMagazineDocumentFieldChange}
+        onFileChange={onMagazineDocumentFileChange}
+        onCancelEdit={onCancelMagazineDocumentEdit}
+        onSave={onSaveMagazineDocument}
+        onDelete={onDeleteMagazineDocument}
       />
     );
   }
@@ -5873,7 +5964,8 @@ function AssociationGalleryPanel({
   );
 }
 
-function AssociationCircularsPanel({
+function AssociationDocumentLibraryPanel({
+  moduleLabel,
   items,
   isAdmin,
   selectedIds,
@@ -5896,7 +5988,7 @@ function AssociationCircularsPanel({
         <article className="association-profile-card">
           <div className="panel-topline">
             <div>
-              <span className="mini-label">Circulars</span>
+              <span className="mini-label">{moduleLabel}</span>
               <h2>Document Library</h2>
             </div>
             {isAdmin ? (
@@ -5930,8 +6022,8 @@ function AssociationCircularsPanel({
         {editingItemId !== null ? (
           <article className="association-profile-card">
             <div className="panel-topline">
-              <h3>{editingItemId ? "Edit Circular" : "Add Circular"}</h3>
-              <span className="mini-label">Circular CMS</span>
+              <h3>{editingItemId ? `Edit ${moduleLabel}` : `Add ${moduleLabel}`}</h3>
+              <span className="mini-label">{moduleLabel} CMS</span>
             </div>
 
             <div className="profile-form-grid">
@@ -6009,7 +6101,7 @@ function AssociationCircularsPanel({
                 onClick={onSave}
                 disabled={isSaving}
               >
-                {isSaving ? "Saving..." : "Save Circular"}
+                {isSaving ? "Saving..." : `Save ${moduleLabel}`}
               </button>
             </div>
           </article>
@@ -6085,10 +6177,10 @@ function AssociationCircularsPanel({
           </div>
         ) : (
           <article className="association-profile-card committee-empty-card">
-            <span className="mini-label">Circulars</span>
-            <h3>No circular documents yet</h3>
+            <span className="mini-label">{moduleLabel}</span>
+            <h3>No {moduleLabel.toLowerCase()} documents yet</h3>
             <p>
-              Upload your first circular to start building the document library.
+              Upload your first {moduleLabel.toLowerCase()} item to start building the document library.
             </p>
           </article>
         )}
@@ -12767,6 +12859,29 @@ export default function HomePage() {
   const [isSavingCircularDocument, setIsSavingCircularDocument] =
     useState(false);
   const [circularDocumentFeedback, setCircularDocumentFeedback] = useState("");
+  const [newsBulletinDocuments, setNewsBulletinDocuments] = useState([]);
+  const [editingNewsBulletinDocumentId, setEditingNewsBulletinDocumentId] =
+    useState(null);
+  const [newsBulletinDocumentForm, setNewsBulletinDocumentForm] = useState(
+    defaultNewsBulletinDocumentForm,
+  );
+  const [selectedNewsBulletinDocumentIds, setSelectedNewsBulletinDocumentIds] =
+    useState([]);
+  const [isSavingNewsBulletinDocument, setIsSavingNewsBulletinDocument] =
+    useState(false);
+  const [newsBulletinDocumentFeedback, setNewsBulletinDocumentFeedback] =
+    useState("");
+  const [magazineDocuments, setMagazineDocuments] = useState([]);
+  const [editingMagazineDocumentId, setEditingMagazineDocumentId] =
+    useState(null);
+  const [magazineDocumentForm, setMagazineDocumentForm] = useState(
+    defaultMagazineDocumentForm,
+  );
+  const [selectedMagazineDocumentIds, setSelectedMagazineDocumentIds] =
+    useState([]);
+  const [isSavingMagazineDocument, setIsSavingMagazineDocument] =
+    useState(false);
+  const [magazineDocumentFeedback, setMagazineDocumentFeedback] = useState("");
   const [memberTabData, setMemberTabData] = useState(initialMemberTabData);
   const [editingCommitteeMemberId, setEditingCommitteeMemberId] =
     useState(null);
@@ -13732,7 +13847,13 @@ export default function HomePage() {
       mapAssociationGalleryItems(payload.association?.galleryItems),
     );
     setCircularDocuments(
-      mapAssociationCircularDocuments(payload.association?.circularDocuments),
+      mapAssociationDocuments(payload.association?.circularDocuments),
+    );
+    setNewsBulletinDocuments(
+      mapAssociationDocuments(payload.association?.newsBulletinDocuments),
+    );
+    setMagazineDocuments(
+      mapAssociationDocuments(payload.association?.magazineDocuments),
     );
   };
 
@@ -14049,9 +14170,13 @@ export default function HomePage() {
           mapAssociationGalleryItems(payload.association?.galleryItems),
         );
         setCircularDocuments(
-          mapAssociationCircularDocuments(
-            payload.association?.circularDocuments,
-          ),
+          mapAssociationDocuments(payload.association?.circularDocuments),
+        );
+        setNewsBulletinDocuments(
+          mapAssociationDocuments(payload.association?.newsBulletinDocuments),
+        );
+        setMagazineDocuments(
+          mapAssociationDocuments(payload.association?.magazineDocuments),
         );
       } catch (_error) {
         // Keep default local profile state when the API is unavailable.
@@ -18759,21 +18884,28 @@ export default function HomePage() {
     })();
   };
 
-  const openCircularDocumentEditor = (itemId) => {
-    setCircularDocumentFeedback("");
+  const openAssociationDocumentEditor = ({
+    itemId,
+    documents,
+    defaultForm,
+    setFeedback,
+    setEditingId,
+    setForm,
+  }) => {
+    setFeedback("");
     if (!itemId) {
-      setEditingCircularDocumentId("");
-      setCircularDocumentForm(defaultCircularDocumentForm);
+      setEditingId("");
+      setForm(defaultForm);
       return;
     }
 
-    const item = circularDocuments.find((document) => document.id === itemId);
+    const item = documents.find((document) => document.id === itemId);
     if (!item) {
       return;
     }
 
-    setEditingCircularDocumentId(itemId);
-    setCircularDocumentForm({
+    setEditingId(itemId);
+    setForm({
       id: item.id,
       headline: item.headline ?? "",
       tagline: item.tagline ?? "",
@@ -18787,15 +18919,15 @@ export default function HomePage() {
     });
   };
 
-  const updateCircularDocumentField = (field, value) => {
-    setCircularDocumentFeedback("");
-    setCircularDocumentForm((current) => ({
+  const updateAssociationDocumentField = ({ field, value, setFeedback, setForm }) => {
+    setFeedback("");
+    setForm((current) => ({
       ...current,
       [field]: value,
     }));
   };
 
-  const updateCircularDocumentFile = (file) => {
+  const updateAssociationDocumentFile = ({ file, setFeedback, setForm }) => {
     void (async () => {
       if (!file) {
         return;
@@ -18804,8 +18936,8 @@ export default function HomePage() {
       const previewUrl = file.type.startsWith("image/")
         ? await readFileAsDataUrl(file)
         : "";
-      setCircularDocumentFeedback("");
-      setCircularDocumentForm((current) => ({
+      setFeedback("");
+      setForm((current) => ({
         ...current,
         file,
         fileName: file.name,
@@ -18816,146 +18948,170 @@ export default function HomePage() {
     })();
   };
 
-  const cancelCircularDocumentEdit = () => {
-    setCircularDocumentFeedback("");
-    setEditingCircularDocumentId(null);
-    setCircularDocumentForm(defaultCircularDocumentForm);
+  const cancelAssociationDocumentEdit = ({
+    defaultForm,
+    setFeedback,
+    setEditingId,
+    setForm,
+  }) => {
+    setFeedback("");
+    setEditingId(null);
+    setForm(defaultForm);
   };
 
-  const toggleSelectCircularDocument = (itemId) => {
-    setSelectedCircularDocumentIds((current) =>
+  const toggleAssociationDocumentSelection = ({ itemId, setSelectedIds }) => {
+    setSelectedIds((current) =>
       current.includes(itemId)
         ? current.filter((id) => id !== itemId)
         : [...current, itemId],
     );
   };
 
-  const saveCircularDocument = () => {
+  const saveAssociationDocumentLibrary = ({
+    routeBase,
+    moduleLabel,
+    editingId,
+    formData,
+    setIsSaving,
+    setFeedback,
+    onCancelEdit,
+    clearSelection,
+  }) => {
     void (async () => {
-      if (!associationProfile.id || !circularDocumentForm.headline.trim()) {
-        setCircularDocumentFeedback(
-          "Circular headline is required before saving.",
-        );
+      if (!associationProfile.id || !formData.headline.trim()) {
+        setFeedback(`${moduleLabel} headline is required before saving.`);
         return;
       }
 
-      if (!editingCircularDocumentId && !circularDocumentForm.file) {
-        setCircularDocumentFeedback(
-          "Upload a document before creating a new circular.",
-        );
+      if (!editingId && !formData.file) {
+        setFeedback(`Upload a document before creating a new ${moduleLabel.toLowerCase()}.`);
         return;
       }
 
       const payload = new FormData();
-      payload.append("headline", circularDocumentForm.headline.trim());
-      payload.append("tagline", circularDocumentForm.tagline.trim());
-      payload.append("summary", circularDocumentForm.summary.trim());
-      if (circularDocumentForm.file) {
-        payload.append("file", circularDocumentForm.file);
+      payload.append("headline", formData.headline.trim());
+      payload.append("tagline", formData.tagline.trim());
+      payload.append("summary", formData.summary.trim());
+      if (formData.file) {
+        payload.append("file", formData.file);
       }
 
-      setIsSavingCircularDocument(true);
-      setCircularDocumentFeedback("");
+      setIsSaving(true);
+      setFeedback("");
 
       try {
         const response = await runAuthenticatedFetch(
-          `/associations/${associationProfile.id}/circulars${editingCircularDocumentId ? `/${editingCircularDocumentId}` : ""}`,
+          `/associations/${associationProfile.id}/${routeBase}${editingId ? `/${editingId}` : ""}`,
           {
-            method: editingCircularDocumentId ? "PATCH" : "POST",
+            method: editingId ? "PATCH" : "POST",
             body: payload,
           },
         );
 
         if (!response.ok) {
-          let message = "Unable to save the circular right now.";
+          let message = `Unable to save the ${moduleLabel.toLowerCase()} right now.`;
           try {
             const result = await response.json();
             if (result?.error) {
               message = result.error;
             }
           } catch {}
-          setCircularDocumentFeedback(message);
+          setFeedback(message);
           return;
         }
 
         await loadAssociationProfile();
-        cancelCircularDocumentEdit();
-        setSelectedCircularDocumentIds([]);
-        setCircularDocumentFeedback("Circular saved successfully.");
+        onCancelEdit();
+        clearSelection();
+        setFeedback(`${moduleLabel} saved successfully.`);
       } finally {
-        setIsSavingCircularDocument(false);
+        setIsSaving(false);
       }
     })();
   };
 
-  const deleteCircularDocument = (itemId) => {
+  const deleteAssociationDocument = ({
+    routeBase,
+    moduleLabel,
+    itemId,
+    editingId,
+    setIsSaving,
+    setFeedback,
+    onCancelEdit,
+    setSelectedIds,
+  }) => {
     void (async () => {
       if (!associationProfile.id) {
-        setCircularDocumentFeedback(
-          "Association profile must be available before deleting a circular.",
+        setFeedback(
+          `Association profile must be available before deleting a ${moduleLabel.toLowerCase()}.`,
         );
         return;
       }
 
-      setIsSavingCircularDocument(true);
-      setCircularDocumentFeedback("");
+      setIsSaving(true);
+      setFeedback("");
 
       try {
         const response = await runAuthenticatedFetch(
-          `/associations/${associationProfile.id}/circulars/${itemId}`,
+          `/associations/${associationProfile.id}/${routeBase}/${itemId}`,
           {
             method: "DELETE",
           },
         );
 
         if (!response.ok && response.status !== 204) {
-          let message = "Unable to delete the circular right now.";
+          let message = `Unable to delete the ${moduleLabel.toLowerCase()} right now.`;
           try {
             const result = await response.json();
             if (result?.error) {
               message = result.error;
             }
           } catch {}
-          setCircularDocumentFeedback(message);
+          setFeedback(message);
           return;
         }
 
         await loadAssociationProfile();
-        if (editingCircularDocumentId === itemId) {
-          cancelCircularDocumentEdit();
+        if (editingId === itemId) {
+          onCancelEdit();
         }
-        setSelectedCircularDocumentIds((current) =>
-          current.filter((id) => id !== itemId),
-        );
-        setCircularDocumentFeedback("Circular deleted.");
+        setSelectedIds((current) => current.filter((id) => id !== itemId));
+        setFeedback(`${moduleLabel} deleted.`);
       } finally {
-        setIsSavingCircularDocument(false);
+        setIsSaving(false);
       }
     })();
   };
 
-  const deleteSelectedCircularDocuments = () => {
+  const deleteSelectedAssociationDocuments = ({
+    routeBase,
+    moduleLabel,
+    selectedIds,
+    setIsSaving,
+    setFeedback,
+    setSelectedIds,
+  }) => {
     void (async () => {
-      if (!associationProfile.id || selectedCircularDocumentIds.length === 0) {
-        setCircularDocumentFeedback("Select one or more circulars first.");
+      if (!associationProfile.id || selectedIds.length === 0) {
+        setFeedback(`Select one or more ${moduleLabel.toLowerCase()} items first.`);
         return;
       }
 
-      setIsSavingCircularDocument(true);
-      setCircularDocumentFeedback("");
+      setIsSaving(true);
+      setFeedback("");
 
       try {
         await Promise.all(
-          selectedCircularDocumentIds.map(async (itemId) => {
+          selectedIds.map(async (itemId) => {
             const response = await runAuthenticatedFetch(
-              `/associations/${associationProfile.id}/circulars/${itemId}`,
+              `/associations/${associationProfile.id}/${routeBase}/${itemId}`,
               {
                 method: "DELETE",
               },
             );
 
             if (!response.ok && response.status !== 204) {
-              let message = "Unable to delete one or more circulars.";
+              let message = `Unable to delete one or more ${moduleLabel.toLowerCase()} items.`;
               try {
                 const result = await response.json();
                 if (result?.error) {
@@ -18968,21 +19124,240 @@ export default function HomePage() {
         );
 
         await loadAssociationProfile();
-        setSelectedCircularDocumentIds([]);
-        setCircularDocumentFeedback(
-          `${selectedCircularDocumentIds.length} circular${selectedCircularDocumentIds.length === 1 ? "" : "s"} deleted.`,
+        setSelectedIds([]);
+        setFeedback(
+          `${selectedIds.length} ${moduleLabel.toLowerCase()} item${selectedIds.length === 1 ? "" : "s"} deleted.`,
         );
       } catch (error) {
-        setCircularDocumentFeedback(
+        setFeedback(
           error instanceof Error
             ? error.message
-            : "Unable to delete the selected circulars right now.",
+            : `Unable to delete the selected ${moduleLabel.toLowerCase()} items right now.`,
         );
       } finally {
-        setIsSavingCircularDocument(false);
+        setIsSaving(false);
       }
     })();
   };
+
+  const openCircularDocumentEditor = (itemId) =>
+    openAssociationDocumentEditor({
+      itemId,
+      documents: circularDocuments,
+      defaultForm: defaultCircularDocumentForm,
+      setFeedback: setCircularDocumentFeedback,
+      setEditingId: setEditingCircularDocumentId,
+      setForm: setCircularDocumentForm,
+    });
+
+  const updateCircularDocumentField = (field, value) =>
+    updateAssociationDocumentField({
+      field,
+      value,
+      setFeedback: setCircularDocumentFeedback,
+      setForm: setCircularDocumentForm,
+    });
+
+  const updateCircularDocumentFile = (file) =>
+    updateAssociationDocumentFile({
+      file,
+      setFeedback: setCircularDocumentFeedback,
+      setForm: setCircularDocumentForm,
+    });
+
+  const cancelCircularDocumentEdit = () =>
+    cancelAssociationDocumentEdit({
+      defaultForm: defaultCircularDocumentForm,
+      setFeedback: setCircularDocumentFeedback,
+      setEditingId: setEditingCircularDocumentId,
+      setForm: setCircularDocumentForm,
+    });
+
+  const toggleSelectCircularDocument = (itemId) =>
+    toggleAssociationDocumentSelection({
+      itemId,
+      setSelectedIds: setSelectedCircularDocumentIds,
+    });
+
+  const saveCircularDocument = () =>
+    saveAssociationDocumentLibrary({
+      routeBase: "circulars",
+      moduleLabel: "Circular",
+      editingId: editingCircularDocumentId,
+      formData: circularDocumentForm,
+      setIsSaving: setIsSavingCircularDocument,
+      setFeedback: setCircularDocumentFeedback,
+      onCancelEdit: cancelCircularDocumentEdit,
+      clearSelection: () => setSelectedCircularDocumentIds([]),
+    });
+
+  const deleteCircularDocument = (itemId) =>
+    deleteAssociationDocument({
+      routeBase: "circulars",
+      moduleLabel: "Circular",
+      itemId,
+      editingId: editingCircularDocumentId,
+      setIsSaving: setIsSavingCircularDocument,
+      setFeedback: setCircularDocumentFeedback,
+      onCancelEdit: cancelCircularDocumentEdit,
+      setSelectedIds: setSelectedCircularDocumentIds,
+    });
+
+  const deleteSelectedCircularDocuments = () =>
+    deleteSelectedAssociationDocuments({
+      routeBase: "circulars",
+      moduleLabel: "Circular",
+      selectedIds: selectedCircularDocumentIds,
+      setIsSaving: setIsSavingCircularDocument,
+      setFeedback: setCircularDocumentFeedback,
+      setSelectedIds: setSelectedCircularDocumentIds,
+    });
+
+  const openNewsBulletinDocumentEditor = (itemId) =>
+    openAssociationDocumentEditor({
+      itemId,
+      documents: newsBulletinDocuments,
+      defaultForm: defaultNewsBulletinDocumentForm,
+      setFeedback: setNewsBulletinDocumentFeedback,
+      setEditingId: setEditingNewsBulletinDocumentId,
+      setForm: setNewsBulletinDocumentForm,
+    });
+
+  const updateNewsBulletinDocumentField = (field, value) =>
+    updateAssociationDocumentField({
+      field,
+      value,
+      setFeedback: setNewsBulletinDocumentFeedback,
+      setForm: setNewsBulletinDocumentForm,
+    });
+
+  const updateNewsBulletinDocumentFile = (file) =>
+    updateAssociationDocumentFile({
+      file,
+      setFeedback: setNewsBulletinDocumentFeedback,
+      setForm: setNewsBulletinDocumentForm,
+    });
+
+  const cancelNewsBulletinDocumentEdit = () =>
+    cancelAssociationDocumentEdit({
+      defaultForm: defaultNewsBulletinDocumentForm,
+      setFeedback: setNewsBulletinDocumentFeedback,
+      setEditingId: setEditingNewsBulletinDocumentId,
+      setForm: setNewsBulletinDocumentForm,
+    });
+
+  const toggleSelectNewsBulletinDocument = (itemId) =>
+    toggleAssociationDocumentSelection({
+      itemId,
+      setSelectedIds: setSelectedNewsBulletinDocumentIds,
+    });
+
+  const saveNewsBulletinDocument = () =>
+    saveAssociationDocumentLibrary({
+      routeBase: "news-bulletins",
+      moduleLabel: "News & Bulletin",
+      editingId: editingNewsBulletinDocumentId,
+      formData: newsBulletinDocumentForm,
+      setIsSaving: setIsSavingNewsBulletinDocument,
+      setFeedback: setNewsBulletinDocumentFeedback,
+      onCancelEdit: cancelNewsBulletinDocumentEdit,
+      clearSelection: () => setSelectedNewsBulletinDocumentIds([]),
+    });
+
+  const deleteNewsBulletinDocument = (itemId) =>
+    deleteAssociationDocument({
+      routeBase: "news-bulletins",
+      moduleLabel: "News & Bulletin",
+      itemId,
+      editingId: editingNewsBulletinDocumentId,
+      setIsSaving: setIsSavingNewsBulletinDocument,
+      setFeedback: setNewsBulletinDocumentFeedback,
+      onCancelEdit: cancelNewsBulletinDocumentEdit,
+      setSelectedIds: setSelectedNewsBulletinDocumentIds,
+    });
+
+  const deleteSelectedNewsBulletinDocuments = () =>
+    deleteSelectedAssociationDocuments({
+      routeBase: "news-bulletins",
+      moduleLabel: "News & Bulletin",
+      selectedIds: selectedNewsBulletinDocumentIds,
+      setIsSaving: setIsSavingNewsBulletinDocument,
+      setFeedback: setNewsBulletinDocumentFeedback,
+      setSelectedIds: setSelectedNewsBulletinDocumentIds,
+    });
+
+  const openMagazineDocumentEditor = (itemId) =>
+    openAssociationDocumentEditor({
+      itemId,
+      documents: magazineDocuments,
+      defaultForm: defaultMagazineDocumentForm,
+      setFeedback: setMagazineDocumentFeedback,
+      setEditingId: setEditingMagazineDocumentId,
+      setForm: setMagazineDocumentForm,
+    });
+
+  const updateMagazineDocumentField = (field, value) =>
+    updateAssociationDocumentField({
+      field,
+      value,
+      setFeedback: setMagazineDocumentFeedback,
+      setForm: setMagazineDocumentForm,
+    });
+
+  const updateMagazineDocumentFile = (file) =>
+    updateAssociationDocumentFile({
+      file,
+      setFeedback: setMagazineDocumentFeedback,
+      setForm: setMagazineDocumentForm,
+    });
+
+  const cancelMagazineDocumentEdit = () =>
+    cancelAssociationDocumentEdit({
+      defaultForm: defaultMagazineDocumentForm,
+      setFeedback: setMagazineDocumentFeedback,
+      setEditingId: setEditingMagazineDocumentId,
+      setForm: setMagazineDocumentForm,
+    });
+
+  const toggleSelectMagazineDocument = (itemId) =>
+    toggleAssociationDocumentSelection({
+      itemId,
+      setSelectedIds: setSelectedMagazineDocumentIds,
+    });
+
+  const saveMagazineDocument = () =>
+    saveAssociationDocumentLibrary({
+      routeBase: "magazines",
+      moduleLabel: "Magazine",
+      editingId: editingMagazineDocumentId,
+      formData: magazineDocumentForm,
+      setIsSaving: setIsSavingMagazineDocument,
+      setFeedback: setMagazineDocumentFeedback,
+      onCancelEdit: cancelMagazineDocumentEdit,
+      clearSelection: () => setSelectedMagazineDocumentIds([]),
+    });
+
+  const deleteMagazineDocument = (itemId) =>
+    deleteAssociationDocument({
+      routeBase: "magazines",
+      moduleLabel: "Magazine",
+      itemId,
+      editingId: editingMagazineDocumentId,
+      setIsSaving: setIsSavingMagazineDocument,
+      setFeedback: setMagazineDocumentFeedback,
+      onCancelEdit: cancelMagazineDocumentEdit,
+      setSelectedIds: setSelectedMagazineDocumentIds,
+    });
+
+  const deleteSelectedMagazineDocuments = () =>
+    deleteSelectedAssociationDocuments({
+      routeBase: "magazines",
+      moduleLabel: "Magazine",
+      selectedIds: selectedMagazineDocumentIds,
+      setIsSaving: setIsSavingMagazineDocument,
+      setFeedback: setMagazineDocumentFeedback,
+      setSelectedIds: setSelectedMagazineDocumentIds,
+    });
 
   const toggleAppPermission = (permissionKey) => {
     setAppAccessFeedback("");
@@ -19594,6 +19969,44 @@ export default function HomePage() {
                 onDeleteCircularDocument={deleteCircularDocument}
                 isSavingCircularDocument={isSavingCircularDocument}
                 circularDocumentFeedback={circularDocumentFeedback}
+                newsBulletinDocuments={newsBulletinDocuments}
+                selectedNewsBulletinIds={selectedNewsBulletinDocumentIds}
+                editingNewsBulletinDocumentId={editingNewsBulletinDocumentId}
+                newsBulletinDocumentForm={newsBulletinDocumentForm}
+                onOpenNewsBulletinDocumentEditor={
+                  openNewsBulletinDocumentEditor
+                }
+                onToggleNewsBulletinSelect={toggleSelectNewsBulletinDocument}
+                onDeleteSelectedNewsBulletins={
+                  deleteSelectedNewsBulletinDocuments
+                }
+                onNewsBulletinDocumentFieldChange={
+                  updateNewsBulletinDocumentField
+                }
+                onNewsBulletinDocumentFileChange={
+                  updateNewsBulletinDocumentFile
+                }
+                onCancelNewsBulletinDocumentEdit={
+                  cancelNewsBulletinDocumentEdit
+                }
+                onSaveNewsBulletinDocument={saveNewsBulletinDocument}
+                onDeleteNewsBulletinDocument={deleteNewsBulletinDocument}
+                isSavingNewsBulletinDocument={isSavingNewsBulletinDocument}
+                newsBulletinDocumentFeedback={newsBulletinDocumentFeedback}
+                magazineDocuments={magazineDocuments}
+                selectedMagazineIds={selectedMagazineDocumentIds}
+                editingMagazineDocumentId={editingMagazineDocumentId}
+                magazineDocumentForm={magazineDocumentForm}
+                onOpenMagazineDocumentEditor={openMagazineDocumentEditor}
+                onToggleMagazineSelect={toggleSelectMagazineDocument}
+                onDeleteSelectedMagazines={deleteSelectedMagazineDocuments}
+                onMagazineDocumentFieldChange={updateMagazineDocumentField}
+                onMagazineDocumentFileChange={updateMagazineDocumentFile}
+                onCancelMagazineDocumentEdit={cancelMagazineDocumentEdit}
+                onSaveMagazineDocument={saveMagazineDocument}
+                onDeleteMagazineDocument={deleteMagazineDocument}
+                isSavingMagazineDocument={isSavingMagazineDocument}
+                magazineDocumentFeedback={magazineDocumentFeedback}
               />
             </div>
           </section>

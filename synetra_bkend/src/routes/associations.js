@@ -22,6 +22,8 @@ const router = Router();
 const currentFilePath = fileURLToPath(import.meta.url);
 const currentDirPath = path.dirname(currentFilePath);
 const circularUploadsDirPath = getUploadSubdirPath("circulars");
+const newsBulletinUploadsDirPath = getUploadSubdirPath("news-bulletins");
+const magazineUploadsDirPath = getUploadSubdirPath("magazines");
 const galleryUploadsDirPath = getUploadSubdirPath("gallery");
 const associationUploadsDirPath = getUploadSubdirPath("associations");
 const memberPhotoUploadsDirPath = getUploadSubdirPath("member-photos");
@@ -36,15 +38,24 @@ function buildSafeUploadName(file, fallbackBaseName) {
   return `${Date.now()}-${safeBaseName || fallbackBaseName}${extension}`;
 }
 
-const circularStorage = multer.diskStorage({
-  destination: (_req, _file, callback) => {
-    fs.mkdirSync(circularUploadsDirPath, { recursive: true });
-    callback(null, circularUploadsDirPath);
-  },
-  filename: (_req, file, callback) => {
-    callback(null, buildSafeUploadName(file, "circular"));
-  },
-});
+function buildDocumentStorage(uploadsDirPath, fallbackBaseName) {
+  return multer.diskStorage({
+    destination: (_req, _file, callback) => {
+      fs.mkdirSync(uploadsDirPath, { recursive: true });
+      callback(null, uploadsDirPath);
+    },
+    filename: (_req, file, callback) => {
+      callback(null, buildSafeUploadName(file, fallbackBaseName));
+    },
+  });
+}
+
+const circularStorage = buildDocumentStorage(circularUploadsDirPath, "circular");
+const newsBulletinStorage = buildDocumentStorage(
+  newsBulletinUploadsDirPath,
+  "news-bulletin",
+);
+const magazineStorage = buildDocumentStorage(magazineUploadsDirPath, "magazine");
 
 const galleryStorage = multer.diskStorage({
   destination: (_req, _file, callback) => {
@@ -58,6 +69,20 @@ const galleryStorage = multer.diskStorage({
 
 const circularUpload = multer({
   storage: circularStorage,
+  limits: {
+    fileSize: 20 * 1024 * 1024,
+  },
+});
+
+const newsBulletinUpload = multer({
+  storage: newsBulletinStorage,
+  limits: {
+    fileSize: 20 * 1024 * 1024,
+  },
+});
+
+const magazineUpload = multer({
+  storage: magazineStorage,
   limits: {
     fileSize: 20 * 1024 * 1024,
   },
@@ -313,22 +338,28 @@ async function normalizeAssociationRecord(association) {
 }
 
 function serializeCircularDocument(req, circularDocument) {
-  const publicUrl = buildPublicAssetUrl(req, circularDocument.storagePath);
-  const fileExtension = path.extname(circularDocument.originalFileName).replace(".", "").toUpperCase() || "FILE";
+  return serializeAssociationDocument(req, circularDocument);
+}
+
+function serializeAssociationDocument(req, document) {
+  const publicUrl = buildPublicAssetUrl(req, document.storagePath);
+  const fileExtension =
+    path.extname(document.originalFileName).replace(".", "").toUpperCase() ||
+    "FILE";
 
   return {
-    id: circularDocument.id,
-    headline: circularDocument.headline,
-    tagline: circularDocument.tagline,
-    summary: circularDocument.summary,
-    originalFileName: circularDocument.originalFileName,
-    mimeType: circularDocument.mimeType,
-    fileSize: circularDocument.fileSize,
+    id: document.id,
+    headline: document.headline,
+    tagline: document.tagline,
+    summary: document.summary,
+    originalFileName: document.originalFileName,
+    mimeType: document.mimeType,
+    fileSize: document.fileSize,
     fileExtension,
     documentUrl: publicUrl,
-    previewUrl: circularDocument.mimeType.startsWith("image/") ? publicUrl : null,
-    createdAt: circularDocument.createdAt,
-    updatedAt: circularDocument.updatedAt,
+    previewUrl: document.mimeType.startsWith("image/") ? publicUrl : null,
+    createdAt: document.createdAt,
+    updatedAt: document.updatedAt,
   };
 }
 
@@ -398,6 +429,16 @@ function serializeAssociation(req, association) {
     circularDocuments: Array.isArray(association.circularDocuments)
       ? association.circularDocuments.map((item) => serializeCircularDocument(req, item))
       : [],
+    newsBulletinDocuments: Array.isArray(association.newsBulletinDocuments)
+      ? association.newsBulletinDocuments.map((item) =>
+          serializeAssociationDocument(req, item),
+        )
+      : [],
+    magazineDocuments: Array.isArray(association.magazineDocuments)
+      ? association.magazineDocuments.map((item) =>
+          serializeAssociationDocument(req, item),
+        )
+      : [],
   };
 }
 
@@ -439,6 +480,12 @@ async function ensureCurrentAssociation() {
     include: {
       aboutContent: true,
       circularDocuments: {
+        orderBy: [{ createdAt: "desc" }, { displayOrder: "asc" }],
+      },
+      newsBulletinDocuments: {
+        orderBy: [{ createdAt: "desc" }, { displayOrder: "asc" }],
+      },
+      magazineDocuments: {
         orderBy: [{ createdAt: "desc" }, { displayOrder: "asc" }],
       },
       appAccess: true,
@@ -515,6 +562,12 @@ router.get("/", async (req, res) => {
     include: {
       aboutContent: true,
       circularDocuments: {
+        orderBy: [{ displayOrder: "asc" }, { createdAt: "asc" }],
+      },
+      newsBulletinDocuments: {
+        orderBy: [{ displayOrder: "asc" }, { createdAt: "asc" }],
+      },
+      magazineDocuments: {
         orderBy: [{ displayOrder: "asc" }, { createdAt: "asc" }],
       },
       galleryItems: {
@@ -1469,6 +1522,211 @@ router.delete("/:id/circulars/:circularDocumentId", async (req, res) => {
   }
 
   return res.status(204).send();
+});
+
+function registerAssociationDocumentRoutes({
+  routeBase,
+  uploadMiddleware,
+  delegateKey,
+  includeKey,
+  responseKey,
+  missingMessage,
+  payloadError,
+  fileRequiredMessage,
+  uploadPathPrefix,
+}) {
+  router.get(`/:id/${routeBase}`, async (req, res) => {
+    const association = await prisma.association.findUnique({
+      where: { id: req.params.id },
+      include: {
+        [includeKey]: {
+          orderBy: [{ createdAt: "desc" }, { displayOrder: "asc" }],
+        },
+      },
+    });
+
+    if (!association) {
+      return res.status(404).json({ error: "Association not found" });
+    }
+
+    return res.json({
+      [responseKey]: association[includeKey].map((item) =>
+        serializeAssociationDocument(req, item),
+      ),
+    });
+  });
+
+  router.post(
+    `/:id/${routeBase}`,
+    uploadMiddleware.single("file"),
+    async (req, res) => {
+      const parsed = circularDocumentSchema.safeParse(req.body);
+
+      if (!parsed.success) {
+        if (req.file?.path) {
+          fs.rmSync(req.file.path, { force: true });
+        }
+
+        return res.status(400).json({
+          error: payloadError,
+          details: parsed.error.flatten(),
+        });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({ error: fileRequiredMessage });
+      }
+
+      const association = await prisma.association.findUnique({
+        where: { id: req.params.id },
+        include: {
+          [includeKey]: true,
+        },
+      });
+
+      if (!association) {
+        fs.rmSync(req.file.path, { force: true });
+        return res.status(404).json({ error: "Association not found" });
+      }
+
+      const document = await prisma[delegateKey].create({
+        data: {
+          associationId: req.params.id,
+          headline: parsed.data.headline,
+          tagline: parsed.data.tagline,
+          summary: parsed.data.summary,
+          originalFileName: req.file.originalname,
+          storedFileName: req.file.filename,
+          storagePath: `${uploadPathPrefix}/${req.file.filename}`,
+          mimeType: req.file.mimetype,
+          fileSize: req.file.size,
+          displayOrder: association[includeKey].length,
+        },
+      });
+
+      return res
+        .status(201)
+        .json({ [responseKey.slice(0, -1)]: serializeAssociationDocument(req, document) });
+    },
+  );
+
+  router.patch(
+    `/:id/${routeBase}/:documentId`,
+    uploadMiddleware.single("file"),
+    async (req, res) => {
+      const parsed = circularDocumentSchema.safeParse(req.body);
+
+      if (!parsed.success) {
+        if (req.file?.path) {
+          fs.rmSync(req.file.path, { force: true });
+        }
+
+        return res.status(400).json({
+          error: payloadError,
+          details: parsed.error.flatten(),
+        });
+      }
+
+      const document = await prisma[delegateKey].findFirst({
+        where: {
+          id: req.params.documentId,
+          associationId: req.params.id,
+        },
+      });
+
+      if (!document) {
+        if (req.file?.path) {
+          fs.rmSync(req.file.path, { force: true });
+        }
+
+        return res.status(404).json({ error: missingMessage });
+      }
+
+      const updatedDocument = await prisma[delegateKey].update({
+        where: { id: req.params.documentId },
+        data: {
+          headline: parsed.data.headline,
+          tagline: parsed.data.tagline,
+          summary: parsed.data.summary,
+          ...(req.file
+            ? {
+                originalFileName: req.file.originalname,
+                storedFileName: req.file.filename,
+                storagePath: `${uploadPathPrefix}/${req.file.filename}`,
+                mimeType: req.file.mimetype,
+                fileSize: req.file.size,
+              }
+            : {}),
+        },
+      });
+
+      if (req.file && document.storagePath) {
+        const previousFilePath = path.resolve(
+          currentDirPath,
+          "../../",
+          document.storagePath,
+        );
+        if (fs.existsSync(previousFilePath)) {
+          fs.rmSync(previousFilePath, { force: true });
+        }
+      }
+
+      return res.json({
+        [responseKey.slice(0, -1)]: serializeAssociationDocument(
+          req,
+          updatedDocument,
+        ),
+      });
+    },
+  );
+
+  router.delete(`/:id/${routeBase}/:documentId`, async (req, res) => {
+    const document = await prisma[delegateKey].findFirst({
+      where: {
+        id: req.params.documentId,
+        associationId: req.params.id,
+      },
+    });
+
+    if (!document) {
+      return res.status(404).json({ error: missingMessage });
+    }
+
+    await prisma[delegateKey].delete({
+      where: { id: req.params.documentId },
+    });
+
+    const filePath = path.resolve(currentDirPath, "../../", document.storagePath);
+    if (fs.existsSync(filePath)) {
+      fs.rmSync(filePath, { force: true });
+    }
+
+    return res.status(204).send();
+  });
+}
+
+registerAssociationDocumentRoutes({
+  routeBase: "news-bulletins",
+  uploadMiddleware: newsBulletinUpload,
+  delegateKey: "associationNewsBulletinDocument",
+  includeKey: "newsBulletinDocuments",
+  responseKey: "newsBulletinDocuments",
+  missingMessage: "News & bulletin document not found",
+  payloadError: "Invalid news & bulletin payload",
+  fileRequiredMessage: "Document file is required",
+  uploadPathPrefix: "uploads/news-bulletins",
+});
+
+registerAssociationDocumentRoutes({
+  routeBase: "magazines",
+  uploadMiddleware: magazineUpload,
+  delegateKey: "associationMagazineDocument",
+  includeKey: "magazineDocuments",
+  responseKey: "magazineDocuments",
+  missingMessage: "Magazine document not found",
+  payloadError: "Invalid magazine payload",
+  fileRequiredMessage: "Document file is required",
+  uploadPathPrefix: "uploads/magazines",
 });
 
 export default router;

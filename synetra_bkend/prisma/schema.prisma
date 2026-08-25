@@ -38,6 +38,8 @@ model Association {
   galleryItems       AssociationGalleryItem[]
   galleryFolders     AssociationGalleryFolder[]
   circularDocuments  AssociationCircularDocument[]
+  newsBulletinDocuments AssociationNewsBulletinDocument[]
+  magazineDocuments  AssociationMagazineDocument[]
   appAccess         AssociationAppAccess?
   MemberPost         MemberPost[]
   vendors            Vendor[]
@@ -142,6 +144,44 @@ model AssociationGalleryPhoto {
 }
 
 model AssociationCircularDocument {
+  id               String      @id @default(cuid())
+  associationId    String
+  headline         String
+  tagline          String?
+  summary          String?
+  originalFileName String
+  storedFileName   String
+  storagePath      String
+  mimeType         String
+  fileSize         Int
+  displayOrder     Int         @default(0)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  association      Association @relation(fields: [associationId], references: [id], onDelete: Cascade)
+
+  @@index([associationId, displayOrder])
+}
+
+model AssociationNewsBulletinDocument {
+  id               String      @id @default(cuid())
+  associationId    String
+  headline         String
+  tagline          String?
+  summary          String?
+  originalFileName String
+  storedFileName   String
+  storagePath      String
+  mimeType         String
+  fileSize         Int
+  displayOrder     Int         @default(0)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  association      Association @relation(fields: [associationId], references: [id], onDelete: Cascade)
+
+  @@index([associationId, displayOrder])
+}
+
+model AssociationMagazineDocument {
   id               String      @id @default(cuid())
   associationId    String
   headline         String
