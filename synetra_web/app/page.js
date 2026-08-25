@@ -7434,7 +7434,149 @@ function VendorStatusGrid({ items, isSaving, onEdit }) {
   );
 }
 
-function VendorRegistrationTable({ items, onEdit, onDelete, onStatusChange }) {
+function VendorProfileDialog({ vendor, onClose }) {
+  if (!vendor) {
+    return null;
+  }
+
+  const assetEntries = [
+    ["Company Logo", vendor.companyLogoAsset],
+    ["ID Proof", vendor.idProofAsset],
+    ["Location Proof", vendor.locationProofAsset],
+    ["Company Profile / Brochure", vendor.companyBrochureAsset],
+    ["Profile Photo", vendor.profilePhotoAsset],
+    ["Visiting Card", vendor.visitingCardAsset],
+  ].filter(([, asset]) => asset?.url);
+
+  const socialLinks = [
+    ["Website", vendor.website],
+    ["Facebook", vendor.facebookUrl],
+    ["Instagram", vendor.instagramUrl],
+    ["YouTube", vendor.youtubeUrl],
+    ["LinkedIn", vendor.linkedinUrl],
+    ["X / Twitter", vendor.xUrl],
+  ].filter(([, value]) => value);
+
+  return (
+    <div
+      className="member-form-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Vendor profile"
+    >
+      <div className="member-form-dialog vendor-profile-dialog">
+        <section className="association-profile-card vendor-profile-sheet">
+          <div className="panel-topline">
+            <div>
+              <span className="mini-label">Vendor Profile</span>
+              <h2>{vendor.company}</h2>
+            </div>
+            <button
+              className="secondary-link secondary-button"
+              type="button"
+              onClick={onClose}
+            >
+              Close
+            </button>
+          </div>
+
+          <div className="vendor-profile-grid">
+            <div className="vendor-profile-block">
+              <span className="mini-label">Basic Info</span>
+              <p><strong>Contact:</strong> {vendor.contactPerson || "--"}</p>
+              <p><strong>Email:</strong> {vendor.email || "--"}</p>
+              <p><strong>Phone:</strong> {vendor.phone || "--"}</p>
+              <p><strong>WhatsApp:</strong> {vendor.whatsapp || "--"}</p>
+              <p><strong>Category:</strong> {vendor.category || "--"}</p>
+              <p><strong>Sub Category:</strong> {vendor.vendorType || "--"}</p>
+              <p><strong>Status:</strong> {vendor.registrationStatus}</p>
+            </div>
+
+            <div className="vendor-profile-block">
+              <span className="mini-label">Address</span>
+              <p><strong>Country:</strong> {vendor.country || "--"}</p>
+              <p><strong>State:</strong> {vendor.state || "--"}</p>
+              <p><strong>City:</strong> {vendor.city || "--"}</p>
+              <p><strong>Zipcode:</strong> {vendor.zipcode || "--"}</p>
+              <p><strong>Address:</strong> {vendor.address || "--"}</p>
+              <p><strong>Google Location:</strong> {vendor.googleLocation || "--"}</p>
+            </div>
+
+            <div className="vendor-profile-block">
+              <span className="mini-label">Commercial</span>
+              <p><strong>Plan Name:</strong> {vendor.planName || "--"}</p>
+              <p><strong>Membership Plan:</strong> {vendor.membershipPlan || "--"}</p>
+              <p><strong>Payment Amount:</strong> {vendor.paymentAmount || "--"}</p>
+              <p><strong>Payment Mode:</strong> {vendor.paymentMode || "--"}</p>
+              <p><strong>Bank Name:</strong> {vendor.bankName || "--"}</p>
+              <p><strong>Transaction ID:</strong> {vendor.transactionId || "--"}</p>
+              <p><strong>GST Number:</strong> {vendor.gstNumber || "--"}</p>
+              <p><strong>Restaurant:</strong> {vendor.isRestaurant ? "Yes" : "No"}</p>
+            </div>
+
+            <div className="vendor-profile-block">
+              <span className="mini-label">Schedule</span>
+              <p><strong>Onboarding Start:</strong> {vendor.onboardingStartDate || "--"}</p>
+              <p><strong>Onboarding End:</strong> {vendor.onboardingEndDate || "--"}</p>
+              <p><strong>Payment Due:</strong> {vendor.paymentDue || "--"}</p>
+              <p><strong>Opening Time:</strong> {vendor.openingTime || "--"}</p>
+              <p><strong>Closing Time:</strong> {vendor.closingTime || "--"}</p>
+            </div>
+          </div>
+
+          <div className="vendor-profile-grid">
+            <div className="vendor-profile-block vendor-profile-block-wide">
+              <span className="mini-label">Descriptions</span>
+              <p><strong>Work Description:</strong> {vendor.workDescription || "--"}</p>
+              <p><strong>Payment Description:</strong> {vendor.paymentDescription || "--"}</p>
+              <p><strong>Notes:</strong> {vendor.notes || "--"}</p>
+            </div>
+          </div>
+
+          {socialLinks.length > 0 ? (
+            <div className="vendor-profile-block vendor-profile-block-wide">
+              <span className="mini-label">Links</span>
+              <div className="vendor-profile-links">
+                {socialLinks.map(([label, value]) => (
+                  <a key={label} href={value} target="_blank" rel="noreferrer">
+                    {label}
+                  </a>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {assetEntries.length > 0 ? (
+            <div className="vendor-profile-block vendor-profile-block-wide">
+              <span className="mini-label">Saved Assets</span>
+              <div className="vendor-profile-assets">
+                {assetEntries.map(([label, asset]) => (
+                  <article key={label} className="vendor-profile-asset-card">
+                    <strong>{label}</strong>
+                    {asset.mimeType?.startsWith("image/") ? (
+                      <img src={asset.url} alt={label} className="vendor-profile-asset-image" />
+                    ) : null}
+                    <a href={asset.url} target="_blank" rel="noreferrer">
+                      {getStoredAssetLabel(asset)}
+                    </a>
+                  </article>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function VendorRegistrationTable({
+  items,
+  onEdit,
+  onDelete,
+  onStatusChange,
+  onView,
+}) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedVendorIds, setSelectedVendorIds] = useState([]);
 
@@ -7579,6 +7721,18 @@ function VendorRegistrationTable({ items, onEdit, onDelete, onStatusChange }) {
                 </td>
                 <td>
                   <div className="record-actions">
+                    <button
+                      className="secondary-link secondary-button table-button table-icon-only"
+                      type="button"
+                      onClick={() => onView?.(vendor)}
+                      aria-label="View vendor"
+                      title="View vendor"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                        <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" />
+                        <circle cx="12" cy="12" r="3.2" />
+                      </svg>
+                    </button>
                     <button
                       className="secondary-link secondary-button table-button table-icon-only"
                       type="button"
@@ -12307,6 +12461,7 @@ export default function HomePage() {
   const [vendorStatusSearch, setVendorStatusSearch] = useState("");
   const [selectedVendorRequests, setSelectedVendorRequests] = useState([]);
   const [selectedVendorReviewId, setSelectedVendorReviewId] = useState("");
+  const [selectedVendorProfileId, setSelectedVendorProfileId] = useState("");
   const [vendorApprovalForm, setVendorApprovalForm] = useState(
     buildVendorApprovalForm(null),
   );
@@ -13878,6 +14033,8 @@ export default function HomePage() {
     ) ??
     vendorRecords.find((vendor) => vendor.id === selectedVendorReviewId) ??
     null;
+  const selectedVendorProfile =
+    vendorRecords.find((vendor) => vendor.id === selectedVendorProfileId) ?? null;
   const filteredVendorContentPosts = vendorContentPosts.filter((post) => {
     const query = adminVendorSearch.trim().toLowerCase();
     const postStatus = (
@@ -19147,6 +19304,7 @@ export default function HomePage() {
 
                 <VendorRegistrationTable
                   items={filteredVendorOverviewItems}
+                  onView={(vendor) => setSelectedVendorProfileId(vendor.id)}
                   onEdit={openVendorRegistrationEditor}
                   onDelete={deleteVendorRecord}
                   onStatusChange={updateVendorStatus}
@@ -19848,6 +20006,13 @@ export default function HomePage() {
             />
           </div>
         </div>
+      ) : null}
+
+      {selectedVendorProfile ? (
+        <VendorProfileDialog
+          vendor={selectedVendorProfile}
+          onClose={() => setSelectedVendorProfileId("")}
+        />
       ) : null}
     </main>
   );
