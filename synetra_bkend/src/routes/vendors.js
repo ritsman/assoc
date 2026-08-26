@@ -171,6 +171,28 @@ const vendorFileUpload = multer({
   },
 }).fields(vendorFileFieldNames.map((name) => ({ name, maxCount: 1 })));
 
+function handleVendorUpload(req, res, next) {
+  vendorFileUpload(req, res, (error) => {
+    if (!error) {
+      next();
+      return;
+    }
+
+    if (error instanceof multer.MulterError) {
+      const message =
+        error.code === "LIMIT_FILE_SIZE"
+          ? "Vendor uploads must be 15 MB or smaller."
+          : error.message;
+      return res.status(400).json({ error: message });
+    }
+
+    return res.status(400).json({
+      error:
+        error instanceof Error ? error.message : "Unable to process vendor upload",
+    });
+  });
+}
+
 function buildVendorAsset(req, file) {
   if (!file) {
     return undefined;
@@ -586,7 +608,7 @@ router.get("/me", requireAuthenticatedSession, async (req, res) => {
   return res.json({ vendor: serializeVendor(req, vendor) });
 });
 
-router.post("/", vendorFileUpload, async (req, res) => {
+router.post("/", handleVendorUpload, async (req, res) => {
   const parsed = vendorSchema.safeParse(req.body);
 
   if (!parsed.success) {
@@ -655,7 +677,7 @@ router.post("/", vendorFileUpload, async (req, res) => {
   }
 });
 
-router.patch("/me", requireAuthenticatedSession, vendorFileUpload, async (req, res) => {
+router.patch("/me", requireAuthenticatedSession, handleVendorUpload, async (req, res) => {
   const vendorId = resolveAuthenticatedVendorId(req);
   if (!vendorId) {
     return res.status(403).json({
@@ -705,7 +727,7 @@ router.patch("/me", requireAuthenticatedSession, vendorFileUpload, async (req, r
   }
 });
 
-router.patch("/:id", vendorFileUpload, async (req, res) => {
+router.patch("/:id", handleVendorUpload, async (req, res) => {
   const parsed = vendorUpdateSchema.safeParse(req.body);
 
   if (!parsed.success) {
