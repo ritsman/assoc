@@ -35,6 +35,12 @@ const createBackendAdminSchema = z.object({
   firstName: z.string().trim().optional(),
   lastName: z.string().trim().optional(),
 });
+const updateCurrentUserSchema = z.object({
+  email: z.string().email(),
+  firstName: z.string().trim().min(1),
+  lastName: z.string().trim().optional(),
+  phone: z.string().trim().optional(),
+});
 
 function buildNamesFromEmail(email) {
   const localPart = String(email || "")
@@ -261,6 +267,56 @@ router.get(
     });
   },
 );
+
+router.get("/me", requireAuthenticatedSession, async (req, res) => {
+  const user = await prisma.user.findUnique({
+    where: { id: req.auth.user.id },
+  });
+
+  if (!user) {
+    return res.status(404).json({ error: "User not found" });
+  }
+
+  return res.json({ user: serializeUser(user) });
+});
+
+router.patch("/me", requireAuthenticatedSession, async (req, res) => {
+  const parsed = updateCurrentUserSchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    return res.status(400).json({
+      error: "Invalid profile payload",
+      details: parsed.error.flatten(),
+    });
+  }
+
+  const email = parsed.data.email.trim().toLowerCase();
+  const firstName = parsed.data.firstName.trim();
+  const lastName = parsed.data.lastName?.trim() || "";
+  const phone = parsed.data.phone?.trim() || null;
+
+  const existingUser = await prisma.user.findUnique({
+    where: { email },
+  });
+
+  if (existingUser && existingUser.id !== req.auth.user.id) {
+    return res.status(409).json({
+      error: "Another user already uses this email address.",
+    });
+  }
+
+  const user = await prisma.user.update({
+    where: { id: req.auth.user.id },
+    data: {
+      email,
+      firstName,
+      lastName,
+      phone,
+    },
+  });
+
+  return res.json({ user: serializeUser(user) });
+});
 
 router.patch(
   "/:id/access",
