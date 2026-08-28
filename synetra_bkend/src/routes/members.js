@@ -42,73 +42,59 @@ const accessStatusSchema = z.object({
   accessStatus: z.enum(["PENDING", "APPROVED", "SUSPENDED", "CANCELLED"]),
 });
 const memberViewQuerySchema = z.enum(["legacy", "directory", "admin"]);
-const positiveIntegerQueryField = z.preprocess(
-  (value) => {
-    if (value === undefined || value === null || value === "") {
-      return undefined;
-    }
-    const normalizedValue = Array.isArray(value) ? value[0] : value;
-    return Number(normalizedValue);
-  },
-  z.number().int().min(1).optional(),
-);
-const optionalTrimmedQueryField = z.preprocess(
-  (value) => {
-    if (value === undefined || value === null) {
-      return undefined;
-    }
-    const normalizedValue = String(Array.isArray(value) ? value[0] : value)
-      .trim();
-    return normalizedValue === "" ? undefined : normalizedValue;
-  },
-  z.string().optional(),
-);
+const positiveIntegerQueryField = z.preprocess((value) => {
+  if (value === undefined || value === null || value === "") {
+    return undefined;
+  }
+  const normalizedValue = Array.isArray(value) ? value[0] : value;
+  return Number(normalizedValue);
+}, z.number().int().min(1).optional());
+const optionalTrimmedQueryField = z.preprocess((value) => {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  const normalizedValue = String(
+    Array.isArray(value) ? value[0] : value,
+  ).trim();
+  return normalizedValue === "" ? undefined : normalizedValue;
+}, z.string().optional());
 const memberDirectoryQuerySchema = z.object({
   page: positiveIntegerQueryField,
   pageSize: positiveIntegerQueryField,
   search: optionalTrimmedQueryField,
   membershipType: optionalTrimmedQueryField,
   email: optionalTrimmedQueryField,
-  approvedOnly: z.preprocess(
-    (value) => {
-      if (value === undefined || value === null || value === "") {
-        return false;
-      }
-      const normalizedValue = String(Array.isArray(value) ? value[0] : value)
-        .trim()
-        .toLowerCase();
-      return normalizedValue === "true" || normalizedValue === "1";
-    },
-    z.boolean(),
-  ),
-  committeeOnly: z.preprocess(
-    (value) => {
-      if (value === undefined || value === null || value === "") {
-        return false;
-      }
-      const normalizedValue = String(Array.isArray(value) ? value[0] : value)
-        .trim()
-        .toLowerCase();
-      return normalizedValue === "true" || normalizedValue === "1";
-    },
-    z.boolean(),
-  ),
+  approvedOnly: z.preprocess((value) => {
+    if (value === undefined || value === null || value === "") {
+      return false;
+    }
+    const normalizedValue = String(Array.isArray(value) ? value[0] : value)
+      .trim()
+      .toLowerCase();
+    return normalizedValue === "true" || normalizedValue === "1";
+  }, z.boolean()),
+  committeeOnly: z.preprocess((value) => {
+    if (value === undefined || value === null || value === "") {
+      return false;
+    }
+    const normalizedValue = String(Array.isArray(value) ? value[0] : value)
+      .trim()
+      .toLowerCase();
+    return normalizedValue === "true" || normalizedValue === "1";
+  }, z.boolean()),
 });
-const optionalStringAsNullField = z.preprocess(
-  (value) => {
-    if (value === null || value === undefined) {
-      return value;
-    }
+const optionalStringAsNullField = z.preprocess((value) => {
+  if (value === null || value === undefined) {
+    return value;
+  }
 
-    if (typeof value !== "string") {
-      return value;
-    }
+  if (typeof value !== "string") {
+    return value;
+  }
 
-    const normalizedValue = value.trim();
-    return normalizedValue === "" ? null : normalizedValue;
-  },
-  z.string().nullable().optional(),
-);
+  const normalizedValue = value.trim();
+  return normalizedValue === "" ? null : normalizedValue;
+}, z.string().nullable().optional());
 
 const memberSchema = z.object({
   associationId: z.string().min(1).optional(),
@@ -136,6 +122,13 @@ const memberSchema = z.object({
 });
 
 const memberUpdateSchema = memberSchema.partial();
+const memberSelfUpdateSchema = z.object({
+  firstName: z.string().trim().min(1).optional(),
+  lastName: z.string().trim().optional(),
+  email: z.string().email().optional(),
+  companyName: z.string().trim().optional(),
+  photoUrl: z.string().optional(),
+});
 
 const bulkImportUpload = multer({
   storage: multer.diskStorage({
@@ -149,7 +142,10 @@ const bulkImportUpload = multer({
         .replace(/[^a-zA-Z0-9-_]+/g, "-")
         .replace(/^-+|-+$/g, "")
         .slice(0, 60);
-      callback(null, `${Date.now()}-${safeName || "bulk-members"}${path.extname(file.originalname)}`);
+      callback(
+        null,
+        `${Date.now()}-${safeName || "bulk-members"}${path.extname(file.originalname)}`,
+      );
     },
   }),
   limits: {
@@ -227,9 +223,10 @@ async function ensureCommitteePostAvailability(
     return;
   }
 
-  const conflictingName = `${conflictingMember.firstName || ""} ${conflictingMember.lastName || ""}`
-    .replace(/\s+/g, " ")
-    .trim();
+  const conflictingName =
+    `${conflictingMember.firstName || ""} ${conflictingMember.lastName || ""}`
+      .replace(/\s+/g, " ")
+      .trim();
 
   throw new Error(
     conflictingName
@@ -264,7 +261,9 @@ const legacyPrimaryMembershipTypeValues = new Set([
 ]);
 
 function normalizeMembershipTypeValue(value) {
-  const normalizedValue = normalizeExcelValue(value).replace(/\s+/g, " ").trim();
+  const normalizedValue = normalizeExcelValue(value)
+    .replace(/\s+/g, " ")
+    .trim();
   const loweredValue = normalizedValue.toLowerCase();
 
   if (legacyPrimaryMembershipTypeValues.has(loweredValue)) {
@@ -291,8 +290,8 @@ function normalizeMembershipTypeValue(value) {
 }
 
 function buildMembershipTypeFilter(membershipType) {
-  const normalizedType = normalizeMembershipTypeValue(membershipType)
-    .toLowerCase();
+  const normalizedType =
+    normalizeMembershipTypeValue(membershipType).toLowerCase();
 
   if (normalizedType === "guest") {
     return {
@@ -319,7 +318,10 @@ function buildMembershipTypeFilter(membershipType) {
 
 function mapBulkImportRow(headers, rowValues) {
   const row = Object.fromEntries(
-    headers.map((header, index) => [header, normalizeExcelValue(rowValues[index])]),
+    headers.map((header, index) => [
+      header,
+      normalizeExcelValue(rowValues[index]),
+    ]),
   );
 
   const email = row.email?.toLowerCase();
@@ -329,7 +331,8 @@ function mapBulkImportRow(headers, rowValues) {
     membershipNumber: row.membership_no,
     companyName: row.company_name,
     midcArea: row.midc_area,
-    representativeName: `${representative.firstName} ${representative.lastName}`.trim(),
+    representativeName:
+      `${representative.firstName} ${representative.lastName}`.trim(),
     firstName: representative.firstName,
     lastName: representative.lastName,
     phone: row.cell_no,
@@ -435,8 +438,10 @@ function buildAccessUpdate(accessStatus) {
 }
 
 function hasPendingPasswordHash(passwordHash) {
-  return typeof passwordHash === "string" &&
-    passwordHash.startsWith(`${PENDING_PASSWORD_PREFIX}:`);
+  return (
+    typeof passwordHash === "string" &&
+    passwordHash.startsWith(`${PENDING_PASSWORD_PREFIX}:`)
+  );
 }
 
 async function ensureAssociation(associationId) {
@@ -483,7 +488,10 @@ async function normalizeMemberRecord(member) {
     : member.photoUrl;
   const nextRoleTitle = normalizeMembershipTypeValue(member.roleTitle);
 
-  if (nextPhotoUrl === member.photoUrl && nextRoleTitle === (member.roleTitle ?? "")) {
+  if (
+    nextPhotoUrl === member.photoUrl &&
+    nextRoleTitle === (member.roleTitle ?? "")
+  ) {
     return member;
   }
 
@@ -576,6 +584,17 @@ function serializeMemberAdminItem(req, member) {
   };
 }
 
+function resolveAuthenticatedMemberId(req) {
+  if (!req.auth?.user?.isMember) {
+    return null;
+  }
+
+  const memberId = req.auth.user.memberId;
+  return typeof memberId === "string" && memberId.trim().isNotEmpty
+    ? memberId.trim()
+    : null;
+}
+
 router.get("/", async (req, res) => {
   const { associationId } = req.query;
   const parsedView = memberViewQuerySchema.safeParse(req.query.view);
@@ -634,7 +653,9 @@ router.get("/", async (req, res) => {
       });
     }
 
-    const parsedDirectoryQuery = memberDirectoryQuerySchema.safeParse(req.query);
+    const parsedDirectoryQuery = memberDirectoryQuerySchema.safeParse(
+      req.query,
+    );
     if (!parsedDirectoryQuery.success) {
       return res.status(400).json({
         error: "Invalid member directory query",
@@ -659,53 +680,50 @@ router.get("/", async (req, res) => {
       ...baseWhere,
       ...(approvedOnly
         ? {
-          user: {
-            is: {
-              approvalStatus: ApprovalStatus.APPROVED,
-              isActive: true,
+            user: {
+              is: {
+                approvalStatus: ApprovalStatus.APPROVED,
+                isActive: true,
+              },
             },
-          },
-        }
+          }
         : {}),
       ...(emailValue
         ? {
-          email: {
-            equals: emailValue,
-            mode: "insensitive",
-          },
-        }
+            email: {
+              equals: emailValue,
+              mode: "insensitive",
+            },
+          }
         : {}),
       ...(membershipTypeValue
         ? buildMembershipTypeFilter(membershipTypeValue)
         : {}),
       ...(committeeOnly
         ? {
-          NOT: [
-            { committeePost: null },
-            { committeePost: "" },
-          ],
-        }
+            NOT: [{ committeePost: null }, { committeePost: "" }],
+          }
         : {}),
       ...(searchValue
         ? {
-          OR: [
-            { firstName: { contains: searchValue, mode: "insensitive" } },
-            { lastName: { contains: searchValue, mode: "insensitive" } },
-            { email: { contains: searchValue, mode: "insensitive" } },
-            { phone: { contains: searchValue, mode: "insensitive" } },
-            { address: { contains: searchValue, mode: "insensitive" } },
-            { gst: { contains: searchValue, mode: "insensitive" } },
-            { companyName: { contains: searchValue, mode: "insensitive" } },
-            { roleTitle: { contains: searchValue, mode: "insensitive" } },
-            { memberBio: { contains: searchValue, mode: "insensitive" } },
-            {
-              membershipDetails: {
-                contains: searchValue,
-                mode: "insensitive",
+            OR: [
+              { firstName: { contains: searchValue, mode: "insensitive" } },
+              { lastName: { contains: searchValue, mode: "insensitive" } },
+              { email: { contains: searchValue, mode: "insensitive" } },
+              { phone: { contains: searchValue, mode: "insensitive" } },
+              { address: { contains: searchValue, mode: "insensitive" } },
+              { gst: { contains: searchValue, mode: "insensitive" } },
+              { companyName: { contains: searchValue, mode: "insensitive" } },
+              { roleTitle: { contains: searchValue, mode: "insensitive" } },
+              { memberBio: { contains: searchValue, mode: "insensitive" } },
+              {
+                membershipDetails: {
+                  contains: searchValue,
+                  mode: "insensitive",
+                },
               },
-            },
-          ],
-        }
+            ],
+          }
         : {}),
     };
 
@@ -734,11 +752,7 @@ router.get("/", async (req, res) => {
           paymentAmount: true,
           paymentStatus: true,
         },
-        orderBy: [
-          { firstName: "asc" },
-          { lastName: "asc" },
-          { id: "asc" },
-        ],
+        orderBy: [{ firstName: "asc" }, { lastName: "asc" }, { id: "asc" }],
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
@@ -886,12 +900,12 @@ router.post("/", async (req, res) => {
             ...buildMemberUserPayload(createdMember),
             approvalStatus:
               existingUser.approvalStatus === ApprovalStatus.REJECTED ||
-                  existingUser.approvalStatus !== initialApprovalStatus
+              existingUser.approvalStatus !== initialApprovalStatus
                 ? initialApprovalStatus
                 : undefined,
             approvedAt:
               existingUser.approvalStatus === ApprovalStatus.REJECTED ||
-                  initialApprovalStatus === ApprovalStatus.APPROVED
+              initialApprovalStatus === ApprovalStatus.APPROVED
                 ? initialApprovedAt
                 : undefined,
             rejectedAt:
@@ -946,7 +960,9 @@ router.post(
   bulkImportUpload.single("excelFile"),
   async (req, res) => {
     if (!req.file) {
-      return res.status(400).json({ error: "Attach an Excel file to import members." });
+      return res
+        .status(400)
+        .json({ error: "Attach an Excel file to import members." });
     }
 
     try {
@@ -957,7 +973,9 @@ router.post(
       const sheet = workbook.Sheets[sheetName];
 
       if (!sheet) {
-        return res.status(400).json({ error: "The Excel file does not contain a readable sheet." });
+        return res
+          .status(400)
+          .json({ error: "The Excel file does not contain a readable sheet." });
       }
 
       const rows = xlsx.utils.sheet_to_json(sheet, {
@@ -967,7 +985,9 @@ router.post(
       });
 
       if (rows.length < 2) {
-        return res.status(400).json({ error: "The Excel file does not contain any member rows." });
+        return res
+          .status(400)
+          .json({ error: "The Excel file does not contain any member rows." });
       }
 
       const headers = rows[0].map((header) =>
@@ -1107,6 +1127,143 @@ router.post(
   },
 );
 
+router.get("/me", requireAuthenticatedSession, async (req, res) => {
+  const memberId = resolveAuthenticatedMemberId(req);
+  if (!memberId) {
+    return res.status(403).json({
+      error: "Member access is required for this action.",
+    });
+  }
+
+  const member = await prisma.member.findUnique({
+    where: { id: memberId },
+    include: {
+      association: true,
+      user: true,
+    },
+  });
+
+  if (!member) {
+    return res.status(404).json({ error: "Member not found" });
+  }
+
+  return res.json({ member: serializeMember(req, member) });
+});
+
+router.patch("/me", requireAuthenticatedSession, async (req, res) => {
+  const memberId = resolveAuthenticatedMemberId(req);
+  if (!memberId) {
+    return res.status(403).json({
+      error: "Member access is required for this action.",
+    });
+  }
+
+  const parsed = memberSelfUpdateSchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    return res.status(400).json({
+      error: "Invalid member payload",
+      details: parsed.error.flatten(),
+    });
+  }
+
+  const existingMember = await prisma.member.findUnique({
+    where: { id: memberId },
+    include: {
+      association: true,
+      user: true,
+    },
+  });
+
+  if (!existingMember) {
+    return res.status(404).json({ error: "Member not found" });
+  }
+
+  try {
+    const member = await prisma.$transaction(async (tx) => {
+      const updatedMember = await tx.member.update({
+        where: { id: memberId },
+        data: {
+          ...(parsed.data.firstName !== undefined
+            ? { firstName: parsed.data.firstName }
+            : {}),
+          ...(parsed.data.lastName !== undefined
+            ? { lastName: parsed.data.lastName }
+            : {}),
+          ...(parsed.data.email !== undefined
+            ? { email: parsed.data.email }
+            : {}),
+          ...(parsed.data.companyName !== undefined
+            ? { companyName: parsed.data.companyName }
+            : {}),
+          ...(parsed.data.photoUrl !== undefined
+            ? {
+                photoUrl: normalizeMemberPhotoValue(
+                  parsed.data.photoUrl,
+                  memberId,
+                ),
+              }
+            : {}),
+        },
+        include: {
+          association: true,
+          user: true,
+        },
+      });
+
+      const linkedUser = await tx.user.findFirst({
+        where: { memberId: updatedMember.id },
+      });
+
+      if (linkedUser) {
+        await tx.user.update({
+          where: { id: linkedUser.id },
+          data: buildMemberUserPayload(updatedMember),
+        });
+      } else {
+        const userByEmail = await tx.user.findUnique({
+          where: { email: existingMember.email },
+        });
+
+        if (userByEmail) {
+          await tx.user.update({
+            where: { id: userByEmail.id },
+            data: buildMemberUserPayload(updatedMember),
+          });
+        }
+      }
+
+      return tx.member.findUnique({
+        where: { id: updatedMember.id },
+        include: {
+          association: true,
+          user: true,
+        },
+      });
+    });
+
+    if (
+      parsed.data.photoUrl !== undefined &&
+      member.photoUrl !== existingMember.photoUrl
+    ) {
+      deleteLocalAssetIfPresent(
+        existingMember.photoUrl,
+        "uploads/member-photos",
+      );
+    }
+
+    return res.json({ member: serializeMember(req, member) });
+  } catch (error) {
+    if (isDuplicateMemberEmailError(error)) {
+      return res.status(409).json({
+        error: "A member with this email already exists in the association",
+      });
+    }
+
+    throw error;
+  }
+});
+
 router.patch("/:id", async (req, res) => {
   const parsed = memberUpdateSchema.safeParse(req.body);
 
@@ -1197,7 +1354,10 @@ router.patch("/:id", async (req, res) => {
     });
 
     if (member.photoUrl !== existingMember.photoUrl) {
-      deleteLocalAssetIfPresent(existingMember.photoUrl, "uploads/member-photos");
+      deleteLocalAssetIfPresent(
+        existingMember.photoUrl,
+        "uploads/member-photos",
+      );
     }
 
     return res.json({ member: serializeMember(req, member) });
@@ -1223,72 +1383,74 @@ router.patch(
   requireAuthenticatedSession,
   requireAdminUser,
   async (req, res) => {
-  const parsed = accessStatusSchema.safeParse(req.body);
+    const parsed = accessStatusSchema.safeParse(req.body);
 
-  if (!parsed.success) {
-    return res.status(400).json({
-      error: "Invalid member access payload",
-      details: parsed.error.flatten(),
-    });
-  }
-
-  const member = await prisma.member.findUnique({
-    where: { id: req.params.id },
-  });
-
-  if (!member) {
-    return res.status(404).json({ error: "Member not found" });
-  }
-
-  const { user: userData, memberStatus } = buildAccessUpdate(parsed.data.accessStatus);
-  const passwordHash =
-    parsed.data.accessStatus === "APPROVED"
-      ? await buildDefaultMemberPasswordHash()
-      : undefined;
-
-  const updatedMember = await prisma.$transaction(async (tx) => {
-    const linkedUser =
-      (await tx.user.findFirst({
-        where: { memberId: member.id },
-      })) ??
-      (await tx.user.findUnique({
-        where: { email: member.email },
-      }));
-
-    if (linkedUser) {
-      await tx.user.update({
-        where: { id: linkedUser.id },
-        data: {
-          ...buildMemberUserPayload(member),
-          ...userData,
-          ...(passwordHash ? { passwordHash } : {}),
-        },
-      });
-    } else {
-      await tx.user.create({
-        data: {
-          ...buildMemberUserPayload(member),
-          ...userData,
-          passwordHash: passwordHash ?? buildPendingPasswordHash(),
-        },
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: "Invalid member access payload",
+        details: parsed.error.flatten(),
       });
     }
 
-    await tx.member.update({
-      where: { id: member.id },
-      data: {
-        membershipStatus: memberStatus,
-      },
+    const member = await prisma.member.findUnique({
+      where: { id: req.params.id },
     });
 
-    return tx.member.findUnique({
-      where: { id: member.id },
-      include: {
-        association: true,
-        user: true,
-      },
+    if (!member) {
+      return res.status(404).json({ error: "Member not found" });
+    }
+
+    const { user: userData, memberStatus } = buildAccessUpdate(
+      parsed.data.accessStatus,
+    );
+    const passwordHash =
+      parsed.data.accessStatus === "APPROVED"
+        ? await buildDefaultMemberPasswordHash()
+        : undefined;
+
+    const updatedMember = await prisma.$transaction(async (tx) => {
+      const linkedUser =
+        (await tx.user.findFirst({
+          where: { memberId: member.id },
+        })) ??
+        (await tx.user.findUnique({
+          where: { email: member.email },
+        }));
+
+      if (linkedUser) {
+        await tx.user.update({
+          where: { id: linkedUser.id },
+          data: {
+            ...buildMemberUserPayload(member),
+            ...userData,
+            ...(passwordHash ? { passwordHash } : {}),
+          },
+        });
+      } else {
+        await tx.user.create({
+          data: {
+            ...buildMemberUserPayload(member),
+            ...userData,
+            passwordHash: passwordHash ?? buildPendingPasswordHash(),
+          },
+        });
+      }
+
+      await tx.member.update({
+        where: { id: member.id },
+        data: {
+          membershipStatus: memberStatus,
+        },
+      });
+
+      return tx.member.findUnique({
+        where: { id: member.id },
+        include: {
+          association: true,
+          user: true,
+        },
+      });
     });
-  });
 
     return res.json({ member: serializeMember(req, updatedMember) });
   },
