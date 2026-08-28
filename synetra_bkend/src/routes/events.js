@@ -1,18 +1,22 @@
 import fs from "fs";
 import path from "path";
+import crypto from "crypto";
 import multer from "multer";
 import { Router } from "express";
 import { fileURLToPath } from "url";
+import prismaPkg from "@prisma/client";
 import { z } from "zod";
 import {
   buildPublicAssetUrl,
   buildPublicThumbnailUrl,
   resolvePublicAssetUrl,
 } from "../lib/public-url.js";
+import { requireAuthenticatedSession } from "../lib/session-auth.js";
 import { prisma } from "../lib/prisma.js";
 import { getUploadSubdirPath } from "../lib/uploads-dir.js";
 
 const router = Router();
+const { EventAttendeeType } = prismaPkg;
 const currentFilePath = fileURLToPath(import.meta.url);
 const eventUploadsDirPath = getUploadSubdirPath("events");
 
@@ -38,6 +42,9 @@ const eventSchema = z.object({
   startTime: z.string().optional(),
   endTime: z.string().optional(),
   summary: z.string().optional(),
+});
+const eventAttendanceSchema = z.object({
+  participantCount: z.coerce.number().int().min(1).max(25),
 });
 
 const eventStorage = multer.diskStorage({
@@ -92,6 +99,9 @@ function serializeEventType(eventType) {
 
 function serializeEvent(req, event) {
   const eventDate = event.date.toISOString().slice(0, 10);
+  const myAttendance = event.myAttendance
+    ? serializeEventAttendanceSummary(event.myAttendance)
+    : null;
   return {
     id: event.id,
     name: event.name,
@@ -112,7 +122,134 @@ function serializeEvent(req, event) {
     promoVideoUrl: resolvePublicAssetUrl(req, event.promoVideoUrl),
     liveStatus: eventDate < new Date().toISOString().slice(0, 10) ? "Completed" : "Scheduled",
     scheduledGoLive: eventDate,
+    myAttendance,
   };
+}
+
+function serializeEventAttendanceSummary(attendance) {
+  return {
+    id: attendance.id,
+    attendeeType: attendance.attendeeType,
+    attendeeName: attendance.attendeeName,
+    attendeeEmail: attendance.attendeeEmail,
+    companyName: attendance.companyName || "",
+    participantCount: attendance.participantCount,
+    passCount:
+      typeof attendance._count?.passes === "number"
+        ? attendance._count.passes
+        : Array.isArray(attendance.passes)
+          ? attendance.passes.length
+          : 0,
+    updatedAt: attendance.updatedAt,
+  };
+}
+
+function serializeEventPass(req, pass, event) {
+  return {
+    id: pass.id,
+    passCode: pass.passCode,
+    attendeeType: pass.attendeeType,
+    attendeeName: pass.attendeeName,
+    attendeeEmail: pass.attendeeEmail,
+    companyName: pass.companyName || "",
+    slotNumber: pass.slotNumber,
+    participantCount: pass.participantCount,
+    status: pass.status,
+    createdAt: pass.createdAt,
+    event: {
+      id: event.id,
+      name: event.name,
+      type: event.type,
+      date: event.date.toISOString().slice(0, 10),
+      venue: event.venue || "",
+      startTime: event.startTime || "",
+      endTime: event.endTime || "",
+      audience: event.audience || "",
+      entryType: event.entryType || "",
+      entryCharges: event.entryCharges || "",
+      summary: event.summary || "",
+    },
+  };
+}
+
+function resolveAuthenticatedAttendanceContext(req) {
+  const user = req.auth?.user;
+  if (!user || (!user.isMember && !user.isVendor)) {
+    return null;
+  }
+
+  if (user.isVendor) {
+    if (!user.vendorId) {
+      return null;
+    }
+    return {
+      attendeeType: EventAttendeeType.VENDOR,
+      userId: user.id,
+      memberId: null,
+      vendorId: String(user.vendorId),
+    };
+  }
+
+  if (!user.memberId) {
+    return null;
+  }
+
+  return {
+    attendeeType: EventAttendeeType.MEMBER,
+    userId: user.id,
+    memberId: String(user.memberId),
+    vendorId: null,
+  };
+}
+
+async function buildAttendanceProfile(tx, context) {
+  if (context.attendeeType === EventAttendeeType.VENDOR) {
+    const vendor = await tx.vendor.findUnique({
+      where: { id: context.vendorId },
+      select: {
+        id: true,
+        companyName: true,
+        email: true,
+        name: true,
+        contactPerson: true,
+      },
+    });
+    if (!vendor) {
+      throw new Error("Vendor not found");
+    }
+    return {
+      attendeeName:
+        vendor.contactPerson?.trim() || vendor.name.trim() || vendor.companyName.trim(),
+      attendeeEmail: vendor.email,
+      companyName: vendor.companyName,
+    };
+  }
+
+  const member = await tx.member.findUnique({
+    where: { id: context.memberId },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      email: true,
+      companyName: true,
+    },
+  });
+  if (!member) {
+    throw new Error("Member not found");
+  }
+  return {
+    attendeeName: `${member.firstName || ""} ${member.lastName || ""}`
+      .replace(/\s+/g, " ")
+      .trim(),
+    attendeeEmail: member.email,
+    companyName: member.companyName || "",
+  };
+}
+
+function buildPassCode(eventId, slotNumber) {
+  const suffix = crypto.randomBytes(3).toString("hex").toUpperCase();
+  return `EVT-${eventId.slice(-6).toUpperCase()}-${slotNumber}-${suffix}`;
 }
 
 router.get("/types", async (_req, res) => {
@@ -175,12 +312,187 @@ router.patch("/types/:id", async (req, res) => {
 
 router.get("/", async (req, res) => {
   const association = await ensureAssociation();
+  const attendanceContext = resolveAuthenticatedAttendanceContext(req);
+  const attendanceMap = new Map();
+  if (attendanceContext) {
+    const attendances = await prisma.eventAttendance.findMany({
+      where: {
+        associationId: association.id,
+        userId: attendanceContext.userId,
+      },
+      include: {
+        _count: {
+          select: {
+            passes: true,
+          },
+        },
+      },
+    });
+    for (const attendance of attendances) {
+      attendanceMap.set(attendance.eventId, attendance);
+    }
+  }
   const events = await prisma.associationEvent.findMany({
     where: { associationId: association.id },
     orderBy: [{ date: "desc" }, { createdAt: "desc" }],
   });
 
-  return res.json({ events: events.map((event) => serializeEvent(req, event)) });
+  return res.json({
+    events: events.map((event) =>
+      serializeEvent(req, {
+        ...event,
+        myAttendance: attendanceMap.get(event.id) ?? null,
+      }),
+    ),
+  });
+});
+
+router.get("/:id/passes/me", requireAuthenticatedSession, async (req, res) => {
+  const association = await ensureAssociation();
+  const attendanceContext = resolveAuthenticatedAttendanceContext(req);
+  if (!attendanceContext) {
+    return res.status(403).json({
+      error: "Member or vendor access is required for this action.",
+    });
+  }
+
+  const event = await prisma.associationEvent.findFirst({
+    where: {
+      id: req.params.id,
+      associationId: association.id,
+    },
+  });
+  if (!event) {
+    return res.status(404).json({ error: "Event not found" });
+  }
+
+  const attendance = await prisma.eventAttendance.findUnique({
+    where: {
+      eventId_userId: {
+        eventId: event.id,
+        userId: attendanceContext.userId,
+      },
+    },
+    include: {
+      passes: {
+        orderBy: { slotNumber: "asc" },
+      },
+    },
+  });
+
+  return res.json({
+    attendance: attendance ? serializeEventAttendanceSummary(attendance) : null,
+    passes:
+      attendance?.passes.map((pass) => serializeEventPass(req, pass, event)) ??
+      [],
+  });
+});
+
+router.post("/:id/attend", requireAuthenticatedSession, async (req, res) => {
+  const parsed = eventAttendanceSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      error: "Invalid attendance payload",
+      details: parsed.error.flatten(),
+    });
+  }
+
+  const association = await ensureAssociation();
+  const attendanceContext = resolveAuthenticatedAttendanceContext(req);
+  if (!attendanceContext) {
+    return res.status(403).json({
+      error: "Member or vendor access is required for this action.",
+    });
+  }
+
+  const event = await prisma.associationEvent.findFirst({
+    where: {
+      id: req.params.id,
+      associationId: association.id,
+    },
+  });
+  if (!event) {
+    return res.status(404).json({ error: "Event not found" });
+  }
+
+  const participantCount = parsed.data.participantCount;
+
+  const result = await prisma.$transaction(async (tx) => {
+    const profile = await buildAttendanceProfile(tx, attendanceContext);
+    const attendance = await tx.eventAttendance.upsert({
+      where: {
+        eventId_userId: {
+          eventId: event.id,
+          userId: attendanceContext.userId,
+        },
+      },
+      create: {
+        associationId: association.id,
+        eventId: event.id,
+        userId: attendanceContext.userId,
+        memberId: attendanceContext.memberId,
+        vendorId: attendanceContext.vendorId,
+        attendeeType: attendanceContext.attendeeType,
+        attendeeName: profile.attendeeName,
+        attendeeEmail: profile.attendeeEmail,
+        companyName: profile.companyName,
+        participantCount,
+      },
+      update: {
+        attendeeName: profile.attendeeName,
+        attendeeEmail: profile.attendeeEmail,
+        companyName: profile.companyName,
+        participantCount,
+      },
+    });
+
+    await tx.eventPass.deleteMany({
+      where: {
+        attendanceId: attendance.id,
+      },
+    });
+
+    for (let index = 0; index < participantCount; index += 1) {
+      await tx.eventPass.create({
+        data: {
+          associationId: association.id,
+          eventId: event.id,
+          attendanceId: attendance.id,
+          userId: attendanceContext.userId,
+          memberId: attendanceContext.memberId,
+          vendorId: attendanceContext.vendorId,
+          attendeeType: attendanceContext.attendeeType,
+          passCode: buildPassCode(event.id, index + 1),
+          attendeeName: profile.attendeeName,
+          attendeeEmail: profile.attendeeEmail,
+          companyName: profile.companyName,
+          slotNumber: index + 1,
+          participantCount,
+        },
+      });
+    }
+
+    const attendanceWithPasses = await tx.eventAttendance.findUnique({
+      where: { id: attendance.id },
+      include: {
+        passes: {
+          orderBy: { slotNumber: "asc" },
+        },
+        _count: {
+          select: {
+            passes: true,
+          },
+        },
+      },
+    });
+
+    return attendanceWithPasses;
+  });
+
+  return res.json({
+    attendance: serializeEventAttendanceSummary(result),
+    passes: result.passes.map((pass) => serializeEventPass(req, pass, event)),
+  });
 });
 
 router.post(

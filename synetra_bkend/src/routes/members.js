@@ -584,15 +584,60 @@ function serializeMemberAdminItem(req, member) {
   };
 }
 
-function resolveAuthenticatedMemberId(req) {
+async function resolveAuthenticatedMember(req) {
   if (!req.auth?.user?.isMember) {
     return null;
   }
 
   const memberId = req.auth.user.memberId;
-  return typeof memberId === "string" && memberId.trim().isNotEmpty
-    ? memberId.trim()
-    : null;
+  if (typeof memberId === "string" && memberId.trim().isNotEmpty) {
+    const member = await prisma.member.findUnique({
+      where: { id: memberId.trim() },
+      include: {
+        association: true,
+        user: true,
+      },
+    });
+    if (member) {
+      return member;
+    }
+  }
+
+  const email = req.auth.user.email?.trim().toLowerCase();
+  if (!email) {
+    return null;
+  }
+
+  const member = await prisma.member.findFirst({
+    where: {
+      email: {
+        equals: email,
+        mode: "insensitive",
+      },
+      ...(req.auth.user.associationId
+        ? { associationId: req.auth.user.associationId }
+        : {}),
+    },
+    include: {
+      association: true,
+      user: true,
+    },
+  });
+
+  if (!member) {
+    return null;
+  }
+
+  if (req.auth.user.id) {
+    await prisma.user.update({
+      where: { id: req.auth.user.id },
+      data: buildMemberUserPayload(member),
+    });
+    req.auth.user.memberId = member.id;
+    req.auth.user.associationId = member.associationId;
+  }
+
+  return member;
 }
 
 router.get("/", async (req, res) => {
@@ -1128,31 +1173,19 @@ router.post(
 );
 
 router.get("/me", requireAuthenticatedSession, async (req, res) => {
-  const memberId = resolveAuthenticatedMemberId(req);
-  if (!memberId) {
+  const member = await resolveAuthenticatedMember(req);
+  if (!member) {
     return res.status(403).json({
       error: "Member access is required for this action.",
     });
-  }
-
-  const member = await prisma.member.findUnique({
-    where: { id: memberId },
-    include: {
-      association: true,
-      user: true,
-    },
-  });
-
-  if (!member) {
-    return res.status(404).json({ error: "Member not found" });
   }
 
   return res.json({ member: serializeMember(req, member) });
 });
 
 router.patch("/me", requireAuthenticatedSession, async (req, res) => {
-  const memberId = resolveAuthenticatedMemberId(req);
-  if (!memberId) {
+  const existingMember = await resolveAuthenticatedMember(req);
+  if (!existingMember) {
     return res.status(403).json({
       error: "Member access is required for this action.",
     });
@@ -1167,17 +1200,7 @@ router.patch("/me", requireAuthenticatedSession, async (req, res) => {
     });
   }
 
-  const existingMember = await prisma.member.findUnique({
-    where: { id: memberId },
-    include: {
-      association: true,
-      user: true,
-    },
-  });
-
-  if (!existingMember) {
-    return res.status(404).json({ error: "Member not found" });
-  }
+  const memberId = existingMember.id;
 
   try {
     const member = await prisma.$transaction(async (tx) => {
